@@ -120,15 +120,15 @@ async function generateDailyHaiku(env: Env): Promise<void> {
 			{
 				role: "system",
 				content:
-					"You write single-line haikus. Respond with ONLY the haiku, nothing else. No quotes, no explanation.",
+					"You write haikus (5-7-5 syllables). Respond with ONLY the haiku, nothing else. No quotes, no explanation, no title.",
 			},
 			{
 				role: "user",
 				content:
-					"Write a haiku about waiting at a bus stop, not knowing if the bus was cancelled or if it ever existed. Theme: missing buses, uncertainty, urban melancholy. One line, separated by slashes.",
+					"Write a haiku about waiting at a bus stop, not knowing if the bus was cancelled or if it ever existed. Theme: missing buses, uncertainty, urban melancholy.",
 			},
 		],
-		max_tokens: 50,
+		max_tokens: 100,
 	});
 
 	const result = response as Record<string, unknown>;
@@ -536,7 +536,7 @@ function renderOverview(stats: Stats, nextDeps: NextDeparture[]): string {
   <header>
     <h1>🚌 ${STATION_NAME}</h1>
     <p class="subtitle">Bus M43 cancellation tracker &mdash; collecting since ${COLLECTION_START}${stats.lastChange ? ` &mdash; last updated ${fmtTimestamp(stats.lastChange)}` : ""}</p>
-    ${stats.haiku ? `<p class="subtitle" style="margin-top:0.5rem;font-style:italic;color:#8b949e">${esc(stats.haiku)}</p>` : ""}
+    ${stats.haiku ? `<blockquote style="margin-top:0.75rem;padding-left:1rem;border-left:3px solid #30363d;font-style:italic;color:#8b949e;white-space:pre-line">${esc(stats.haiku)}</blockquote>` : ""}
   </header>
   <div class="cards">
     <div class="card">
