@@ -85,10 +85,18 @@ async function collectDepartures(env: Env): Promise<number> {
   return departures.length;
 }
 
+interface DirectionStats {
+  date: string;
+  direction: string;
+  total: number;
+  cancelled: number;
+}
+
 interface DayStats {
   date: string;
   total: number;
   cancelled: number;
+  directions: { direction: string; total: number; cancelled: number }[];
 }
 
 async function getStats(db: D1Database): Promise<{ days: DayStats[]; avgCancelledPerDay: number }> {
@@ -96,15 +104,29 @@ async function getStats(db: D1Database): Promise<{ days: DayStats[]; avgCancelle
     .prepare(
       `SELECT
         date,
+        direction,
         COUNT(*) as total,
         SUM(CASE WHEN journey_status = 'C' THEN 1 ELSE 0 END) as cancelled
       FROM departures
-      GROUP BY date
-      ORDER BY date DESC`
+      GROUP BY date, direction
+      ORDER BY date DESC, direction`
     )
-    .all<{ date: string; total: number; cancelled: number }>();
+    .all<DirectionStats>();
 
-  const days = results ?? [];
+  const rows = results ?? [];
+  const dayMap = new Map<string, DayStats>();
+  for (const row of rows) {
+    let day = dayMap.get(row.date);
+    if (!day) {
+      day = { date: row.date, total: 0, cancelled: 0, directions: [] };
+      dayMap.set(row.date, day);
+    }
+    day.total += row.total;
+    day.cancelled += row.cancelled;
+    day.directions.push({ direction: row.direction, total: row.total, cancelled: row.cancelled });
+  }
+
+  const days = [...dayMap.values()];
   const totalCancelled = days.reduce((sum, d) => sum + d.cancelled, 0);
   const avgCancelledPerDay = days.length > 0 ? totalCancelled / days.length : 0;
 
@@ -116,15 +138,28 @@ function renderPage(stats: { days: DayStats[]; avgCancelledPerDay: number }): st
   const todayStats = stats.days.find((d) => d.date === today);
 
   const rows = stats.days
-    .map((d) => {
+    .flatMap((d) => {
       const pct = d.total > 0 ? ((d.cancelled / d.total) * 100).toFixed(1) : "0.0";
       const isToday = d.date === today;
-      return `<tr${isToday ? ' class="today"' : ""}>
-        <td>${d.date}${isToday ? " (today)" : ""}</td>
+      const cls = isToday ? ' class="today"' : "";
+      const dirCount = d.directions.length;
+      const mainRow = `<tr${cls}>
+        <td rowspan="${dirCount + 1}">${d.date}${isToday ? " (today)" : ""}</td>
+        <td><strong>All</strong></td>
         <td>${d.total}</td>
         <td>${d.cancelled}</td>
         <td>${pct}%</td>
       </tr>`;
+      const dirRows = d.directions.map((dir) => {
+        const dirPct = dir.total > 0 ? ((dir.cancelled / dir.total) * 100).toFixed(1) : "0.0";
+        return `<tr${cls}>
+          <td class="dir">${dir.direction}</td>
+          <td>${dir.total}</td>
+          <td>${dir.cancelled}</td>
+          <td>${dirPct}%</td>
+        </tr>`;
+      });
+      return [mainRow, ...dirRows];
     })
     .join("\n");
 
@@ -148,6 +183,7 @@ function renderPage(stats: { days: DayStats[]; avgCancelledPerDay: number }): st
     th { background: #fafafa; text-align: left; padding: 0.6rem 0.8rem; font-size: 0.75rem; text-transform: uppercase; color: #888; letter-spacing: 0.05em; border-bottom: 1px solid #eee; }
     td { padding: 0.5rem 0.8rem; border-bottom: 1px solid #f0f0f0; font-variant-numeric: tabular-nums; }
     tr.today { background: #fff8e1; font-weight: 600; }
+    td.dir { font-size: 0.85rem; color: #555; padding-left: 1.2rem; }
     tr:last-child td { border-bottom: none; }
   </style>
 </head>
@@ -169,8 +205,8 @@ function renderPage(stats: { days: DayStats[]; avgCancelledPerDay: number }): st
     </div>
   </div>
   <table>
-    <thead><tr><th>Date</th><th>Total</th><th>Cancelled</th><th>Rate</th></tr></thead>
-    <tbody>${rows || '<tr><td colspan="4" style="text-align:center;color:#888;padding:1rem">No data yet</td></tr>'}</tbody>
+    <thead><tr><th>Date</th><th>Direction</th><th>Total</th><th>Cancelled</th><th>Rate</th></tr></thead>
+    <tbody>${rows || '<tr><td colspan="5" style="text-align:center;color:#888;padding:1rem">No data yet</td></tr>'}</tbody>
   </table>
 </body>
 </html>`;
