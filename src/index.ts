@@ -605,7 +605,6 @@ export default {
       });
     }
 
-    await collectDepartures(env);
     const [stats, nextDeps] = await Promise.all([getStats(env.DB), getNextDepartures(env.DB)]);
     return new Response(renderOverview(stats, nextDeps), {
       headers: { "Content-Type": "text/html; charset=utf-8" },
