@@ -11,7 +11,7 @@ interface Station {
 	id: string;
 	name: string;
 	slug: string;
-	type: "bus" | "tram";
+	type: "bus" | "tram" | "underground";
 	collectionStart: string;
 	collectionStartTime: string;
 }
@@ -32,6 +32,14 @@ const STATIONS: Station[] = [
 		type: "tram",
 		collectionStart: "2026-03-27",
 		collectionStartTime: "17:00:00",
+	},
+	{
+		id: "3001545",
+		name: "Frankfurt (Main) Seckbacher Landstraße",
+		slug: "seckbacher-landstrasse",
+		type: "underground",
+		collectionStart: "2026-03-27",
+		collectionStartTime: "18:00:00",
 	},
 ];
 
@@ -144,7 +152,12 @@ async function generateDailyHaiku(env: Env, station: Station): Promise<void> {
 		.first();
 	if (existing) return;
 
-	const vehicle = station.type === "tram" ? "tram" : "bus";
+	const vehicle =
+		station.type === "tram"
+			? "tram"
+			: station.type === "underground"
+				? "U-Bahn train"
+				: "bus";
 	const response = await env.AI.run("@cf/ibm-granite/granite-4.0-h-micro", {
 		messages: [
 			{
@@ -612,7 +625,7 @@ function renderOverview(
 <div class="wrap">
   <a href="/" class="back">&larr; All stations</a>
   <header>
-    <h1>${station.type === "tram" ? "🚋" : "🚌"} ${esc(station.name)}</h1>
+    <h1>${station.type === "underground" ? "🚇" : station.type === "tram" ? "🚋" : "🚌"} ${esc(station.name)}</h1>
     <p class="subtitle">Cancellation tracker &mdash; collecting since ${station.collectionStart}${stats.lastChange ? ` &mdash; last updated ${fmtTimestamp(stats.lastChange)}` : ""}</p>
     ${stats.haiku ? `<blockquote style="margin-top:0.75rem;padding-left:1rem;border-left:3px solid #30363d;font-style:italic;color:#8b949e;white-space:pre-line">${esc(stats.haiku)}</blockquote>` : ""}
   </header>
