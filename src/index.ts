@@ -115,8 +115,7 @@ async function generateDailyHaiku(env: Env): Promise<void> {
 		.first();
 	if (existing) return;
 
-	// @ts-expect-error model not yet in workers-types
-	const response = await env.AI.run("@cf/ibm/granite-4.0-h-micro", {
+	const response = await env.AI.run("@cf/ibm-granite/granite-4.0-h-micro", {
 		messages: [
 			{
 				role: "system",
@@ -133,7 +132,11 @@ async function generateDailyHaiku(env: Env): Promise<void> {
 	});
 
 	const haiku = (response as { response?: string }).response?.trim();
-	if (!haiku) return;
+	if (!haiku) {
+		console.error("Haiku generation returned empty response", response);
+		return;
+	}
+	console.log(`Generated haiku: ${haiku}`);
 
 	await env.DB.prepare(
 		"INSERT OR IGNORE INTO haikus (date, haiku) VALUES (?, ?)",
