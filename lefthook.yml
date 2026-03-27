@@ -6,3 +6,5 @@ pre-commit:
     - name: lint-format
       run: npx biome check --write {staged_files}
       stage_fixed: true
+    - name: unused
+      run: npx knip
