@@ -51,7 +51,7 @@ async function collectDepartures(env: Env): Promise<number> {
   const today = todayBerlin();
   const url = `https://www.rmv.de/hapi/departureBoard?accessId=${env.RMV_API_KEY}&id=${STATION_ID}&date=${today}&time=00:00&duration=1439&maxJourneys=-1&format=json`;
 
-  const resp = await fetch(url);
+  const resp = await fetch(url, { cf: { cacheTtl: 300, cacheEverything: true } });
   if (!resp.ok) {
     console.error(`HAFAS API error: ${resp.status}`);
     return 0;
