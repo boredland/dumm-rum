@@ -1,5 +1,11 @@
 const STATION_ID = "3001586";
 const STATION_NAME = "Frankfurt (Main) Draisbornstraße";
+const COLLECTION_START = "2026-03-27";
+const COLLECTION_START_TIME = "11:00:00";
+
+const RELIABLE_DATA_FILTER = `
+  (date > '${COLLECTION_START}' OR (date = '${COLLECTION_START}' AND time >= '${COLLECTION_START_TIME}'))`;
+
 
 const UPSERT_SQL = `
 INSERT INTO departures (date, time, rt_date, rt_time, line, direction, journey_status, cancelled, operator, category, journey_num, reachable, stop, stop_ext_id, fetched_at)
@@ -120,7 +126,7 @@ async function getStats(db: D1Database): Promise<{ days: DayStats[]; avgCancelle
   const { results } = await db
     .prepare(
       `SELECT date, direction, COUNT(*) as total, SUM(cancelled) as cancelled
-       FROM departures GROUP BY date, direction ORDER BY date DESC, direction`
+       FROM departures WHERE ${RELIABLE_DATA_FILTER} GROUP BY date, direction ORDER BY date DESC, direction`
     )
     .all<DirectionStats>();
 
@@ -148,11 +154,41 @@ async function getDayDepartures(db: D1Database, date: string): Promise<Departure
   const { results } = await db
     .prepare(
       `SELECT date, time, rt_date, rt_time, line, direction, cancelled, operator, category, journey_num, fetched_at
-       FROM departures WHERE date = ? ORDER BY time, direction`
+       FROM departures WHERE date = ? AND ${RELIABLE_DATA_FILTER} ORDER BY time, direction`
     )
     .bind(date)
     .all<DepartureRow>();
   return results ?? [];
+}
+
+interface NextDeparture {
+  time: string;
+  rt_time: string | null;
+  direction: string;
+  line: string;
+}
+
+async function getNextDepartures(db: D1Database): Promise<NextDeparture[]> {
+  const today = todayBerlin();
+  const now = new Date().toLocaleTimeString("sv-SE", { timeZone: "Europe/Berlin", hour12: false });
+  const { results } = await db
+    .prepare(
+      `SELECT time, rt_time, direction, line FROM departures
+       WHERE date = ? AND cancelled = 0 AND time >= ?
+       ORDER BY time`
+    )
+    .bind(today, now)
+    .all<NextDeparture>();
+  const rows = results ?? [];
+  const seen = new Set<string>();
+  const out: NextDeparture[] = [];
+  for (const r of rows) {
+    if (!seen.has(r.direction)) {
+      seen.add(r.direction);
+      out.push(r);
+    }
+  }
+  return out;
 }
 
 function esc(s: string): string {
@@ -261,7 +297,7 @@ function renderChart(days: DayStats[]): string {
   </div>`;
 }
 
-function renderOverview(stats: { days: DayStats[]; avgCancelledPerDay: number }): string {
+function renderOverview(stats: { days: DayStats[]; avgCancelledPerDay: number }, nextDeps: NextDeparture[]): string {
   const today = todayBerlin();
   const todayStats = stats.days.find((d) => d.date === today);
   const todayCancelled = todayStats?.cancelled ?? 0;
@@ -323,6 +359,20 @@ function renderOverview(stats: { days: DayStats[]; avgCancelledPerDay: number })
       <div class="detail">${stats.days.length > 0 ? `since ${stats.days[stats.days.length - 1].date}` : ""}</div>
     </div>
   </div>
+  ${nextDeps.length > 0 ? `
+  <div class="section-title">Next departures</div>
+  <div class="cards">
+    ${nextDeps.map((d) => {
+      const time = d.time.slice(0, 5);
+      const rt = d.rt_time ? d.rt_time.slice(0, 5) : null;
+      const delay = rt && rt !== time ? ` <span style="color:#d29922">&rarr; ${rt}</span>` : "";
+      return `<div class="card">
+      <div class="label">${esc(shortDirection(d.direction))}</div>
+      <div class="value" style="font-size:1.5rem">${time}${delay}</div>
+      <div class="detail">${esc(d.line)}</div>
+    </div>`;
+    }).join("\n")}
+  </div>` : ""}
   <div class="section-title">Cancellation rate</div>
   ${renderChart(stats.days)}
   <div class="section-title">Daily breakdown</div>
@@ -336,15 +386,25 @@ function renderOverview(stats: { days: DayStats[]; avgCancelledPerDay: number })
 }
 
 function renderDayDetail(date: string, departures: DepartureRow[]): string {
+  const isToday = date === todayBerlin();
+  const nowTime = new Date().toLocaleTimeString("sv-SE", { timeZone: "Europe/Berlin", hour12: false });
+  const currentHour = nowTime.slice(0, 2);
   const cancelled = departures.filter((d) => d.cancelled);
   const rate = pct(cancelled.length, departures.length);
 
+  let anchorPlaced = false;
   const tableRows = departures
     .map((d) => {
       const time = d.time.slice(0, 5);
+      const hour = d.time.slice(0, 2);
       const rtTime = d.rt_time ? d.rt_time.slice(0, 5) : null;
       const delay = rtTime && rtTime !== time ? rtTime : null;
-      return `<tr>
+      let id = "";
+      if (isToday && !anchorPlaced && hour >= currentHour) {
+        id = ' id="now"';
+        anchorPlaced = true;
+      }
+      return `<tr${id}>
         <td>${time}${delay ? ` <span style="color:#d29922">&rarr; ${delay}</span>` : ""}</td>
         <td>${esc(d.line)}</td>
         <td>${esc(shortDirection(d.direction))}</td>
@@ -386,6 +446,7 @@ function renderDayDetail(date: string, departures: DepartureRow[]): string {
     <tbody>${tableRows || '<tr><td colspan="5" class="empty">No departures</td></tr>'}</tbody>
   </table>
 </div>
+${isToday ? `<script>document.getElementById("now")?.scrollIntoView({behavior:"smooth",block:"center"})</script>` : ""}
 </body>
 </html>`;
 }
@@ -415,8 +476,8 @@ export default {
     }
 
     await collectDepartures(env);
-    const stats = await getStats(env.DB);
-    return new Response(renderOverview(stats), {
+    const [stats, nextDeps] = await Promise.all([getStats(env.DB), getNextDepartures(env.DB)]);
+    return new Response(renderOverview(stats, nextDeps), {
       headers: { "Content-Type": "text/html; charset=utf-8" },
     });
   },
