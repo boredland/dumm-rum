@@ -532,27 +532,32 @@ function renderDayDetail(date: string, departures: DepartureRow[]): string {
     <div class="card">
       <div class="label">Avg delay</div>
       <div class="value" style="font-size:1.5rem">${(() => {
-        const withRt = departures.filter((d) => !d.cancelled && d.rt_time);
-        const cancelledDeps = departures.filter((d) => d.cancelled);
-        if (withRt.length === 0 && cancelledDeps.length === 0) return "&mdash;";
-        const rtDelay = withRt.reduce((s, d) =>
-          s + timeToMinutes(d.rt_time!) - timeToMinutes(d.time), 0);
-        const span = departures.length > 1
-          ? timeToMinutes(departures[departures.length - 1].time) - timeToMinutes(departures[0].time)
-          : 0;
-        const headway = span > 0 && departures.length > 1 ? span / (departures.length - 1) : 0;
-        const cancelledDelay = cancelledDeps.length * headway;
-        const total = withRt.length + cancelledDeps.length;
-        const avg = (rtDelay + cancelledDelay) / total;
+        const directions = new Map<string, DepartureRow[]>();
+        for (const d of departures) {
+          const arr = directions.get(d.direction) ?? [];
+          arr.push(d);
+          directions.set(d.direction, arr);
+        }
+        let totalDelay = 0;
+        let count = 0;
+        for (const [, deps] of directions) {
+          const sorted = deps.sort((a, b) => a.time.localeCompare(b.time));
+          const freq = freqMinutes(sorted.length, sorted[0].time, sorted[sorted.length - 1].time);
+          for (const d of sorted) {
+            if (d.cancelled && freq !== null) {
+              totalDelay += freq;
+              count++;
+            } else if (!d.cancelled && d.rt_time) {
+              totalDelay += timeToMinutes(d.rt_time) - timeToMinutes(d.time);
+              count++;
+            }
+          }
+        }
+        if (count === 0) return "&mdash;";
+        const avg = totalDelay / count;
         return `${avg >= 0 ? "+" : ""}${avg.toFixed(1)} min`;
       })()}</div>
-      <div class="detail">incl. cancelled as ${(() => {
-        const span = departures.length > 1
-          ? timeToMinutes(departures[departures.length - 1].time) - timeToMinutes(departures[0].time)
-          : 0;
-        const headway = span > 0 && departures.length > 1 ? span / (departures.length - 1) : 0;
-        return `~${headway.toFixed(0)} min headway`;
-      })()}</div>
+      <div class="detail">cancelled = planned freq delay</div>
     </div>
   </div>
   <div class="section-title">All departures</div>
