@@ -42,6 +42,14 @@ const STATIONS: Station[] = [
 		collectionStartTime: "19:00:00",
 	},
 	{
+		id: "3001209",
+		name: "Frankfurt (Main) Philipp-Reis-Straße",
+		slug: "philipp-reis-strasse",
+		type: "bus",
+		collectionStart: "2026-03-27",
+		collectionStartTime: "20:00:00",
+	},
+	{
 		id: "3000129",
 		name: "Frankfurt (Main) Leonardo-Da-Vinci-Allee",
 		slug: "leonardo-da-vinci-allee",
