@@ -139,8 +139,7 @@ async function getStats(db: D1Database): Promise<Stats> {
     db.prepare(
       `SELECT date, direction, COUNT(*) as total, SUM(cancelled) as cancelled,
         AVG(CASE WHEN cancelled = 0 AND rt_time IS NOT NULL THEN
-          (CAST(substr(rt_time,1,2) AS INTEGER)*60 + CAST(substr(rt_time,4,2) AS INTEGER))
-          - (CAST(substr(time,1,2) AS INTEGER)*60 + CAST(substr(time,4,2) AS INTEGER))
+          (strftime('%s', rt_time) - strftime('%s', time)) / 60.0
         END) as avg_delay,
         MIN(time) as first_time,
         MAX(time) as last_time
@@ -200,12 +199,15 @@ async function getDayDepartures(db: D1Database, date: string): Promise<Departure
   return results ?? [];
 }
 
+function timeToMinutes(t: string): number {
+  const [h, m] = t.split(":").map(Number);
+  return h * 60 + m;
+}
+
 function formatFreq(count: number, firstTime: string, lastTime: string): string {
-  const span = (parseInt(lastTime.slice(0, 2)) * 60 + parseInt(lastTime.slice(3, 5)))
-    - (parseInt(firstTime.slice(0, 2)) * 60 + parseInt(firstTime.slice(3, 5)));
+  const span = timeToMinutes(lastTime) - timeToMinutes(firstTime);
   if (span <= 0 || count <= 1) return "&mdash;";
-  const avg = span / (count - 1);
-  return `~${avg.toFixed(0)} min`;
+  return `~${(span / (count - 1)).toFixed(0)} min`;
 }
 
 interface NextDeparture {
@@ -457,7 +459,7 @@ function renderDayDetail(date: string, departures: DepartureRow[]): string {
       const hour = d.time.slice(0, 2);
       const rtTime = d.rt_time ? d.rt_time.slice(0, 5) : null;
       const delayMin = rtTime
-        ? (parseInt(rtTime.slice(0, 2)) * 60 + parseInt(rtTime.slice(3))) - (parseInt(time.slice(0, 2)) * 60 + parseInt(time.slice(3)))
+        ? timeToMinutes(rtTime) - timeToMinutes(time)
         : null;
       let id = "";
       if (isToday && !anchorPlaced && hour >= currentHour) {
@@ -509,11 +511,8 @@ function renderDayDetail(date: string, departures: DepartureRow[]): string {
       <div class="value" style="font-size:1.5rem">${(() => {
         const nonCancelled = departures.filter((d) => !d.cancelled && d.rt_time);
         if (nonCancelled.length === 0) return "&mdash;";
-        const totalDelay = nonCancelled.reduce((s, d) => {
-          const t = parseInt(d.time.slice(0, 2)) * 60 + parseInt(d.time.slice(3, 5));
-          const rt = parseInt(d.rt_time!.slice(0, 2)) * 60 + parseInt(d.rt_time!.slice(3, 5));
-          return s + (rt - t);
-        }, 0);
+        const totalDelay = nonCancelled.reduce((s, d) =>
+          s + timeToMinutes(d.rt_time!) - timeToMinutes(d.time), 0);
         const avg = totalDelay / nonCancelled.length;
         return `${avg >= 0 ? "+" : ""}${avg.toFixed(1)} min`;
       })()}</div>
