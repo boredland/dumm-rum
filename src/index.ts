@@ -244,7 +244,7 @@ h1 .icon { font-size: 1.2rem; }
 .card .value.ok { color: #3fb950; }
 .card .detail { font-size: 0.8rem; color: #7d8590; margin-top: 0.2rem; }
 .section-title { font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.08em; color: #7d8590; margin-bottom: 0.75rem; font-weight: 600; }
-table { width: 100%; border-collapse: collapse; background: #161b22; border: 1px solid #30363d; border-radius: 12px; overflow: hidden; }
+table { width: 100%; border-collapse: separate; border-spacing: 0; background: #161b22; border: 1px solid #30363d; border-radius: 12px; overflow: hidden; }
 th { text-align: left; padding: 0.7rem 1rem; font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.06em; color: #7d8590; background: #1c2129; border-bottom: 1px solid #30363d; font-weight: 600; }
 td { padding: 0.6rem 1rem; border-bottom: 1px solid #21262d; font-variant-numeric: tabular-nums; font-size: 0.9rem; }
 tr:last-child td { border-bottom: none; }
