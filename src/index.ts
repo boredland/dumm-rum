@@ -100,6 +100,7 @@ interface DirectionStats {
   total: number;
   cancelled: number;
   avg_delay: number | null;
+  rt_count: number;
   first_time: string;
   last_time: string;
 }
@@ -141,6 +142,7 @@ async function getStats(db: D1Database): Promise<Stats> {
         AVG(CASE WHEN cancelled = 0 AND rt_time IS NOT NULL THEN
           (strftime('%s', rt_time) - strftime('%s', time)) / 60.0
         END) as avg_delay,
+        SUM(CASE WHEN cancelled = 0 AND rt_time IS NOT NULL THEN 1 ELSE 0 END) as rt_count,
         MIN(time) as first_time,
         MAX(time) as last_time
        FROM departures WHERE ${RELIABLE_DATA_FILTER} GROUP BY date, direction ORDER BY date DESC, direction`
@@ -160,11 +162,19 @@ async function getStats(db: D1Database): Promise<Stats> {
     }
     day.total += row.total;
     day.cancelled += row.cancelled;
+    const plannedFreqMin = freqMinutes(row.total, row.first_time, row.last_time);
+    let blendedDelay: number | null = null;
+    if (row.rt_count > 0 || row.cancelled > 0) {
+      const rtSum = (row.avg_delay ?? 0) * row.rt_count;
+      const cancelledDelay = plannedFreqMin !== null ? row.cancelled * plannedFreqMin : 0;
+      const totalCount = row.rt_count + row.cancelled;
+      blendedDelay = totalCount > 0 ? (rtSum + cancelledDelay) / totalCount : null;
+    }
     day.directions.push({
       direction: row.direction,
       total: row.total,
       cancelled: row.cancelled,
-      avgDelay: row.avg_delay,
+      avgDelay: blendedDelay,
       plannedFreq: formatFreq(row.total, row.first_time, row.last_time),
       actualFreq: formatFreq(row.total - row.cancelled, row.first_time, row.last_time),
     });
@@ -174,9 +184,9 @@ async function getStats(db: D1Database): Promise<Stats> {
   for (const day of days) {
     const withDelay = day.directions.filter((d) => d.avgDelay !== null);
     if (withDelay.length > 0) {
-      const totalWeight = withDelay.reduce((s, d) => s + (d.total - d.cancelled), 0);
+      const totalWeight = withDelay.reduce((s, d) => s + d.total, 0);
       day.avgDelay = totalWeight > 0
-        ? withDelay.reduce((s, d) => s + d.avgDelay! * (d.total - d.cancelled), 0) / totalWeight
+        ? withDelay.reduce((s, d) => s + d.avgDelay! * d.total, 0) / totalWeight
         : null;
     }
   }
@@ -211,10 +221,15 @@ function timeToMinutes(t: string): number {
   return h * 60 + m;
 }
 
-function formatFreq(count: number, firstTime: string, lastTime: string): string {
+function freqMinutes(count: number, firstTime: string, lastTime: string): number | null {
   const span = timeToMinutes(lastTime) - timeToMinutes(firstTime);
-  if (span <= 0 || count <= 1) return "&mdash;";
-  return `~${(span / (count - 1)).toFixed(0)} min`;
+  if (span <= 0 || count <= 1) return null;
+  return span / (count - 1);
+}
+
+function formatFreq(count: number, firstTime: string, lastTime: string): string {
+  const freq = freqMinutes(count, firstTime, lastTime);
+  return freq !== null ? `~${freq.toFixed(0)} min` : "&mdash;";
 }
 
 interface NextDeparture {
@@ -516,14 +531,27 @@ function renderDayDetail(date: string, departures: DepartureRow[]): string {
     <div class="card">
       <div class="label">Avg delay</div>
       <div class="value" style="font-size:1.5rem">${(() => {
-        const nonCancelled = departures.filter((d) => !d.cancelled && d.rt_time);
-        if (nonCancelled.length === 0) return "&mdash;";
-        const totalDelay = nonCancelled.reduce((s, d) =>
+        const withRt = departures.filter((d) => !d.cancelled && d.rt_time);
+        const cancelledDeps = departures.filter((d) => d.cancelled);
+        if (withRt.length === 0 && cancelledDeps.length === 0) return "&mdash;";
+        const rtDelay = withRt.reduce((s, d) =>
           s + timeToMinutes(d.rt_time!) - timeToMinutes(d.time), 0);
-        const avg = totalDelay / nonCancelled.length;
+        const span = departures.length > 1
+          ? timeToMinutes(departures[departures.length - 1].time) - timeToMinutes(departures[0].time)
+          : 0;
+        const headway = span > 0 && departures.length > 1 ? span / (departures.length - 1) : 0;
+        const cancelledDelay = cancelledDeps.length * headway;
+        const total = withRt.length + cancelledDeps.length;
+        const avg = (rtDelay + cancelledDelay) / total;
         return `${avg >= 0 ? "+" : ""}${avg.toFixed(1)} min`;
       })()}</div>
-      <div class="detail">non-cancelled with RT data</div>
+      <div class="detail">incl. cancelled as ${(() => {
+        const span = departures.length > 1
+          ? timeToMinutes(departures[departures.length - 1].time) - timeToMinutes(departures[0].time)
+          : 0;
+        const headway = span > 0 && departures.length > 1 ? span / (departures.length - 1) : 0;
+        return `~${headway.toFixed(0)} min headway`;
+      })()}</div>
     </div>
   </div>
   <div class="section-title">All departures</div>
