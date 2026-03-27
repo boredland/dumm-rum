@@ -802,15 +802,23 @@ export default {
 			});
 
 		if (pathname === "/") {
-			const results = await env.DB.prepare(
-				`SELECT station_id, SUM(cancelled) as cancelled, COUNT(*) as total
-					 FROM departures GROUP BY station_id`,
-			).all<{ station_id: string; cancelled: number; total: number }>();
+			const results = await env.DB.batch(
+				STATIONS.map((s) =>
+					env.DB.prepare(
+						`SELECT SUM(cancelled) as cancelled, COUNT(*) as total FROM departures WHERE station_id = ? AND ${dataFilter(s)}`,
+					).bind(s.id),
+				),
+			);
 			const stationStats = new Map(
-				(results.results ?? []).map((r) => [
-					r.station_id,
-					{ cancelled: r.cancelled, total: r.total },
-				]),
+				STATIONS.map((s, i) => {
+					const row = results[i].results?.[0] as
+						| { cancelled: number; total: number }
+						| undefined;
+					return [
+						s.id,
+						{ cancelled: row?.cancelled ?? 0, total: row?.total ?? 0 },
+					] as const;
+				}),
 			);
 			return html(renderStationList(stationStats));
 		}
