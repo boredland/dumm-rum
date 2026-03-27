@@ -340,7 +340,7 @@ function renderOverview(stats: { days: DayStats[]; avgCancelledPerDay: number },
 <div class="wrap">
   <header>
     <h1><span class="icon">🚌</span> ${STATION_NAME}</h1>
-    <p class="subtitle">Bus M43 cancellation tracker &mdash; collecting data since 2026-03-27 &mdash; updated every 5 min</p>
+    <p class="subtitle">Bus M43 cancellation tracker &mdash; collecting data since ${COLLECTION_START} ${COLLECTION_START_TIME.slice(0, 5)} &mdash; updated every 5 min</p>
   </header>
   <div class="cards">
     <div class="card">
@@ -356,7 +356,7 @@ function renderOverview(stats: { days: DayStats[]; avgCancelledPerDay: number },
     <div class="card">
       <div class="label">Days tracked</div>
       <div class="value">${stats.days.length}</div>
-      <div class="detail">${stats.days.length > 0 ? `since ${stats.days[stats.days.length - 1].date}` : ""}</div>
+      <div class="detail">${stats.days.length > 0 ? `since ${COLLECTION_START}` : ""}</div>
     </div>
   </div>
   ${nextDeps.length > 0 ? `
