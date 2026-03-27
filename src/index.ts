@@ -482,7 +482,7 @@ a:hover { text-decoration: underline; }
 @media (max-width: 600px) {
   .wrap { padding: 1rem; }
   .cards { grid-template-columns: 1fr; }
-  .bar-cell { display: none; }
+  .bar-cell, .hide-mobile { display: none; }
   td, th { padding: 0.5rem 0.6rem; font-size: 0.8rem; }
 }`;
 
@@ -598,8 +598,8 @@ function renderOverview(
       <td>${rate}%</td>
       <td class="bar-cell"><div class="bar-wrap"><div class="bar-fill" style="width:${Math.min(parseFloat(rate) * 2, 100)}%"></div></div></td>
       <td>${fmtDelay(d.avgDelay)}</td>
-      <td>${fmtFreq(d.plannedFreq)}</td>
-      <td>${fmtFreq(d.actualFreq)}</td>
+      <td class="hide-mobile">${fmtFreq(d.plannedFreq)}</td>
+      <td class="hide-mobile">${fmtFreq(d.actualFreq)}</td>
     </tr>`;
 		})
 		.join("\n");
@@ -658,7 +658,7 @@ function renderOverview(
   ${renderChart(stats.days)}
   <div class="section-title">Daily breakdown</div>
   <table>
-    <thead><tr><th>Date</th><th>Total</th><th>Cancelled</th><th>Rate</th><th class="bar-cell"></th><th>Avg delay</th><th>Planned freq</th><th>Actual freq</th></tr></thead>
+    <thead><tr><th>Date</th><th>Total</th><th>Cancelled</th><th>Rate</th><th class="bar-cell"></th><th>Avg delay</th><th class="hide-mobile">Planned freq</th><th class="hide-mobile">Actual freq</th></tr></thead>
     <tbody>${tableRows || '<tr><td colspan="8" class="empty">No data yet</td></tr>'}</tbody>
   </table>
 </div>
