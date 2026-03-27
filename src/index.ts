@@ -589,13 +589,20 @@ function renderChart(days: DayStats[]): string {
 
 // --- Pages ---
 
-function renderStationList(): string {
-	const cards = STATIONS.map(
-		(s) => `<a href="/${s.slug}" class="card" style="text-decoration:none">
+function renderStationList(
+	stationStats: Map<string, { cancelled: number; total: number }>,
+): string {
+	const cards = STATIONS.map((s) => {
+		const st = stationStats.get(s.id);
+		const rate = st && st.total > 0 ? (st.cancelled / st.total) * 100 : 0;
+		const borderColor =
+			rate >= 5 ? "#f85149" : rate >= 1 ? "#d29922" : "#3fb950";
+		return `<a href="/${s.slug}" class="card" style="text-decoration:none;border-color:${borderColor}">
       <div class="label">${s.type}</div>
       <div class="value" style="font-size:1.2rem;color:#fff">${esc(shortDir(s.name))}</div>
-    </a>`,
-	).join("\n");
+      ${st ? `<div class="detail">${pct(st.cancelled, st.total)}% cancelled</div>` : ""}
+    </a>`;
+	}).join("\n");
 
 	return `${head("DummRum")}
 <body>
@@ -795,7 +802,17 @@ export default {
 			});
 
 		if (pathname === "/") {
-			return html(renderStationList());
+			const results = await env.DB.prepare(
+				`SELECT station_id, SUM(cancelled) as cancelled, COUNT(*) as total
+					 FROM departures GROUP BY station_id`,
+			).all<{ station_id: string; cancelled: number; total: number }>();
+			const stationStats = new Map(
+				(results.results ?? []).map((r) => [
+					r.station_id,
+					{ cancelled: r.cancelled, total: r.total },
+				]),
+			);
+			return html(renderStationList(stationStats));
 		}
 
 		const stationMatch = pathname.match(/^\/([^/]+)$/);
