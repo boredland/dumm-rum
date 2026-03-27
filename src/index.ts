@@ -34,6 +34,14 @@ const STATIONS: Station[] = [
 		collectionStartTime: "17:00:00",
 	},
 	{
+		id: "3000506",
+		name: "Frankfurt (Main) Matthias-Beltz-Platz",
+		slug: "matthias-beltz-platz",
+		type: "tram",
+		collectionStart: "2026-03-27",
+		collectionStartTime: "19:00:00",
+	},
+	{
 		id: "3001545",
 		name: "Frankfurt (Main) Seckbacher Landstraße",
 		slug: "seckbacher-landstrasse",
