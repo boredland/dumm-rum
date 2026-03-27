@@ -131,7 +131,12 @@ async function generateDailyHaiku(env: Env): Promise<void> {
 		max_tokens: 50,
 	});
 
-	const haiku = (response as { response?: string }).response?.trim();
+	const result = response as Record<string, unknown>;
+	const haiku = (
+		(result.response as string) ??
+		(result.choices as { message: { content: string } }[])?.[0]?.message
+			?.content
+	)?.trim();
 	if (!haiku) {
 		console.error("Haiku generation returned empty response", response);
 		return;
