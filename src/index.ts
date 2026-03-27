@@ -6,17 +6,43 @@ dayjs.extend(utc);
 dayjs.extend(timezone);
 
 const TZ = "Europe/Berlin";
-const STATION_ID = "3001586";
-const STATION_NAME = "Frankfurt (Main) Draisbornstraße";
-const COLLECTION_START = "2026-03-27";
-const COLLECTION_START_TIME = "11:00:00";
 
-const DATA_FILTER = `(date > '${COLLECTION_START}' OR (date = '${COLLECTION_START}' AND time >= '${COLLECTION_START_TIME}'))`;
+interface Station {
+	id: string;
+	name: string;
+	slug: string;
+	type: "bus" | "tram";
+	collectionStart: string;
+	collectionStartTime: string;
+}
+
+const STATIONS: Station[] = [
+	{
+		id: "3001586",
+		name: "Frankfurt (Main) Draisbornstraße",
+		slug: "draisbornstrasse",
+		type: "bus",
+		collectionStart: "2026-03-27",
+		collectionStartTime: "11:00:00",
+	},
+	{
+		id: "3000508",
+		name: "Frankfurt (Main) Rothschildallee",
+		slug: "rothschildallee",
+		type: "tram",
+		collectionStart: "2026-03-27",
+		collectionStartTime: "17:00:00",
+	},
+];
+
+function dataFilter(station: Station): string {
+	return `(date > '${station.collectionStart}' OR (date = '${station.collectionStart}' AND time >= '${station.collectionStartTime}'))`;
+}
 
 const UPSERT_SQL = `
-INSERT INTO departures (date, time, rt_date, rt_time, line, direction, journey_status, cancelled, operator, category, journey_num, reachable, stop, stop_ext_id, fetched_at)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-ON CONFLICT(date, time, line, direction, journey_num)
+INSERT INTO departures (station_id, date, time, rt_date, rt_time, line, direction, journey_status, cancelled, operator, category, journey_num, reachable, stop, stop_ext_id, fetched_at)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+ON CONFLICT(station_id, date, time, line, direction, journey_num)
 DO UPDATE SET
   rt_date = COALESCE(excluded.rt_date, departures.rt_date),
   rt_time = COALESCE(excluded.rt_time, departures.rt_time),
@@ -60,9 +86,9 @@ function todayBerlin(): string {
 
 // --- Data collection ---
 
-async function collectDepartures(env: Env): Promise<number> {
+async function collectDepartures(env: Env, station: Station): Promise<number> {
 	const oneHourAgo = nowBerlin().subtract(1, "hour");
-	const url = `https://www.rmv.de/hapi/departureBoard?accessId=${env.RMV_API_KEY}&id=${STATION_ID}&date=${oneHourAgo.format("YYYY-MM-DD")}&time=${oneHourAgo.format("HH:mm")}&duration=120&maxJourneys=-1&format=json`;
+	const url = `https://www.rmv.de/hapi/departureBoard?accessId=${env.RMV_API_KEY}&id=${station.id}&date=${oneHourAgo.format("YYYY-MM-DD")}&time=${oneHourAgo.format("HH:mm")}&duration=120&maxJourneys=-1&format=json`;
 
 	const resp = await fetch(url, {
 		cf: { cacheTtl: 300, cacheEverything: true },
@@ -85,6 +111,7 @@ async function collectDepartures(env: Env): Promise<number> {
 		const stmts = departures.slice(i, i + BATCH_SIZE).map((dep) => {
 			const p = dep.ProductAtStop;
 			return env.DB.prepare(UPSERT_SQL).bind(
+				station.id,
 				dep.date,
 				dep.time,
 				dep.rtDate ?? null,
@@ -108,13 +135,16 @@ async function collectDepartures(env: Env): Promise<number> {
 	return departures.length;
 }
 
-async function generateDailyHaiku(env: Env): Promise<void> {
+async function generateDailyHaiku(env: Env, station: Station): Promise<void> {
 	const today = todayBerlin();
-	const existing = await env.DB.prepare("SELECT 1 FROM haikus WHERE date = ?")
-		.bind(today)
+	const existing = await env.DB.prepare(
+		"SELECT 1 FROM haikus WHERE date = ? AND station_id = ?",
+	)
+		.bind(today, station.id)
 		.first();
 	if (existing) return;
 
+	const vehicle = station.type === "tram" ? "tram" : "bus";
 	const response = await env.AI.run("@cf/ibm-granite/granite-4.0-h-micro", {
 		messages: [
 			{
@@ -124,8 +154,7 @@ async function generateDailyHaiku(env: Env): Promise<void> {
 			},
 			{
 				role: "user",
-				content:
-					"Write a haiku about waiting at a bus stop, not knowing if the bus was cancelled or if it ever existed. Theme: missing buses, uncertainty, urban melancholy.",
+				content: `Write a haiku about waiting at a ${vehicle} stop, not knowing if the ${vehicle} was cancelled or if it ever existed. Theme: missing ${vehicle}s, uncertainty, urban melancholy.`,
 			},
 		],
 		max_tokens: 100,
@@ -141,14 +170,13 @@ async function generateDailyHaiku(env: Env): Promise<void> {
 		console.error("Haiku generation returned empty response", response);
 		return;
 	}
-	console.log(`Generated haiku: ${haiku}`);
+	console.log(`Generated haiku for ${station.slug}: ${haiku}`);
 
 	await env.DB.prepare(
-		"INSERT INTO haikus (date, haiku) VALUES (?, ?) ON CONFLICT(date) DO NOTHING",
+		"INSERT INTO haikus (date, station_id, haiku) VALUES (?, ?, ?) ON CONFLICT(date, station_id) DO NOTHING",
 	)
-		.bind(today, haiku)
+		.bind(today, station.id, haiku)
 		.run();
-	console.log(`Stored haiku for ${today}`);
 }
 
 // --- Queries ---
@@ -238,22 +266,29 @@ function avgNonNull(nums: (number | null)[]): number | null {
 		: null;
 }
 
-async function getStats(db: D1Database): Promise<Stats> {
+async function getStats(db: D1Database, station: Station): Promise<Stats> {
+	const filter = dataFilter(station);
 	const [statsResult, lastChangeResult, haikuResult] = await db.batch([
-		db.prepare(
-			`SELECT date, direction, COUNT(*) as total, SUM(cancelled) as cancelled,
+		db
+			.prepare(
+				`SELECT date, direction, COUNT(*) as total, SUM(cancelled) as cancelled,
         AVG(CASE WHEN cancelled = 0 AND rt_time IS NOT NULL THEN
           (strftime('%s', rt_time) - strftime('%s', time)) / 60.0
         END) as avg_delay,
         SUM(CASE WHEN cancelled = 0 AND rt_time IS NOT NULL THEN 1 ELSE 0 END) as rt_count,
         MIN(time) as first_time, MAX(time) as last_time
-       FROM departures WHERE ${DATA_FILTER}
+       FROM departures WHERE station_id = ? AND ${filter}
        GROUP BY date, direction ORDER BY date DESC, direction`,
-		),
-		db.prepare(
-			`SELECT fetched_at FROM departures ORDER BY fetched_at DESC LIMIT 1`,
-		),
-		db.prepare("SELECT haiku FROM haikus WHERE date = ?").bind(todayBerlin()),
+			)
+			.bind(station.id),
+		db
+			.prepare(
+				"SELECT fetched_at FROM departures WHERE station_id = ? ORDER BY fetched_at DESC LIMIT 1",
+			)
+			.bind(station.id),
+		db
+			.prepare("SELECT haiku FROM haikus WHERE date = ? AND station_id = ?")
+			.bind(todayBerlin(), station.id),
 	]);
 
 	const rows = (statsResult.results as DirRow[]) ?? [];
@@ -298,34 +333,42 @@ async function getStats(db: D1Database): Promise<Stats> {
 
 async function getDayDepartures(
 	db: D1Database,
+	station: Station,
 	date: string,
 ): Promise<DepartureRow[]> {
 	const { results } = await db
 		.prepare(
-			`SELECT time, rt_time, line, direction, cancelled, fetched_at FROM departures WHERE date = ? AND ${DATA_FILTER} ORDER BY time, direction`,
+			`SELECT time, rt_time, line, direction, cancelled, fetched_at FROM departures WHERE station_id = ? AND date = ? AND ${dataFilter(station)} ORDER BY time, direction`,
 		)
-		.bind(date)
+		.bind(station.id, date)
 		.all<DepartureRow>();
 	return results ?? [];
 }
 
-async function getHaiku(db: D1Database, date: string): Promise<string | null> {
+async function getHaiku(
+	db: D1Database,
+	station: Station,
+	date: string,
+): Promise<string | null> {
 	const row = await db
-		.prepare("SELECT haiku FROM haikus WHERE date = ?")
-		.bind(date)
+		.prepare("SELECT haiku FROM haikus WHERE date = ? AND station_id = ?")
+		.bind(date, station.id)
 		.first<{ haiku: string }>();
 	return row?.haiku ?? null;
 }
 
-async function getNextDepartures(db: D1Database): Promise<NextDeparture[]> {
+async function getNextDepartures(
+	db: D1Database,
+	station: Station,
+): Promise<NextDeparture[]> {
 	const { results } = await db
 		.prepare(
 			`SELECT time, rt_time, direction, line FROM departures
-       WHERE date = ? AND cancelled = 0 AND time >= ?
+       WHERE station_id = ? AND date = ? AND cancelled = 0 AND time >= ?
        GROUP BY direction HAVING time = MIN(time)
        ORDER BY time`,
 		)
-		.bind(todayBerlin(), nowBerlin().format("HH:mm:ss"))
+		.bind(station.id, todayBerlin(), nowBerlin().format("HH:mm:ss"))
 		.all<NextDeparture>();
 	return results ?? [];
 }
@@ -501,7 +544,32 @@ function renderChart(days: DayStats[]): string {
 
 // --- Pages ---
 
-function renderOverview(stats: Stats, nextDeps: NextDeparture[]): string {
+function renderStationList(): string {
+	const cards = STATIONS.map(
+		(s) => `<a href="/${s.slug}" class="card" style="text-decoration:none">
+      <div class="label">${s.type}</div>
+      <div class="value" style="font-size:1.2rem;color:#fff">${esc(shortDir(s.name))}</div>
+    </a>`,
+	).join("\n");
+
+	return `${head("Dummrum")}
+<body>
+<div class="wrap">
+  <header>
+    <h1>🚌 Dummrum</h1>
+    <p class="subtitle">Bus &amp; tram cancellation tracker</p>
+  </header>
+  <div class="section-title">Stations</div>
+  <div class="cards">${cards}</div>
+</div>
+</body></html>`;
+}
+
+function renderOverview(
+	station: Station,
+	stats: Stats,
+	nextDeps: NextDeparture[],
+): string {
 	const today = todayBerlin();
 	const todayStats = stats.days.find((d) => d.date === today);
 	const todayCancelled = todayStats?.cancelled ?? 0;
@@ -511,7 +579,7 @@ function renderOverview(stats: Stats, nextDeps: NextDeparture[]): string {
 		.map((d) => {
 			const rate = pct(d.cancelled, d.total);
 			return `<tr>
-      <td><a href="/day/${d.date}">${d.date}${d.date === today ? " (today)" : ""}</a></td>
+      <td><a href="/${station.slug}/day/${d.date}">${d.date}${d.date === today ? " (today)" : ""}</a></td>
       <td>${d.total}</td>
       <td>${d.cancelled > 0 ? `<span class="badge cancelled">${d.cancelled}</span>` : `<span class="badge ok">0</span>`}</td>
       <td>${rate}%</td>
@@ -539,12 +607,13 @@ function renderOverview(stats: Stats, nextDeps: NextDeparture[]): string {
 		})
 		.join("\n");
 
-	return `${head(STATION_NAME)}
+	return `${head(station.name)}
 <body>
 <div class="wrap">
+  <a href="/" class="back">&larr; All stations</a>
   <header>
-    <h1>🚌 ${STATION_NAME}</h1>
-    <p class="subtitle">Bus M43 cancellation tracker &mdash; collecting since ${COLLECTION_START}${stats.lastChange ? ` &mdash; last updated ${fmtTimestamp(stats.lastChange)}` : ""}</p>
+    <h1>${station.type === "tram" ? "🚋" : "🚌"} ${esc(station.name)}</h1>
+    <p class="subtitle">Cancellation tracker &mdash; collecting since ${station.collectionStart}${stats.lastChange ? ` &mdash; last updated ${fmtTimestamp(stats.lastChange)}` : ""}</p>
     ${stats.haiku ? `<blockquote style="margin-top:0.75rem;padding-left:1rem;border-left:3px solid #30363d;font-style:italic;color:#8b949e;white-space:pre-line">${esc(stats.haiku)}</blockquote>` : ""}
   </header>
   <div class="cards">
@@ -568,7 +637,7 @@ function renderOverview(stats: Stats, nextDeps: NextDeparture[]): string {
     <div class="card">
       <div class="label">Days tracked</div>
       <div class="value">${stats.days.length}</div>
-      <div class="detail">${stats.days.length > 0 ? `since ${COLLECTION_START}` : ""}</div>
+      <div class="detail">${stats.days.length > 0 ? `since ${station.collectionStart}` : ""}</div>
     </div>
   </div>
   ${nextDeps.length > 0 ? `<div class="section-title">Next departures</div><div class="cards">${nextCards}</div>` : ""}
@@ -584,6 +653,7 @@ function renderOverview(stats: Stats, nextDeps: NextDeparture[]): string {
 }
 
 function renderDayDetail(
+	station: Station,
 	date: string,
 	departures: DepartureRow[],
 	haiku: string | null,
@@ -621,13 +691,13 @@ function renderDayDetail(
 		})
 		.join("\n");
 
-	return `${head(`${date} — ${STATION_NAME}`)}
+	return `${head(`${date} — ${station.name}`)}
 <body>
 <div class="wrap">
-  <a href="/" class="back">&larr; Back to overview</a>
+  <a href="/${station.slug}" class="back">&larr; Back to overview</a>
   <header>
     <h1>${date}</h1>
-    <p class="subtitle">${STATION_NAME}</p>
+    <p class="subtitle">${esc(station.name)}</p>
     ${haiku ? `<blockquote style="margin-top:0.75rem;padding-left:1rem;border-left:3px solid #30363d;font-style:italic;color:#8b949e;white-space:pre-line">${esc(haiku)}</blockquote>` : ""}
   </header>
   <div class="cards">
@@ -660,37 +730,54 @@ ${isToday ? '<script>document.getElementById("now")?.scrollIntoView({behavior:"s
 
 export default {
 	async scheduled(_controller: ScheduledController, env: Env) {
-		const [count] = await Promise.all([
-			collectDepartures(env),
-			generateDailyHaiku(env),
-		]);
-		console.log(`Upserted ${count} departures for ${todayBerlin()}`);
+		const results = await Promise.all(
+			STATIONS.flatMap((s) => [
+				collectDepartures(env, s),
+				generateDailyHaiku(env, s),
+			]),
+		);
+		const counts = results.filter((_, i) => i % 2 === 0);
+		for (let i = 0; i < STATIONS.length; i++) {
+			console.log(`${STATIONS[i].slug}: upserted ${counts[i]} departures`);
+		}
 	},
 
 	async fetch(request: Request, env: Env) {
 		const { pathname } = new URL(request.url);
-
-		if (pathname === "/api/stats") {
-			return Response.json(await getStats(env.DB));
-		}
-
-		const dayMatch = pathname.match(/^\/day\/(\d{4}-\d{2}-\d{2})$/);
-		if (dayMatch) {
-			const [departures, haiku] = await Promise.all([
-				getDayDepartures(env.DB, dayMatch[1]),
-				getHaiku(env.DB, dayMatch[1]),
-			]);
-			return new Response(renderDayDetail(dayMatch[1], departures, haiku), {
+		const html = (body: string) =>
+			new Response(body, {
 				headers: { "Content-Type": "text/html; charset=utf-8" },
 			});
+
+		if (pathname === "/") {
+			return html(renderStationList());
 		}
 
-		const [stats, nextDeps] = await Promise.all([
-			getStats(env.DB),
-			getNextDepartures(env.DB),
-		]);
-		return new Response(renderOverview(stats, nextDeps), {
-			headers: { "Content-Type": "text/html; charset=utf-8" },
-		});
+		const stationMatch = pathname.match(/^\/([^/]+)$/);
+		if (stationMatch) {
+			const station = STATIONS.find((s) => s.slug === stationMatch[1]);
+			if (!station) return new Response("Not found", { status: 404 });
+			if (pathname === `/${station.slug}/api/stats`) {
+				return Response.json(await getStats(env.DB, station));
+			}
+			const [stats, nextDeps] = await Promise.all([
+				getStats(env.DB, station),
+				getNextDepartures(env.DB, station),
+			]);
+			return html(renderOverview(station, stats, nextDeps));
+		}
+
+		const dayMatch = pathname.match(/^\/([^/]+)\/day\/(\d{4}-\d{2}-\d{2})$/);
+		if (dayMatch) {
+			const station = STATIONS.find((s) => s.slug === dayMatch[1]);
+			if (!station) return new Response("Not found", { status: 404 });
+			const [departures, haiku] = await Promise.all([
+				getDayDepartures(env.DB, station, dayMatch[2]),
+				getHaiku(env.DB, station, dayMatch[2]),
+			]);
+			return html(renderDayDetail(station, dayMatch[2], departures, haiku));
+		}
+
+		return new Response("Not found", { status: 404 });
 	},
 } satisfies ExportedHandler<Env>;
