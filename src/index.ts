@@ -157,7 +157,7 @@ function renderPage(stats: { days: DayStats[]; avgCancelledPerDay: number }): st
   <div class="cards">
     <div class="card">
       <div class="label">Today cancelled</div>
-      <div class="value${(todayStats?.cancelled ?? 0) > 0 ? " warn" : ""}">${todayStats?.cancelled ?? "—"}<span style="font-size:0.9rem;font-weight:400;color:#888"> / ${todayStats?.total ?? "—"}</span></div>
+      <div class="value${(todayStats?.cancelled ?? 0) > 0 ? " warn" : ""}">${todayStats ? `${todayStats.cancelled}<span style="font-size:0.9rem;font-weight:400;color:#888"> / ${todayStats.total}</span>` : '<span style="font-size:0.9rem;color:#888">no data yet</span>'}</div>
     </div>
     <div class="card">
       <div class="label">Avg cancelled / day</div>
