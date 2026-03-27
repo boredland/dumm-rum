@@ -122,15 +122,24 @@ interface DepartureRow {
   fetched_at: string;
 }
 
-async function getStats(db: D1Database): Promise<{ days: DayStats[]; avgCancelledPerDay: number }> {
-  const { results } = await db
-    .prepare(
+interface Stats {
+  days: DayStats[];
+  avgCancelledPerDay: number;
+  lastChange: string | null;
+}
+
+async function getStats(db: D1Database): Promise<Stats> {
+  const [statsResult, lastChangeResult] = await db.batch([
+    db.prepare(
       `SELECT date, direction, COUNT(*) as total, SUM(cancelled) as cancelled
        FROM departures WHERE ${RELIABLE_DATA_FILTER} GROUP BY date, direction ORDER BY date DESC, direction`
-    )
-    .all<DirectionStats>();
+    ),
+    db.prepare(
+      `SELECT fetched_at FROM departures ORDER BY fetched_at DESC LIMIT 1`
+    ),
+  ]);
 
-  const rows = results ?? [];
+  const rows = (statsResult.results as DirectionStats[]) ?? [];
   const dayMap = new Map<string, DayStats>();
   for (const row of rows) {
     let day = dayMap.get(row.date);
@@ -146,8 +155,9 @@ async function getStats(db: D1Database): Promise<{ days: DayStats[]; avgCancelle
   const days = [...dayMap.values()];
   const totalCancelled = days.reduce((sum, d) => sum + d.cancelled, 0);
   const avgCancelledPerDay = days.length > 0 ? totalCancelled / days.length : 0;
+  const lastChange = (lastChangeResult.results?.[0] as { fetched_at: string } | undefined)?.fetched_at ?? null;
 
-  return { days, avgCancelledPerDay };
+  return { days, avgCancelledPerDay, lastChange };
 }
 
 async function getDayDepartures(db: D1Database, date: string): Promise<DepartureRow[]> {
@@ -297,7 +307,13 @@ function renderChart(days: DayStats[]): string {
   </div>`;
 }
 
-function renderOverview(stats: { days: DayStats[]; avgCancelledPerDay: number }, nextDeps: NextDeparture[]): string {
+function formatLastChange(iso: string | null): string {
+  if (!iso) return "";
+  const d = new Date(iso);
+  return d.toLocaleString("de-DE", { timeZone: "Europe/Berlin", day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" });
+}
+
+function renderOverview(stats: Stats, nextDeps: NextDeparture[]): string {
   const today = todayBerlin();
   const todayStats = stats.days.find((d) => d.date === today);
   const todayCancelled = todayStats?.cancelled ?? 0;
@@ -340,7 +356,7 @@ function renderOverview(stats: { days: DayStats[]; avgCancelledPerDay: number },
 <div class="wrap">
   <header>
     <h1><span class="icon">🚌</span> ${STATION_NAME}</h1>
-    <p class="subtitle">Bus M43 cancellation tracker &mdash; collecting data since ${COLLECTION_START} ${COLLECTION_START_TIME.slice(0, 5)} &mdash; updated every 5 min</p>
+    <p class="subtitle">Bus M43 cancellation tracker &mdash; collecting since ${COLLECTION_START}${stats.lastChange ? ` &mdash; last updated ${formatLastChange(stats.lastChange)}` : ""}</p>
   </header>
   <div class="cards">
     <div class="card">
