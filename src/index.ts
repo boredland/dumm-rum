@@ -308,6 +308,14 @@ async function getDayDepartures(
 	return results ?? [];
 }
 
+async function getHaiku(db: D1Database, date: string): Promise<string | null> {
+	const row = await db
+		.prepare("SELECT haiku FROM haikus WHERE date = ?")
+		.bind(date)
+		.first<{ haiku: string }>();
+	return row?.haiku ?? null;
+}
+
 async function getNextDepartures(db: D1Database): Promise<NextDeparture[]> {
 	const { results } = await db
 		.prepare(
@@ -574,7 +582,11 @@ function renderOverview(stats: Stats, nextDeps: NextDeparture[]): string {
 </body></html>`;
 }
 
-function renderDayDetail(date: string, departures: DepartureRow[]): string {
+function renderDayDetail(
+	date: string,
+	departures: DepartureRow[],
+	haiku: string | null,
+): string {
 	const isToday = date === todayBerlin();
 	const currentHour = nowBerlin().format("HH");
 	const cancelledCount = departures.filter((d) => d.cancelled).length;
@@ -615,6 +627,7 @@ function renderDayDetail(date: string, departures: DepartureRow[]): string {
   <header>
     <h1>${date}</h1>
     <p class="subtitle">${STATION_NAME}</p>
+    ${haiku ? `<blockquote style="margin-top:0.75rem;padding-left:1rem;border-left:3px solid #30363d;font-style:italic;color:#8b949e;white-space:pre-line">${esc(haiku)}</blockquote>` : ""}
   </header>
   <div class="cards">
     <div class="card">
@@ -662,8 +675,11 @@ export default {
 
 		const dayMatch = pathname.match(/^\/day\/(\d{4}-\d{2}-\d{2})$/);
 		if (dayMatch) {
-			const departures = await getDayDepartures(env.DB, dayMatch[1]);
-			return new Response(renderDayDetail(dayMatch[1], departures), {
+			const [departures, haiku] = await Promise.all([
+				getDayDepartures(env.DB, dayMatch[1]),
+				getHaiku(env.DB, dayMatch[1]),
+			]);
+			return new Response(renderDayDetail(dayMatch[1], departures, haiku), {
 				headers: { "Content-Type": "text/html; charset=utf-8" },
 			});
 		}
