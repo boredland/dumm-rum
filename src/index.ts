@@ -214,12 +214,15 @@ function renderChart(days: DayStats[]): string {
   const sorted = [...days].reverse();
   if (sorted.length === 0) return "";
 
-  const barWidth = 24;
-  const gap = 4;
-  const chartHeight = 160;
-  const labelHeight = 50;
-  const topPadding = 20;
-  const svgWidth = sorted.length * (barWidth + gap) + gap + 40;
+  const chartWidth = 760;
+  const leftPad = 36;
+  const chartHeight = 120;
+  const labelHeight = 40;
+  const topPadding = 16;
+  const usable = chartWidth - leftPad;
+  const gap = Math.max(1, Math.floor(usable / sorted.length * 0.15));
+  const barWidth = Math.max(2, Math.floor((usable - gap * sorted.length) / sorted.length));
+  const svgWidth = chartWidth;
   const svgHeight = chartHeight + labelHeight + topPadding;
   const maxRate = Math.max(10, ...sorted.map((d) => d.total > 0 ? (d.cancelled / d.total) * 100 : 0));
 
@@ -227,16 +230,17 @@ function renderChart(days: DayStats[]): string {
     .map((d, i) => {
       const rate = d.total > 0 ? (d.cancelled / d.total) * 100 : 0;
       const barH = maxRate > 0 ? (rate / maxRate) * chartHeight : 0;
-      const x = 40 + i * (barWidth + gap) + gap;
+      const x = leftPad + i * (barWidth + gap) + gap;
       const y = topPadding + chartHeight - barH;
       const color = rate > 0 ? "#f85149" : "#21262d";
       const label = d.date.slice(5);
-      const showLabel = sorted.length <= 14 || i % Math.ceil(sorted.length / 14) === 0;
+      const maxLabels = Math.floor(usable / 40);
+      const showLabel = sorted.length <= maxLabels || i % Math.ceil(sorted.length / maxLabels) === 0;
       return `<rect x="${x}" y="${y}" width="${barWidth}" height="${Math.max(barH, 1)}" rx="3" fill="${color}" opacity="${rate > 0 ? 0.85 : 0.4}">
         <title>${d.date}: ${rate.toFixed(1)}% (${d.cancelled}/${d.total})</title>
       </rect>
-      ${rate > 0 ? `<text x="${x + barWidth / 2}" y="${y - 4}" text-anchor="middle" font-size="10" fill="#7d8590">${rate.toFixed(1)}%</text>` : ""}
-      ${showLabel ? `<text x="${x + barWidth / 2}" y="${topPadding + chartHeight + 14}" text-anchor="middle" font-size="9" fill="#484f58" transform="rotate(45 ${x + barWidth / 2} ${topPadding + chartHeight + 14})">${label}</text>` : ""}`;
+      ${rate > 0 && barWidth >= 14 ? `<text x="${x + barWidth / 2}" y="${y - 3}" text-anchor="middle" font-size="8" fill="#7d8590">${rate.toFixed(0)}%</text>` : ""}
+      ${showLabel ? `<text x="${x + barWidth / 2}" y="${topPadding + chartHeight + 12}" text-anchor="middle" font-size="8" fill="#484f58" transform="rotate(45 ${x + barWidth / 2} ${topPadding + chartHeight + 12})">${label}</text>` : ""}`;
     })
     .join("\n");
 
@@ -244,8 +248,8 @@ function renderChart(days: DayStats[]): string {
     .filter((v) => v <= maxRate * 1.1)
     .map((v) => {
       const y = topPadding + chartHeight - (v / maxRate) * chartHeight;
-      return `<line x1="38" x2="${svgWidth}" y1="${y}" y2="${y}" stroke="#21262d" stroke-width="1"/>
-      <text x="36" y="${y + 3}" text-anchor="end" font-size="9" fill="#484f58">${v}%</text>`;
+      return `<line x1="${leftPad - 2}" x2="${svgWidth}" y1="${y}" y2="${y}" stroke="#21262d" stroke-width="1"/>
+      <text x="${leftPad - 4}" y="${y + 3}" text-anchor="end" font-size="8" fill="#484f58">${v}%</text>`;
     })
     .join("\n");
 
