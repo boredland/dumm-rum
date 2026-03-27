@@ -19,4 +19,5 @@ CREATE TABLE IF NOT EXISTS departures (
 );
 
 CREATE INDEX IF NOT EXISTS idx_departures_date ON departures(date);
-CREATE INDEX IF NOT EXISTS idx_departures_cancelled ON departures(date, cancelled);
+CREATE INDEX IF NOT EXISTS idx_departures_next ON departures(date, cancelled, time);
+CREATE INDEX IF NOT EXISTS idx_departures_fetched ON departures(fetched_at);
