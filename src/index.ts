@@ -711,7 +711,7 @@ function renderDayDetail(
 	haiku: string | null,
 ): string {
 	const isToday = date === todayBerlin();
-	const currentHour = nowBerlin().format("HH");
+	const nowTime = nowBerlin().format("HH:mm:ss");
 	const cancelledCount = departures.filter((d) => d.cancelled).length;
 	const avgDel = dayAvgDelay(departures);
 
@@ -724,7 +724,7 @@ function renderDayDetail(
 				? timeToMinutes(rtTime) - timeToMinutes(time)
 				: null;
 			let id = "";
-			if (isToday && !anchorPlaced && d.time.slice(0, 2) >= currentHour) {
+			if (isToday && !anchorPlaced && d.time >= nowTime) {
 				id = ' id="now"';
 				anchorPlaced = true;
 			}
