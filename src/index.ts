@@ -100,6 +100,8 @@ interface DirectionStats {
   total: number;
   cancelled: number;
   avg_delay: number | null;
+  first_time: string;
+  last_time: string;
 }
 
 interface DayStats {
@@ -107,6 +109,8 @@ interface DayStats {
   total: number;
   cancelled: number;
   avgDelay: number | null;
+  plannedFreq: string;
+  actualFreq: string;
   directions: { direction: string; total: number; cancelled: number; avgDelay: number | null }[];
 }
 
@@ -137,7 +141,9 @@ async function getStats(db: D1Database): Promise<Stats> {
         AVG(CASE WHEN cancelled = 0 AND rt_time IS NOT NULL THEN
           (CAST(substr(rt_time,1,2) AS INTEGER)*60 + CAST(substr(rt_time,4,2) AS INTEGER))
           - (CAST(substr(time,1,2) AS INTEGER)*60 + CAST(substr(time,4,2) AS INTEGER))
-        END) as avg_delay
+        END) as avg_delay,
+        MIN(time) as first_time,
+        MAX(time) as last_time
        FROM departures WHERE ${RELIABLE_DATA_FILTER} GROUP BY date, direction ORDER BY date DESC, direction`
     ),
     db.prepare(
@@ -150,7 +156,7 @@ async function getStats(db: D1Database): Promise<Stats> {
   for (const row of rows) {
     let day = dayMap.get(row.date);
     if (!day) {
-      day = { date: row.date, total: 0, cancelled: 0, avgDelay: null, directions: [] };
+      day = { date: row.date, total: 0, cancelled: 0, avgDelay: null, plannedFreq: "&mdash;", actualFreq: "&mdash;", directions: [] };
       dayMap.set(row.date, day);
     }
     day.total += row.total;
@@ -168,6 +174,14 @@ async function getStats(db: D1Database): Promise<Stats> {
         : null;
     }
   }
+
+  for (const [date, day] of dayMap) {
+    const allRows = rows.filter((r) => r.date === date);
+    const firstTime = allRows.reduce((m, r) => r.first_time < m ? r.first_time : m, "99:99");
+    const lastTime = allRows.reduce((m, r) => r.last_time > m ? r.last_time : m, "00:00");
+    day.plannedFreq = formatFreq(day.total, firstTime, lastTime);
+    day.actualFreq = formatFreq(day.total - day.cancelled, firstTime, lastTime);
+  }
   const totalCancelled = days.reduce((sum, d) => sum + d.cancelled, 0);
   const avgCancelledPerDay = days.length > 0 ? totalCancelled / days.length : 0;
   const lastChange = (lastChangeResult.results?.[0] as { fetched_at: string } | undefined)?.fetched_at ?? null;
@@ -184,6 +198,14 @@ async function getDayDepartures(db: D1Database, date: string): Promise<Departure
     .bind(date)
     .all<DepartureRow>();
   return results ?? [];
+}
+
+function formatFreq(count: number, firstTime: string, lastTime: string): string {
+  const span = (parseInt(lastTime.slice(0, 2)) * 60 + parseInt(lastTime.slice(3, 5)))
+    - (parseInt(firstTime.slice(0, 2)) * 60 + parseInt(firstTime.slice(3, 5)));
+  if (span <= 0 || count <= 1) return "&mdash;";
+  const avg = span / (count - 1);
+  return `~${avg.toFixed(0)} min`;
 }
 
 interface NextDeparture {
@@ -356,6 +378,8 @@ function renderOverview(stats: Stats, nextDeps: NextDeparture[]): string {
         <td>${rate}%</td>
         <td class="bar-cell"><div class="bar-wrap"><div class="bar-fill" style="width:${Math.min(parseFloat(rate) * 2, 100)}%"></div></div></td>
         <td>${delayStr}</td>
+        <td>${d.plannedFreq}</td>
+        <td>${d.actualFreq}</td>
         <td>${dirSummary}</td>
       </tr>`;
     })
@@ -367,6 +391,7 @@ function renderOverview(stats: Stats, nextDeps: NextDeparture[]): string {
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>${STATION_NAME}</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🚌</text></svg>">
   <style>${CSS}</style>
 </head>
 <body>
@@ -410,8 +435,8 @@ function renderOverview(stats: Stats, nextDeps: NextDeparture[]): string {
   ${renderChart(stats.days)}
   <div class="section-title">Daily breakdown</div>
   <table>
-    <thead><tr><th>Date</th><th>Total</th><th>Cancelled</th><th>Rate</th><th class="bar-cell"></th><th>Avg delay</th><th>By direction</th></tr></thead>
-    <tbody>${tableRows || '<tr><td colspan="7" class="empty">No data yet</td></tr>'}</tbody>
+    <thead><tr><th>Date</th><th>Total</th><th>Cancelled</th><th>Rate</th><th class="bar-cell"></th><th>Avg delay</th><th>Planned freq</th><th>Actual freq</th><th>By direction</th></tr></thead>
+    <tbody>${tableRows || '<tr><td colspan="9" class="empty">No data yet</td></tr>'}</tbody>
   </table>
 </div>
 </body>
@@ -459,6 +484,7 @@ function renderDayDetail(date: string, departures: DepartureRow[]): string {
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>${date} &mdash; ${STATION_NAME}</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🚌</text></svg>">
   <style>${CSS}</style>
 </head>
 <body>
