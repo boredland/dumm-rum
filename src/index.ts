@@ -1,3 +1,11 @@
+import dayjs from "dayjs";
+import utc from "dayjs/plugin/utc";
+import timezone from "dayjs/plugin/timezone";
+
+dayjs.extend(utc);
+dayjs.extend(timezone);
+
+const TZ = "Europe/Berlin";
 const STATION_ID = "3001586";
 const STATION_NAME = "Frankfurt (Main) Draisbornstraße";
 const COLLECTION_START = "2026-03-27";
@@ -43,14 +51,17 @@ interface Env {
   RMV_API_KEY: string;
 }
 
+function nowBerlin() {
+  return dayjs().tz(TZ);
+}
+
 function todayBerlin(): string {
-  return new Date().toLocaleDateString("sv-SE", { timeZone: "Europe/Berlin" });
+  return nowBerlin().format("YYYY-MM-DD");
 }
 
 async function collectDepartures(env: Env): Promise<number> {
-  const today = todayBerlin();
-  const currentTime = new Date().toLocaleTimeString("sv-SE", { timeZone: "Europe/Berlin", hour12: false }).slice(0, 5);
-  const url = `https://www.rmv.de/hapi/departureBoard?accessId=${env.RMV_API_KEY}&id=${STATION_ID}&date=${today}&time=${currentTime}&duration=60&maxJourneys=-1&format=json`;
+  const oneHourAgo = nowBerlin().subtract(1, "hour");
+  const url = `https://www.rmv.de/hapi/departureBoard?accessId=${env.RMV_API_KEY}&id=${STATION_ID}&date=${oneHourAgo.format("YYYY-MM-DD")}&time=${oneHourAgo.format("HH:mm")}&duration=120&maxJourneys=-1&format=json`;
 
   const resp = await fetch(url, { cf: { cacheTtl: 300, cacheEverything: true } });
   if (!resp.ok) {
@@ -246,7 +257,7 @@ interface NextDeparture {
 
 async function getNextDepartures(db: D1Database): Promise<NextDeparture[]> {
   const today = todayBerlin();
-  const now = new Date().toLocaleTimeString("sv-SE", { timeZone: "Europe/Berlin", hour12: false });
+  const now = nowBerlin().format("HH:mm:ss");
   const { results } = await db
     .prepare(
       `SELECT time, rt_time, direction, line FROM departures
@@ -375,8 +386,7 @@ function renderChart(days: DayStats[]): string {
 
 function formatLastChange(iso: string | null): string {
   if (!iso) return "";
-  const d = new Date(iso);
-  return d.toLocaleString("de-DE", { timeZone: "Europe/Berlin", day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" });
+  return dayjs(iso).tz(TZ).format("DD.MM.YYYY, HH:mm");
 }
 
 function renderOverview(stats: Stats, nextDeps: NextDeparture[]): string {
@@ -470,7 +480,7 @@ function renderOverview(stats: Stats, nextDeps: NextDeparture[]): string {
 
 function renderDayDetail(date: string, departures: DepartureRow[]): string {
   const isToday = date === todayBerlin();
-  const nowTime = new Date().toLocaleTimeString("sv-SE", { timeZone: "Europe/Berlin", hour12: false });
+  const nowTime = nowBerlin().format("HH:mm:ss");
   const currentHour = nowTime.slice(0, 2);
   const cancelled = departures.filter((d) => d.cancelled);
   const rate = pct(cancelled.length, departures.length);
