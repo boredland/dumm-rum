@@ -6,11 +6,11 @@ INSERT INTO departures (date, time, rt_date, rt_time, line, direction, journey_s
 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 ON CONFLICT(date, time, line, direction, journey_num)
 DO UPDATE SET
-  rt_date = excluded.rt_date,
-  rt_time = excluded.rt_time,
+  rt_date = COALESCE(excluded.rt_date, departures.rt_date),
+  rt_time = COALESCE(excluded.rt_time, departures.rt_time),
   journey_status = excluded.journey_status,
-  cancelled = excluded.cancelled,
-  reachable = excluded.reachable,
+  cancelled = MAX(departures.cancelled, excluded.cancelled),
+  reachable = CASE WHEN excluded.cancelled THEN 0 ELSE excluded.reachable END,
   fetched_at = excluded.fetched_at`;
 
 interface HafasDeparture {
