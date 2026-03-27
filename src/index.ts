@@ -200,12 +200,62 @@ a:hover { text-decoration: underline; }
 .back:hover { color: #58a6ff; }
 .dir-label { font-size: 0.8rem; color: #7d8590; }
 .empty { text-align: center; color: #484f58; padding: 2rem; }
+.chart-container { background: #161b22; border: 1px solid #30363d; border-radius: 12px; padding: 1.2rem 1.2rem 0.8rem; margin-bottom: 2rem; overflow-x: auto; }
+.chart-container svg { display: block; width: 100%; height: auto; }
+.chart-container svg text { font-family: -apple-system, system-ui, sans-serif; }
 @media (max-width: 600px) {
   .wrap { padding: 1rem; }
   .cards { grid-template-columns: 1fr; }
   .bar-cell { display: none; }
   td, th { padding: 0.5rem 0.6rem; font-size: 0.8rem; }
 }`;
+
+function renderChart(days: DayStats[]): string {
+  const sorted = [...days].reverse();
+  if (sorted.length === 0) return "";
+
+  const barWidth = 24;
+  const gap = 4;
+  const chartHeight = 160;
+  const labelHeight = 50;
+  const topPadding = 20;
+  const svgWidth = sorted.length * (barWidth + gap) + gap + 40;
+  const svgHeight = chartHeight + labelHeight + topPadding;
+  const maxRate = Math.max(10, ...sorted.map((d) => d.total > 0 ? (d.cancelled / d.total) * 100 : 0));
+
+  const bars = sorted
+    .map((d, i) => {
+      const rate = d.total > 0 ? (d.cancelled / d.total) * 100 : 0;
+      const barH = maxRate > 0 ? (rate / maxRate) * chartHeight : 0;
+      const x = 40 + i * (barWidth + gap) + gap;
+      const y = topPadding + chartHeight - barH;
+      const color = rate > 0 ? "#f85149" : "#21262d";
+      const label = d.date.slice(5);
+      const showLabel = sorted.length <= 14 || i % Math.ceil(sorted.length / 14) === 0;
+      return `<rect x="${x}" y="${y}" width="${barWidth}" height="${Math.max(barH, 1)}" rx="3" fill="${color}" opacity="${rate > 0 ? 0.85 : 0.4}">
+        <title>${d.date}: ${rate.toFixed(1)}% (${d.cancelled}/${d.total})</title>
+      </rect>
+      ${rate > 0 ? `<text x="${x + barWidth / 2}" y="${y - 4}" text-anchor="middle" font-size="10" fill="#7d8590">${rate.toFixed(1)}%</text>` : ""}
+      ${showLabel ? `<text x="${x + barWidth / 2}" y="${topPadding + chartHeight + 14}" text-anchor="middle" font-size="9" fill="#484f58" transform="rotate(45 ${x + barWidth / 2} ${topPadding + chartHeight + 14})">${label}</text>` : ""}`;
+    })
+    .join("\n");
+
+  const gridLines = [0, 25, 50, 75, 100]
+    .filter((v) => v <= maxRate * 1.1)
+    .map((v) => {
+      const y = topPadding + chartHeight - (v / maxRate) * chartHeight;
+      return `<line x1="38" x2="${svgWidth}" y1="${y}" y2="${y}" stroke="#21262d" stroke-width="1"/>
+      <text x="36" y="${y + 3}" text-anchor="end" font-size="9" fill="#484f58">${v}%</text>`;
+    })
+    .join("\n");
+
+  return `<div class="chart-container">
+    <svg viewBox="0 0 ${svgWidth} ${svgHeight}" preserveAspectRatio="xMinYMid meet">
+      ${gridLines}
+      ${bars}
+    </svg>
+  </div>`;
+}
 
 function renderOverview(stats: { days: DayStats[]; avgCancelledPerDay: number }): string {
   const today = todayBerlin();
@@ -269,6 +319,8 @@ function renderOverview(stats: { days: DayStats[]; avgCancelledPerDay: number })
       <div class="detail">${stats.days.length > 0 ? `since ${stats.days[stats.days.length - 1].date}` : ""}</div>
     </div>
   </div>
+  <div class="section-title">Cancellation rate</div>
+  ${renderChart(stats.days)}
   <div class="section-title">Daily breakdown</div>
   <table>
     <thead><tr><th>Date</th><th>Total</th><th>Cancelled</th><th>Rate</th><th class="bar-cell"></th><th>By direction</th></tr></thead>
