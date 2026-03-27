@@ -304,7 +304,7 @@ function renderOverview(stats: { days: DayStats[]; avgCancelledPerDay: number })
 <div class="wrap">
   <header>
     <h1><span class="icon">🚌</span> ${STATION_NAME}</h1>
-    <p class="subtitle">Bus M43 cancellation tracker &mdash; updated every 5 min</p>
+    <p class="subtitle">Bus M43 cancellation tracker &mdash; collecting data since 2026-03-27 &mdash; updated every 5 min</p>
   </header>
   <div class="cards">
     <div class="card">
