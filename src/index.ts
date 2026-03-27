@@ -99,13 +99,15 @@ interface DirectionStats {
   direction: string;
   total: number;
   cancelled: number;
+  avg_delay: number | null;
 }
 
 interface DayStats {
   date: string;
   total: number;
   cancelled: number;
-  directions: { direction: string; total: number; cancelled: number }[];
+  avgDelay: number | null;
+  directions: { direction: string; total: number; cancelled: number; avgDelay: number | null }[];
 }
 
 interface DepartureRow {
@@ -131,7 +133,11 @@ interface Stats {
 async function getStats(db: D1Database): Promise<Stats> {
   const [statsResult, lastChangeResult] = await db.batch([
     db.prepare(
-      `SELECT date, direction, COUNT(*) as total, SUM(cancelled) as cancelled
+      `SELECT date, direction, COUNT(*) as total, SUM(cancelled) as cancelled,
+        AVG(CASE WHEN cancelled = 0 AND rt_time IS NOT NULL THEN
+          (CAST(substr(rt_time,1,2) AS INTEGER)*60 + CAST(substr(rt_time,4,2) AS INTEGER))
+          - (CAST(substr(time,1,2) AS INTEGER)*60 + CAST(substr(time,4,2) AS INTEGER))
+        END) as avg_delay
        FROM departures WHERE ${RELIABLE_DATA_FILTER} GROUP BY date, direction ORDER BY date DESC, direction`
     ),
     db.prepare(
@@ -144,15 +150,24 @@ async function getStats(db: D1Database): Promise<Stats> {
   for (const row of rows) {
     let day = dayMap.get(row.date);
     if (!day) {
-      day = { date: row.date, total: 0, cancelled: 0, directions: [] };
+      day = { date: row.date, total: 0, cancelled: 0, avgDelay: null, directions: [] };
       dayMap.set(row.date, day);
     }
     day.total += row.total;
     day.cancelled += row.cancelled;
-    day.directions.push({ direction: row.direction, total: row.total, cancelled: row.cancelled });
+    day.directions.push({ direction: row.direction, total: row.total, cancelled: row.cancelled, avgDelay: row.avg_delay });
   }
 
   const days = [...dayMap.values()];
+  for (const day of days) {
+    const withDelay = day.directions.filter((d) => d.avgDelay !== null);
+    if (withDelay.length > 0) {
+      const totalWeight = withDelay.reduce((s, d) => s + (d.total - d.cancelled), 0);
+      day.avgDelay = totalWeight > 0
+        ? withDelay.reduce((s, d) => s + d.avgDelay! * (d.total - d.cancelled), 0) / totalWeight
+        : null;
+    }
+  }
   const totalCancelled = days.reduce((sum, d) => sum + d.cancelled, 0);
   const avgCancelledPerDay = days.length > 0 ? totalCancelled / days.length : 0;
   const lastChange = (lastChangeResult.results?.[0] as { fetched_at: string } | undefined)?.fetched_at ?? null;
@@ -330,6 +345,7 @@ function renderOverview(stats: Stats, nextDeps: NextDeparture[]): string {
     .map((d) => {
       const rate = pct(d.cancelled, d.total);
       const isToday = d.date === today;
+      const delayStr = d.avgDelay !== null ? `${d.avgDelay >= 0 ? "+" : ""}${d.avgDelay.toFixed(1)} min` : "&mdash;";
       const dirSummary = d.directions
         .map((dir) => `<span class="dir-label">${esc(shortDirection(dir.direction))}: ${dir.cancelled}/${dir.total}</span>`)
         .join("&nbsp;&nbsp;");
@@ -339,6 +355,7 @@ function renderOverview(stats: Stats, nextDeps: NextDeparture[]): string {
         <td>${d.cancelled > 0 ? `<span class="badge cancelled">${d.cancelled}</span>` : `<span class="badge ok">0</span>`}</td>
         <td>${rate}%</td>
         <td class="bar-cell"><div class="bar-wrap"><div class="bar-fill" style="width:${Math.min(parseFloat(rate) * 2, 100)}%"></div></div></td>
+        <td>${delayStr}</td>
         <td>${dirSummary}</td>
       </tr>`;
     })
@@ -393,8 +410,8 @@ function renderOverview(stats: Stats, nextDeps: NextDeparture[]): string {
   ${renderChart(stats.days)}
   <div class="section-title">Daily breakdown</div>
   <table>
-    <thead><tr><th>Date</th><th>Total</th><th>Cancelled</th><th>Rate</th><th class="bar-cell"></th><th>By direction</th></tr></thead>
-    <tbody>${tableRows || '<tr><td colspan="6" class="empty">No data yet</td></tr>'}</tbody>
+    <thead><tr><th>Date</th><th>Total</th><th>Cancelled</th><th>Rate</th><th class="bar-cell"></th><th>Avg delay</th><th>By direction</th></tr></thead>
+    <tbody>${tableRows || '<tr><td colspan="7" class="empty">No data yet</td></tr>'}</tbody>
   </table>
 </div>
 </body>
@@ -414,17 +431,23 @@ function renderDayDetail(date: string, departures: DepartureRow[]): string {
       const time = d.time.slice(0, 5);
       const hour = d.time.slice(0, 2);
       const rtTime = d.rt_time ? d.rt_time.slice(0, 5) : null;
-      const delay = rtTime && rtTime !== time ? rtTime : null;
+      const delayMin = rtTime
+        ? (parseInt(rtTime.slice(0, 2)) * 60 + parseInt(rtTime.slice(3))) - (parseInt(time.slice(0, 2)) * 60 + parseInt(time.slice(3)))
+        : null;
       let id = "";
       if (isToday && !anchorPlaced && hour >= currentHour) {
         id = ' id="now"';
         anchorPlaced = true;
       }
+      const delayStr = delayMin !== null && delayMin !== 0
+        ? ` <span style="color:${delayMin > 0 ? "#d29922" : "#3fb950"}">${delayMin > 0 ? "+" : ""}${delayMin} min</span>`
+        : "";
       return `<tr${id}>
-        <td>${time}${delay ? ` <span style="color:#d29922">&rarr; ${delay}</span>` : ""}</td>
+        <td>${time}${rtTime && rtTime !== time ? ` <span style="color:#d29922">&rarr; ${rtTime}</span>` : ""}</td>
         <td>${esc(d.line)}</td>
         <td>${esc(shortDirection(d.direction))}</td>
         <td>${d.cancelled ? '<span class="badge cancelled">cancelled</span>' : '<span class="badge ok">ok</span>'}</td>
+        <td>${delayStr || '<span class="dir-label">on time</span>'}</td>
         <td class="dir-label">${d.fetched_at.slice(0, 16).replace("T", " ")}</td>
       </tr>`;
     })
@@ -455,11 +478,26 @@ function renderDayDetail(date: string, departures: DepartureRow[]): string {
       <div class="value${cancelled.length > 0 ? " warn" : " ok"}">${cancelled.length}</div>
       <div class="detail">${rate}% cancellation rate</div>
     </div>
+    <div class="card">
+      <div class="label">Avg delay</div>
+      <div class="value" style="font-size:1.5rem">${(() => {
+        const nonCancelled = departures.filter((d) => !d.cancelled && d.rt_time);
+        if (nonCancelled.length === 0) return "&mdash;";
+        const totalDelay = nonCancelled.reduce((s, d) => {
+          const t = parseInt(d.time.slice(0, 2)) * 60 + parseInt(d.time.slice(3, 5));
+          const rt = parseInt(d.rt_time!.slice(0, 2)) * 60 + parseInt(d.rt_time!.slice(3, 5));
+          return s + (rt - t);
+        }, 0);
+        const avg = totalDelay / nonCancelled.length;
+        return `${avg >= 0 ? "+" : ""}${avg.toFixed(1)} min`;
+      })()}</div>
+      <div class="detail">non-cancelled with RT data</div>
+    </div>
   </div>
   <div class="section-title">All departures</div>
   <table>
-    <thead><tr><th>Time</th><th>Line</th><th>Direction</th><th>Status</th><th>Last checked</th></tr></thead>
-    <tbody>${tableRows || '<tr><td colspan="5" class="empty">No departures</td></tr>'}</tbody>
+    <thead><tr><th>Time</th><th>Line</th><th>Direction</th><th>Status</th><th>Delay</th><th>Last checked</th></tr></thead>
+    <tbody>${tableRows || '<tr><td colspan="6" class="empty">No departures</td></tr>'}</tbody>
   </table>
 </div>
 ${isToday ? `<script>document.getElementById("now")?.scrollIntoView({behavior:"smooth",block:"center"})</script>` : ""}
