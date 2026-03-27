@@ -1,0 +1,11 @@
+name = "rmv-collector"
+main = "src/index.ts"
+compatibility_date = "2024-01-01"
+
+[triggers]
+crons = ["0 * * * *"]
+
+[[d1_databases]]
+binding = "DB"
+database_name = "rmv-departures"
+database_id = "6db89bbe-ac67-4d65-864e-5c6b19150a28"
