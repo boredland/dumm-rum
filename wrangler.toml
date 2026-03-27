@@ -15,6 +15,9 @@ pattern = "dummrum.jonas-strassel.de"
 zone_name = "jonas-strassel.de"
 custom_domain = true
 
+[ai]
+binding = "AI"
+
 [[d1_databases]]
 binding = "DB"
 database_name = "rmv-departures"

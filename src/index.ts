@@ -47,6 +47,7 @@ interface HafasDeparture {
 interface Env {
 	DB: D1Database;
 	RMV_API_KEY: string;
+	AI: Ai;
 }
 
 function nowBerlin() {
@@ -107,6 +108,40 @@ async function collectDepartures(env: Env): Promise<number> {
 	return departures.length;
 }
 
+async function generateDailyHaiku(env: Env): Promise<void> {
+	const today = todayBerlin();
+	const existing = await env.DB.prepare("SELECT 1 FROM haikus WHERE date = ?")
+		.bind(today)
+		.first();
+	if (existing) return;
+
+	// @ts-expect-error model not yet in workers-types
+	const response = await env.AI.run("@cf/ibm/granite-4.0-h-micro", {
+		messages: [
+			{
+				role: "system",
+				content:
+					"You write single-line haikus. Respond with ONLY the haiku, nothing else. No quotes, no explanation.",
+			},
+			{
+				role: "user",
+				content:
+					"Write a haiku about waiting at a bus stop, not knowing if the bus was cancelled or if it ever existed. Theme: missing buses, uncertainty, urban melancholy. One line, separated by slashes.",
+			},
+		],
+		max_tokens: 50,
+	});
+
+	const haiku = (response as { response?: string }).response?.trim();
+	if (!haiku) return;
+
+	await env.DB.prepare(
+		"INSERT OR IGNORE INTO haikus (date, haiku) VALUES (?, ?)",
+	)
+		.bind(today, haiku)
+		.run();
+}
+
 // --- Queries ---
 
 interface DirRow {
@@ -149,6 +184,7 @@ interface Stats {
 	days: DayStats[];
 	avgCancelledPerDay: number;
 	lastChange: string | null;
+	haiku: string | null;
 }
 
 function timeToMinutes(t: string): number {
@@ -194,7 +230,7 @@ function avgNonNull(nums: (number | null)[]): number | null {
 }
 
 async function getStats(db: D1Database): Promise<Stats> {
-	const [statsResult, lastChangeResult] = await db.batch([
+	const [statsResult, lastChangeResult, haikuResult] = await db.batch([
 		db.prepare(
 			`SELECT date, direction, COUNT(*) as total, SUM(cancelled) as cancelled,
         AVG(CASE WHEN cancelled = 0 AND rt_time IS NOT NULL THEN
@@ -208,6 +244,7 @@ async function getStats(db: D1Database): Promise<Stats> {
 		db.prepare(
 			`SELECT fetched_at FROM departures ORDER BY fetched_at DESC LIMIT 1`,
 		),
+		db.prepare("SELECT haiku FROM haikus WHERE date = ?").bind(todayBerlin()),
 	]);
 
 	const rows = (statsResult.results as DirRow[]) ?? [];
@@ -239,11 +276,14 @@ async function getStats(db: D1Database): Promise<Stats> {
 	const lastChange =
 		(lastChangeResult.results?.[0] as { fetched_at: string } | undefined)
 			?.fetched_at ?? null;
+	const haiku =
+		(haikuResult.results?.[0] as { haiku: string } | undefined)?.haiku ?? null;
 
 	return {
 		days,
 		avgCancelledPerDay: days.length > 0 ? totalCancelled / days.length : 0,
 		lastChange,
+		haiku,
 	};
 }
 
@@ -488,6 +528,7 @@ function renderOverview(stats: Stats, nextDeps: NextDeparture[]): string {
   <header>
     <h1>🚌 ${STATION_NAME}</h1>
     <p class="subtitle">Bus M43 cancellation tracker &mdash; collecting since ${COLLECTION_START}${stats.lastChange ? ` &mdash; last updated ${fmtTimestamp(stats.lastChange)}` : ""}</p>
+    ${stats.haiku ? `<p class="subtitle" style="margin-top:0.5rem;font-style:italic;color:#8b949e">${esc(stats.haiku)}</p>` : ""}
   </header>
   <div class="cards">
     <div class="card">
@@ -597,7 +638,10 @@ ${isToday ? '<script>document.getElementById("now")?.scrollIntoView({behavior:"s
 
 export default {
 	async scheduled(_controller: ScheduledController, env: Env) {
-		const count = await collectDepartures(env);
+		const [count] = await Promise.all([
+			collectDepartures(env),
+			generateDailyHaiku(env),
+		]);
 		console.log(`Upserted ${count} departures for ${todayBerlin()}`);
 	},
 

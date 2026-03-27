@@ -18,6 +18,11 @@ CREATE TABLE IF NOT EXISTS departures (
   UNIQUE(date, time, line, direction, journey_num)
 );
 
+CREATE TABLE IF NOT EXISTS haikus (
+  date TEXT PRIMARY KEY,
+  haiku TEXT NOT NULL
+);
+
 CREATE INDEX IF NOT EXISTS idx_departures_date ON departures(date);
 CREATE INDEX IF NOT EXISTS idx_departures_next ON departures(date, cancelled, time);
 CREATE INDEX IF NOT EXISTS idx_departures_fetched ON departures(fetched_at);
