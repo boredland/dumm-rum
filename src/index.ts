@@ -586,7 +586,7 @@ function renderStationList(): string {
 <div class="wrap">
   <header>
     <h1>🚌 Dummrum</h1>
-    <p class="subtitle">Bus &amp; tram cancellation tracker</p>
+    <p class="subtitle">Public transport cancellation and delay tracker</p>
   </header>
   <div class="section-title">Stations</div>
   <div class="cards">${cards}</div>
@@ -642,7 +642,7 @@ function renderOverview(
   <a href="/" class="back">&larr; All stations</a>
   <header>
     <h1>${station.type === "underground" ? "🚇" : station.type === "tram" ? "🚋" : "🚌"} ${esc(station.name)}</h1>
-    <p class="subtitle">Cancellation tracker &mdash; collecting since ${station.collectionStart}${stats.lastChange ? ` &mdash; last updated ${fmtTimestamp(stats.lastChange)}` : ""}</p>
+    <p class="subtitle">Cancellation &amp; delay tracker &mdash; collecting since ${station.collectionStart}${stats.lastChange ? ` &mdash; last updated ${fmtTimestamp(stats.lastChange)}` : ""}</p>
     ${stats.haiku ? `<blockquote style="margin-top:0.75rem;padding-left:1rem;border-left:3px solid #30363d;font-style:italic;color:#8b949e;white-space:pre-line">${esc(stats.haiku)}</blockquote>` : ""}
   </header>
   <div class="cards">
