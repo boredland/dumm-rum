@@ -111,7 +111,7 @@ interface DayStats {
   avgDelay: number | null;
   plannedFreq: string;
   actualFreq: string;
-  directions: { direction: string; total: number; cancelled: number; avgDelay: number | null }[];
+  directions: { direction: string; total: number; cancelled: number; avgDelay: number | null; plannedFreq: string; actualFreq: string }[];
 }
 
 interface DepartureRow {
@@ -160,7 +160,14 @@ async function getStats(db: D1Database): Promise<Stats> {
     }
     day.total += row.total;
     day.cancelled += row.cancelled;
-    day.directions.push({ direction: row.direction, total: row.total, cancelled: row.cancelled, avgDelay: row.avg_delay });
+    day.directions.push({
+      direction: row.direction,
+      total: row.total,
+      cancelled: row.cancelled,
+      avgDelay: row.avg_delay,
+      plannedFreq: formatFreq(row.total, row.first_time, row.last_time),
+      actualFreq: formatFreq(row.total - row.cancelled, row.first_time, row.last_time),
+    });
   }
 
   const days = [...dayMap.values()];
@@ -371,7 +378,7 @@ function renderOverview(stats: Stats, nextDeps: NextDeparture[]): string {
       const isToday = d.date === today;
       const delayStr = d.avgDelay !== null ? `${d.avgDelay >= 0 ? "+" : ""}${d.avgDelay.toFixed(1)} min` : "&mdash;";
       const dirSummary = d.directions
-        .map((dir) => `<span class="dir-label">${esc(shortDirection(dir.direction))}: ${dir.cancelled}/${dir.total}</span>`)
+        .map((dir) => `<span class="dir-label">${esc(shortDirection(dir.direction))}: ${dir.cancelled}/${dir.total}, ${dir.plannedFreq} &rarr; ${dir.actualFreq}</span>`)
         .join("&nbsp;&nbsp;");
       return `<tr>
         <td><a href="/day/${d.date}">${d.date}${isToday ? " (today)" : ""}</a></td>
