@@ -177,17 +177,19 @@ function renderPage(stats: { days: DayStats[]; avgCancelledPerDay: number }): st
 }
 
 export default {
-  async scheduled(_event: ScheduledEvent, env: Env, ctx: ExecutionContext): Promise<void> {
+  async scheduled(_controller: ScheduledController, env: Env, ctx: ExecutionContext) {
     const count = await collectDepartures(env);
     console.log(`Upserted ${count} departures for ${todayBerlin()}`);
   },
 
-  async fetch(request: Request, env: Env): Promise<Response> {
+  async fetch(request: Request, env: Env) {
     const url = new URL(request.url);
 
     if (url.pathname === "/api/stats") {
       const stats = await getStats(env.DB);
-      return Response.json(stats);
+      return new Response(JSON.stringify(stats), {
+        headers: { "Content-Type": "application/json" },
+      });
     }
 
     const stats = await getStats(env.DB);
@@ -195,4 +197,4 @@ export default {
       headers: { "Content-Type": "text/html; charset=utf-8" },
     });
   },
-};
+} satisfies ExportedHandler<Env>;
