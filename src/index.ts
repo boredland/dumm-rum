@@ -102,17 +102,25 @@ interface DayStats {
   directions: { direction: string; total: number; cancelled: number }[];
 }
 
+interface DepartureRow {
+  date: string;
+  time: string;
+  rt_date: string | null;
+  rt_time: string | null;
+  line: string;
+  direction: string;
+  cancelled: number;
+  operator: string;
+  category: string;
+  journey_num: string;
+  fetched_at: string;
+}
+
 async function getStats(db: D1Database): Promise<{ days: DayStats[]; avgCancelledPerDay: number }> {
   const { results } = await db
     .prepare(
-      `SELECT
-        date,
-        direction,
-        COUNT(*) as total,
-        SUM(cancelled) as cancelled
-      FROM departures
-      GROUP BY date, direction
-      ORDER BY date DESC, direction`
+      `SELECT date, direction, COUNT(*) as total, SUM(cancelled) as cancelled
+       FROM departures GROUP BY date, direction ORDER BY date DESC, direction`
     )
     .all<DirectionStats>();
 
@@ -136,33 +144,97 @@ async function getStats(db: D1Database): Promise<{ days: DayStats[]; avgCancelle
   return { days, avgCancelledPerDay };
 }
 
-function renderPage(stats: { days: DayStats[]; avgCancelledPerDay: number }): string {
+async function getDayDepartures(db: D1Database, date: string): Promise<DepartureRow[]> {
+  const { results } = await db
+    .prepare(
+      `SELECT date, time, rt_date, rt_time, line, direction, cancelled, operator, category, journey_num, fetched_at
+       FROM departures WHERE date = ? ORDER BY time, direction`
+    )
+    .bind(date)
+    .all<DepartureRow>();
+  return results ?? [];
+}
+
+function esc(s: string): string {
+  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+}
+
+function pct(cancelled: number, total: number): string {
+  return total > 0 ? ((cancelled / total) * 100).toFixed(1) : "0.0";
+}
+
+function shortDirection(dir: string): string {
+  return dir.replace(/^Frankfurt \(Main\)\s*/i, "");
+}
+
+const CSS = `
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif; background: #0f1117; color: #e1e4e8; min-height: 100vh; }
+.wrap { max-width: 800px; margin: 0 auto; padding: 2rem 1.5rem; }
+header { margin-bottom: 2rem; }
+h1 { font-size: 1.5rem; font-weight: 700; color: #fff; display: flex; align-items: center; gap: 0.5rem; }
+h1 .icon { font-size: 1.2rem; }
+.subtitle { color: #7d8590; font-size: 0.85rem; margin-top: 0.3rem; }
+.cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 1rem; margin-bottom: 2rem; }
+.card { background: #161b22; border: 1px solid #30363d; border-radius: 12px; padding: 1.2rem; }
+.card .label { font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.08em; color: #7d8590; margin-bottom: 0.4rem; }
+.card .value { font-size: 2rem; font-weight: 700; font-variant-numeric: tabular-nums; }
+.card .value.warn { color: #f85149; }
+.card .value.ok { color: #3fb950; }
+.card .detail { font-size: 0.8rem; color: #7d8590; margin-top: 0.2rem; }
+.section-title { font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.08em; color: #7d8590; margin-bottom: 0.75rem; font-weight: 600; }
+table { width: 100%; border-collapse: collapse; background: #161b22; border: 1px solid #30363d; border-radius: 12px; overflow: hidden; }
+th { text-align: left; padding: 0.7rem 1rem; font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.06em; color: #7d8590; background: #1c2129; border-bottom: 1px solid #30363d; font-weight: 600; }
+td { padding: 0.6rem 1rem; border-bottom: 1px solid #21262d; font-variant-numeric: tabular-nums; font-size: 0.9rem; }
+tr:last-child td { border-bottom: none; }
+tr:hover { background: #1c2129; }
+a { color: #58a6ff; text-decoration: none; }
+a:hover { text-decoration: underline; }
+.badge { display: inline-block; padding: 0.15rem 0.5rem; border-radius: 999px; font-size: 0.75rem; font-weight: 600; }
+.badge.cancelled { background: rgba(248,81,73,0.15); color: #f85149; }
+.badge.ok { background: rgba(63,185,80,0.1); color: #3fb950; }
+.bar-cell { width: 120px; }
+.bar-wrap { background: #21262d; border-radius: 4px; height: 6px; overflow: hidden; }
+.bar-fill { height: 100%; border-radius: 4px; background: #f85149; transition: width 0.3s; }
+.back { display: inline-flex; align-items: center; gap: 0.4rem; color: #7d8590; font-size: 0.85rem; margin-bottom: 1.5rem; }
+.back:hover { color: #58a6ff; }
+.dir-label { font-size: 0.8rem; color: #7d8590; }
+.empty { text-align: center; color: #484f58; padding: 2rem; }
+@media (max-width: 600px) {
+  .wrap { padding: 1rem; }
+  .cards { grid-template-columns: 1fr; }
+  .bar-cell { display: none; }
+  td, th { padding: 0.5rem 0.6rem; font-size: 0.8rem; }
+}`;
+
+function renderOverview(stats: { days: DayStats[]; avgCancelledPerDay: number }): string {
   const today = todayBerlin();
   const todayStats = stats.days.find((d) => d.date === today);
+  const todayCancelled = todayStats?.cancelled ?? 0;
+  const todayTotal = todayStats?.total ?? 0;
+  const todayRate = pct(todayCancelled, todayTotal);
+  const avgRate = stats.days.length > 0
+    ? pct(
+        stats.days.reduce((s, d) => s + d.cancelled, 0),
+        stats.days.reduce((s, d) => s + d.total, 0)
+      )
+    : "0.0";
 
-  const rows = stats.days
-    .flatMap((d) => {
-      const pct = d.total > 0 ? ((d.cancelled / d.total) * 100).toFixed(1) : "0.0";
+  const tableRows = stats.days
+    .map((d) => {
+      const rate = pct(d.cancelled, d.total);
       const isToday = d.date === today;
-      const cls = isToday ? ' class="today"' : "";
-      const dirCount = d.directions.length;
-      const mainRow = `<tr${cls}>
-        <td rowspan="${dirCount + 1}">${d.date}${isToday ? " (today)" : ""}</td>
-        <td><strong>All</strong></td>
+      const dirSummary = d.directions
+        .map((dir) => `<span class="dir-label">${esc(shortDirection(dir.direction))}: ${dir.cancelled}/${dir.total}</span>`)
+        .join("&nbsp;&nbsp;");
+      return `<tr>
+        <td><a href="/day/${d.date}">${d.date}${isToday ? " (today)" : ""}</a></td>
         <td>${d.total}</td>
-        <td>${d.cancelled}</td>
-        <td>${pct}%</td>
+        <td>${d.cancelled > 0 ? `<span class="badge cancelled">${d.cancelled}</span>` : `<span class="badge ok">0</span>`}</td>
+        <td>${rate}%</td>
+        <td class="bar-cell"><div class="bar-wrap"><div class="bar-fill" style="width:${Math.min(parseFloat(rate) * 2, 100)}%"></div></div></td>
+        <td>${dirSummary}</td>
       </tr>`;
-      const dirRows = d.directions.map((dir) => {
-        const dirPct = dir.total > 0 ? ((dir.cancelled / dir.total) * 100).toFixed(1) : "0.0";
-        return `<tr${cls}>
-          <td class="dir">${dir.direction}</td>
-          <td>${dir.total}</td>
-          <td>${dir.cancelled}</td>
-          <td>${dirPct}%</td>
-        </tr>`;
-      });
-      return [mainRow, ...dirRows];
     })
     .join("\n");
 
@@ -171,46 +243,93 @@ function renderPage(stats: { days: DayStats[]; avgCancelledPerDay: number }): st
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>${STATION_NAME} — Cancellations</title>
-  <style>
-    * { margin: 0; padding: 0; box-sizing: border-box; }
-    body { font-family: -apple-system, system-ui, sans-serif; background: #f5f5f5; color: #1a1a1a; padding: 2rem; max-width: 720px; margin: 0 auto; }
-    h1 { font-size: 1.3rem; margin-bottom: 0.3rem; }
-    .subtitle { color: #666; margin-bottom: 1.5rem; font-size: 0.9rem; }
-    .cards { display: flex; gap: 1rem; margin-bottom: 1.5rem; }
-    .card { flex: 1; background: #fff; border-radius: 8px; padding: 1rem; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
-    .card .label { font-size: 0.75rem; text-transform: uppercase; color: #888; letter-spacing: 0.05em; }
-    .card .value { font-size: 1.8rem; font-weight: 700; margin-top: 0.2rem; }
-    .card .value.warn { color: #d32f2f; }
-    table { width: 100%; border-collapse: collapse; background: #fff; border-radius: 8px; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
-    th { background: #fafafa; text-align: left; padding: 0.6rem 0.8rem; font-size: 0.75rem; text-transform: uppercase; color: #888; letter-spacing: 0.05em; border-bottom: 1px solid #eee; }
-    td { padding: 0.5rem 0.8rem; border-bottom: 1px solid #f0f0f0; font-variant-numeric: tabular-nums; }
-    tr.today { background: #fff8e1; font-weight: 600; }
-    td.dir { font-size: 0.85rem; color: #555; padding-left: 1.2rem; }
-    tr:last-child td { border-bottom: none; }
-  </style>
+  <title>${STATION_NAME}</title>
+  <style>${CSS}</style>
 </head>
 <body>
-  <h1>${STATION_NAME}</h1>
-  <p class="subtitle">Bus departure cancellation tracker — updated hourly</p>
+<div class="wrap">
+  <header>
+    <h1><span class="icon">🚌</span> ${STATION_NAME}</h1>
+    <p class="subtitle">Bus M43 cancellation tracker &mdash; updated every 5 min</p>
+  </header>
   <div class="cards">
     <div class="card">
-      <div class="label">Today cancelled</div>
-      <div class="value${(todayStats?.cancelled ?? 0) > 0 ? " warn" : ""}">${todayStats ? `${todayStats.cancelled}<span style="font-size:0.9rem;font-weight:400;color:#888"> / ${todayStats.total}</span>` : '<span style="font-size:0.9rem;color:#888">no data yet</span>'}</div>
+      <div class="label">Today</div>
+      <div class="value${todayCancelled > 0 ? " warn" : " ok"}">${todayStats ? todayCancelled : "&mdash;"}</div>
+      <div class="detail">${todayStats ? `of ${todayTotal} departures (${todayRate}%)` : "no data yet"}</div>
     </div>
     <div class="card">
-      <div class="label">Avg cancelled / day</div>
+      <div class="label">Avg / day</div>
       <div class="value">${stats.avgCancelledPerDay.toFixed(1)}</div>
+      <div class="detail">cancelled (${avgRate}% rate)</div>
     </div>
     <div class="card">
       <div class="label">Days tracked</div>
       <div class="value">${stats.days.length}</div>
+      <div class="detail">${stats.days.length > 0 ? `since ${stats.days[stats.days.length - 1].date}` : ""}</div>
     </div>
   </div>
+  <div class="section-title">Daily breakdown</div>
   <table>
-    <thead><tr><th>Date</th><th>Direction</th><th>Total</th><th>Cancelled</th><th>Rate</th></tr></thead>
-    <tbody>${rows || '<tr><td colspan="5" style="text-align:center;color:#888;padding:1rem">No data yet</td></tr>'}</tbody>
+    <thead><tr><th>Date</th><th>Total</th><th>Cancelled</th><th>Rate</th><th class="bar-cell"></th><th>By direction</th></tr></thead>
+    <tbody>${tableRows || '<tr><td colspan="6" class="empty">No data yet</td></tr>'}</tbody>
   </table>
+</div>
+</body>
+</html>`;
+}
+
+function renderDayDetail(date: string, departures: DepartureRow[]): string {
+  const cancelled = departures.filter((d) => d.cancelled);
+  const rate = pct(cancelled.length, departures.length);
+
+  const tableRows = departures
+    .map((d) => {
+      const time = d.time.slice(0, 5);
+      const rtTime = d.rt_time ? d.rt_time.slice(0, 5) : null;
+      const delay = rtTime && rtTime !== time ? rtTime : null;
+      return `<tr>
+        <td>${time}${delay ? ` <span style="color:#d29922">&rarr; ${delay}</span>` : ""}</td>
+        <td>${esc(d.line)}</td>
+        <td>${esc(shortDirection(d.direction))}</td>
+        <td>${d.cancelled ? '<span class="badge cancelled">cancelled</span>' : '<span class="badge ok">ok</span>'}</td>
+        <td class="dir-label">${d.fetched_at.slice(0, 16).replace("T", " ")}</td>
+      </tr>`;
+    })
+    .join("\n");
+
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>${date} &mdash; ${STATION_NAME}</title>
+  <style>${CSS}</style>
+</head>
+<body>
+<div class="wrap">
+  <a href="/" class="back">&larr; Back to overview</a>
+  <header>
+    <h1>${date}</h1>
+    <p class="subtitle">${STATION_NAME}</p>
+  </header>
+  <div class="cards">
+    <div class="card">
+      <div class="label">Departures</div>
+      <div class="value">${departures.length}</div>
+    </div>
+    <div class="card">
+      <div class="label">Cancelled</div>
+      <div class="value${cancelled.length > 0 ? " warn" : " ok"}">${cancelled.length}</div>
+      <div class="detail">${rate}% cancellation rate</div>
+    </div>
+  </div>
+  <div class="section-title">All departures</div>
+  <table>
+    <thead><tr><th>Time</th><th>Line</th><th>Direction</th><th>Status</th><th>Last checked</th></tr></thead>
+    <tbody>${tableRows || '<tr><td colspan="5" class="empty">No departures</td></tr>'}</tbody>
+  </table>
+</div>
 </body>
 </html>`;
 }
@@ -221,7 +340,7 @@ export default {
     console.log(`Upserted ${count} departures for ${todayBerlin()}`);
   },
 
-  async fetch(request: Request, env: Env) {
+  async fetch(request: Request, env: Env, ctx: ExecutionContext) {
     const url = new URL(request.url);
 
     if (url.pathname === "/api/stats") {
@@ -231,8 +350,17 @@ export default {
       });
     }
 
+    const dayMatch = url.pathname.match(/^\/day\/(\d{4}-\d{2}-\d{2})$/);
+    if (dayMatch) {
+      const departures = await getDayDepartures(env.DB, dayMatch[1]);
+      return new Response(renderDayDetail(dayMatch[1], departures), {
+        headers: { "Content-Type": "text/html; charset=utf-8" },
+      });
+    }
+
+    await collectDepartures(env);
     const stats = await getStats(env.DB);
-    return new Response(renderPage(stats), {
+    return new Response(renderOverview(stats), {
       headers: { "Content-Type": "text/html; charset=utf-8" },
     });
   },
