@@ -11,9 +11,7 @@ const STATION_NAME = "Frankfurt (Main) Draisbornstraße";
 const COLLECTION_START = "2026-03-27";
 const COLLECTION_START_TIME = "11:00:00";
 
-const RELIABLE_DATA_FILTER = `
-  (date > '${COLLECTION_START}' OR (date = '${COLLECTION_START}' AND time >= '${COLLECTION_START_TIME}'))`;
-
+const DATA_FILTER = `(date > '${COLLECTION_START}' OR (date = '${COLLECTION_START}' AND time >= '${COLLECTION_START_TIME}'))`;
 
 const UPSERT_SQL = `
 INSERT INTO departures (date, time, rt_date, rt_time, line, direction, journey_status, cancelled, operator, category, journey_num, reachable, stop, stop_ext_id, fetched_at)
@@ -59,6 +57,8 @@ function todayBerlin(): string {
   return nowBerlin().format("YYYY-MM-DD");
 }
 
+// --- Data collection ---
+
 async function collectDepartures(env: Env): Promise<number> {
   const oneHourAgo = nowBerlin().subtract(1, "hour");
   const url = `https://www.rmv.de/hapi/departureBoard?accessId=${env.RMV_API_KEY}&id=${STATION_ID}&date=${oneHourAgo.format("YYYY-MM-DD")}&time=${oneHourAgo.format("HH:mm")}&duration=120&maxJourneys=-1&format=json`;
@@ -73,7 +73,6 @@ async function collectDepartures(env: Env): Promise<number> {
   const departures = (data.Departure ?? []).filter(
     (d) => d.ProductAtStop?.line && d.ProductAtStop?.num
   );
-
   if (departures.length === 0) return 0;
 
   const now = new Date().toISOString();
@@ -83,21 +82,10 @@ async function collectDepartures(env: Env): Promise<number> {
     const stmts = departures.slice(i, i + BATCH_SIZE).map((dep) => {
       const p = dep.ProductAtStop;
       return env.DB.prepare(UPSERT_SQL).bind(
-        dep.date,
-        dep.time,
-        dep.rtDate ?? null,
-        dep.rtTime ?? null,
-        p.line,
-        dep.direction,
-        dep.JourneyStatus,
-        dep.cancelled ? 1 : 0,
-        p.operator,
-        p.catOut,
-        p.num,
-        dep.reachable ? 1 : 0,
-        dep.stop ?? null,
-        dep.stopExtId ?? null,
-        now
+        dep.date, dep.time, dep.rtDate ?? null, dep.rtTime ?? null,
+        p.line, dep.direction, dep.JourneyStatus, dep.cancelled ? 1 : 0,
+        p.operator, p.catOut, p.num, dep.reachable ? 1 : 0,
+        dep.stop ?? null, dep.stopExtId ?? null, now
       );
     });
     await env.DB.batch(stmts);
@@ -106,7 +94,9 @@ async function collectDepartures(env: Env): Promise<number> {
   return departures.length;
 }
 
-interface DirectionStats {
+// --- Queries ---
+
+interface DirRow {
   date: string;
   direction: string;
   total: number;
@@ -122,29 +112,60 @@ interface DayStats {
   total: number;
   cancelled: number;
   avgDelay: number | null;
-  plannedFreq: string;
-  actualFreq: string;
-  directions: { direction: string; total: number; cancelled: number; avgDelay: number | null; plannedFreq: string; actualFreq: string }[];
+  plannedFreq: number | null;
+  actualFreq: number | null;
 }
 
 interface DepartureRow {
-  date: string;
   time: string;
-  rt_date: string | null;
   rt_time: string | null;
   line: string;
   direction: string;
   cancelled: number;
-  operator: string;
-  category: string;
-  journey_num: string;
   fetched_at: string;
+}
+
+interface NextDeparture {
+  time: string;
+  rt_time: string | null;
+  direction: string;
+  line: string;
 }
 
 interface Stats {
   days: DayStats[];
   avgCancelledPerDay: number;
   lastChange: string | null;
+}
+
+function timeToMinutes(t: string): number {
+  const [h, m] = t.split(":").map(Number);
+  return h * 60 + m;
+}
+
+function freqMinutes(count: number, firstTime: string, lastTime: string): number | null {
+  const span = timeToMinutes(lastTime) - timeToMinutes(firstTime);
+  return span > 0 && count > 1 ? span / (count - 1) : null;
+}
+
+function blendedDelay(row: DirRow): number | null {
+  if (row.rt_count === 0 && row.cancelled === 0) return null;
+  const rtSum = (row.avg_delay ?? 0) * row.rt_count;
+  const freq = freqMinutes(row.total, row.first_time, row.last_time);
+  const cancelledDelay = freq !== null ? row.cancelled * freq : 0;
+  const total = row.rt_count + row.cancelled;
+  return total > 0 ? (rtSum + cancelledDelay) / total : null;
+}
+
+function weightedAvg(items: { value: number | null; weight: number }[]): number | null {
+  const valid = items.filter((i): i is { value: number; weight: number } => i.value !== null);
+  const totalWeight = valid.reduce((s, i) => s + i.weight, 0);
+  return totalWeight > 0 ? valid.reduce((s, i) => s + i.value * i.weight, 0) / totalWeight : null;
+}
+
+function avgNonNull(nums: (number | null)[]): number | null {
+  const valid = nums.filter((n): n is number => n !== null);
+  return valid.length > 0 ? valid.reduce((a, b) => a + b, 0) / valid.length : null;
 }
 
 async function getStats(db: D1Database): Promise<Stats> {
@@ -155,128 +176,58 @@ async function getStats(db: D1Database): Promise<Stats> {
           (strftime('%s', rt_time) - strftime('%s', time)) / 60.0
         END) as avg_delay,
         SUM(CASE WHEN cancelled = 0 AND rt_time IS NOT NULL THEN 1 ELSE 0 END) as rt_count,
-        MIN(time) as first_time,
-        MAX(time) as last_time
-       FROM departures WHERE ${RELIABLE_DATA_FILTER} GROUP BY date, direction ORDER BY date DESC, direction`
+        MIN(time) as first_time, MAX(time) as last_time
+       FROM departures WHERE ${DATA_FILTER}
+       GROUP BY date, direction ORDER BY date DESC, direction`
     ),
-    db.prepare(
-      `SELECT fetched_at FROM departures ORDER BY fetched_at DESC LIMIT 1`
-    ),
+    db.prepare(`SELECT fetched_at FROM departures ORDER BY fetched_at DESC LIMIT 1`),
   ]);
 
-  const rows = (statsResult.results as DirectionStats[]) ?? [];
-  const dayMap = new Map<string, DayStats>();
+  const rows = (statsResult.results as DirRow[]) ?? [];
+  const dayMap = new Map<string, { dirs: DirRow[] }>();
   for (const row of rows) {
-    let day = dayMap.get(row.date);
-    if (!day) {
-      day = { date: row.date, total: 0, cancelled: 0, avgDelay: null, plannedFreq: "&mdash;", actualFreq: "&mdash;", directions: [] };
-      dayMap.set(row.date, day);
-    }
-    day.total += row.total;
-    day.cancelled += row.cancelled;
-    const plannedFreqMin = freqMinutes(row.total, row.first_time, row.last_time);
-    let blendedDelay: number | null = null;
-    if (row.rt_count > 0 || row.cancelled > 0) {
-      const rtSum = (row.avg_delay ?? 0) * row.rt_count;
-      const cancelledDelay = plannedFreqMin !== null ? row.cancelled * plannedFreqMin : 0;
-      const totalCount = row.rt_count + row.cancelled;
-      blendedDelay = totalCount > 0 ? (rtSum + cancelledDelay) / totalCount : null;
-    }
-    day.directions.push({
-      direction: row.direction,
-      total: row.total,
-      cancelled: row.cancelled,
-      avgDelay: blendedDelay,
-      plannedFreq: formatFreq(row.total, row.first_time, row.last_time),
-      actualFreq: formatFreq(row.total - row.cancelled, row.first_time, row.last_time),
-    });
+    const entry = dayMap.get(row.date) ?? { dirs: [] };
+    entry.dirs.push(row);
+    dayMap.set(row.date, entry);
   }
 
-  const days = [...dayMap.values()];
-  for (const day of days) {
-    const withDelay = day.directions.filter((d) => d.avgDelay !== null);
-    if (withDelay.length > 0) {
-      const totalWeight = withDelay.reduce((s, d) => s + d.total, 0);
-      day.avgDelay = totalWeight > 0
-        ? withDelay.reduce((s, d) => s + d.avgDelay! * d.total, 0) / totalWeight
-        : null;
-    }
-  }
+  const days: DayStats[] = [...dayMap.entries()].map(([date, { dirs }]) => {
+    const total = dirs.reduce((s, d) => s + d.total, 0);
+    const cancelled = dirs.reduce((s, d) => s + d.cancelled, 0);
+    const avgDelay = weightedAvg(dirs.map((d) => ({ value: blendedDelay(d), weight: d.total })));
+    const plannedFreq = avgNonNull(dirs.map((d) => freqMinutes(d.total, d.first_time, d.last_time)));
+    const actualFreq = avgNonNull(dirs.map((d) => freqMinutes(d.total - d.cancelled, d.first_time, d.last_time)));
+    return { date, total, cancelled, avgDelay, plannedFreq, actualFreq };
+  });
 
-  for (const day of days) {
-    const dirFreqs = day.directions.map((d) => {
-      const r = rows.find((r) => r.date === day.date && r.direction === d.direction)!;
-      return { planned: freqMinutes(d.total, r.first_time, r.last_time), actual: freqMinutes(d.total - d.cancelled, r.first_time, r.last_time) };
-    });
-    const planned = dirFreqs.map((f) => f.planned).filter((f): f is number => f !== null);
-    const actual = dirFreqs.map((f) => f.actual).filter((f): f is number => f !== null);
-    const avg = (arr: number[]) => arr.length > 0 ? `~${(arr.reduce((a, b) => a + b, 0) / arr.length).toFixed(0)} min` : "&mdash;";
-    day.plannedFreq = avg(planned);
-    day.actualFreq = avg(actual);
-  }
-  const totalCancelled = days.reduce((sum, d) => sum + d.cancelled, 0);
-  const avgCancelledPerDay = days.length > 0 ? totalCancelled / days.length : 0;
+  const totalCancelled = days.reduce((s, d) => s + d.cancelled, 0);
   const lastChange = (lastChangeResult.results?.[0] as { fetched_at: string } | undefined)?.fetched_at ?? null;
 
-  return { days, avgCancelledPerDay, lastChange };
+  return { days, avgCancelledPerDay: days.length > 0 ? totalCancelled / days.length : 0, lastChange };
 }
 
 async function getDayDepartures(db: D1Database, date: string): Promise<DepartureRow[]> {
   const { results } = await db
-    .prepare(
-      `SELECT date, time, rt_date, rt_time, line, direction, cancelled, operator, category, journey_num, fetched_at
-       FROM departures WHERE date = ? AND ${RELIABLE_DATA_FILTER} ORDER BY time, direction`
-    )
+    .prepare(`SELECT time, rt_time, line, direction, cancelled, fetched_at FROM departures WHERE date = ? AND ${DATA_FILTER} ORDER BY time, direction`)
     .bind(date)
     .all<DepartureRow>();
   return results ?? [];
 }
 
-function timeToMinutes(t: string): number {
-  const [h, m] = t.split(":").map(Number);
-  return h * 60 + m;
-}
-
-function freqMinutes(count: number, firstTime: string, lastTime: string): number | null {
-  const span = timeToMinutes(lastTime) - timeToMinutes(firstTime);
-  if (span <= 0 || count <= 1) return null;
-  return span / (count - 1);
-}
-
-function formatFreq(count: number, firstTime: string, lastTime: string): string {
-  const freq = freqMinutes(count, firstTime, lastTime);
-  return freq !== null ? `~${freq.toFixed(0)} min` : "&mdash;";
-}
-
-interface NextDeparture {
-  time: string;
-  rt_time: string | null;
-  direction: string;
-  line: string;
-}
-
 async function getNextDepartures(db: D1Database): Promise<NextDeparture[]> {
-  const today = todayBerlin();
-  const now = nowBerlin().format("HH:mm:ss");
   const { results } = await db
     .prepare(
       `SELECT time, rt_time, direction, line FROM departures
        WHERE date = ? AND cancelled = 0 AND time >= ?
+       GROUP BY direction HAVING time = MIN(time)
        ORDER BY time`
     )
-    .bind(today, now)
+    .bind(todayBerlin(), nowBerlin().format("HH:mm:ss"))
     .all<NextDeparture>();
-  const rows = results ?? [];
-  const seen = new Set<string>();
-  const out: NextDeparture[] = [];
-  for (const r of rows) {
-    if (!seen.has(r.direction)) {
-      seen.add(r.direction);
-      out.push(r);
-    }
-  }
-  return out;
+  return results ?? [];
 }
+
+// --- Rendering helpers ---
 
 function esc(s: string): string {
   return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
@@ -286,9 +237,50 @@ function pct(cancelled: number, total: number): string {
   return total > 0 ? ((cancelled / total) * 100).toFixed(1) : "0.0";
 }
 
-function shortDirection(dir: string): string {
+function fmtFreq(freq: number | null): string {
+  return freq !== null ? `~${freq.toFixed(0)} min` : "&mdash;";
+}
+
+function fmtDelay(delay: number | null): string {
+  if (delay === null) return "&mdash;";
+  return `${delay >= 0 ? "+" : ""}${delay.toFixed(1)} min`;
+}
+
+function shortDir(dir: string): string {
   return dir.replace(/^Frankfurt \(Main\)\s*/i, "");
 }
+
+function fmtTimestamp(iso: string | null): string {
+  if (!iso) return "";
+  return dayjs(iso).tz(TZ).format("DD.MM.YYYY, HH:mm");
+}
+
+function dayAvgDelay(departures: DepartureRow[]): number | null {
+  const byDir = new Map<string, DepartureRow[]>();
+  for (const d of departures) {
+    const arr = byDir.get(d.direction) ?? [];
+    arr.push(d);
+    byDir.set(d.direction, arr);
+  }
+  let totalDelay = 0;
+  let count = 0;
+  for (const [, deps] of byDir) {
+    const sorted = [...deps].sort((a, b) => a.time.localeCompare(b.time));
+    const freq = freqMinutes(sorted.length, sorted[0].time, sorted[sorted.length - 1].time);
+    for (const d of sorted) {
+      if (d.cancelled && freq !== null) {
+        totalDelay += freq;
+        count++;
+      } else if (!d.cancelled && d.rt_time) {
+        totalDelay += timeToMinutes(d.rt_time) - timeToMinutes(d.time);
+        count++;
+      }
+    }
+  }
+  return count > 0 ? totalDelay / count : null;
+}
+
+// --- CSS ---
 
 const CSS = `
 * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -296,7 +288,6 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sa
 .wrap { max-width: 800px; margin: 0 auto; padding: 2rem 1.5rem; }
 header { margin-bottom: 2rem; }
 h1 { font-size: 1.5rem; font-weight: 700; color: #fff; display: flex; align-items: center; gap: 0.5rem; }
-h1 .icon { font-size: 1.2rem; }
 .subtitle { color: #7d8590; font-size: 0.85rem; margin-top: 0.3rem; }
 .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 1rem; margin-bottom: 2rem; }
 .card { background: #161b22; border: 1px solid #30363d; border-radius: 12px; padding: 1.2rem; }
@@ -318,14 +309,14 @@ a:hover { text-decoration: underline; }
 .badge.ok { background: rgba(63,185,80,0.1); color: #3fb950; }
 .bar-cell { width: 120px; }
 .bar-wrap { background: #21262d; border-radius: 4px; height: 6px; overflow: hidden; }
-.bar-fill { height: 100%; border-radius: 4px; background: #f85149; transition: width 0.3s; }
+.bar-fill { height: 100%; border-radius: 4px; background: #f85149; }
 .back { display: inline-flex; align-items: center; gap: 0.4rem; color: #7d8590; font-size: 0.85rem; margin-bottom: 1.5rem; }
 .back:hover { color: #58a6ff; }
-.dir-label { font-size: 0.8rem; color: #7d8590; }
+.muted { font-size: 0.8rem; color: #7d8590; }
 .empty { text-align: center; color: #484f58; padding: 2rem; }
-.chart-container { background: #161b22; border: 1px solid #30363d; border-radius: 12px; padding: 1.2rem 1.2rem 0.8rem; margin-bottom: 2rem; overflow-x: auto; }
-.chart-container svg { display: block; width: 100%; height: auto; }
-.chart-container svg text { font-family: -apple-system, system-ui, sans-serif; }
+.chart-wrap { background: #161b22; border: 1px solid #30363d; border-radius: 12px; padding: 1.2rem 1.2rem 0.8rem; margin-bottom: 2rem; overflow-x: auto; }
+.chart-wrap svg { display: block; width: 100%; height: auto; }
+.chart-wrap svg text { font-family: -apple-system, system-ui, sans-serif; }
 @media (max-width: 600px) {
   .wrap { padding: 1rem; }
   .cards { grid-template-columns: 1fr; }
@@ -333,118 +324,108 @@ a:hover { text-decoration: underline; }
   td, th { padding: 0.5rem 0.6rem; font-size: 0.8rem; }
 }`;
 
+const FAVICON = `<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🚌</text></svg>">`;
+
+function head(title: string) {
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>${title}</title>
+  ${FAVICON}
+  <style>${CSS}</style>
+</head>`;
+}
+
+// --- Chart ---
+
 function renderChart(days: DayStats[]): string {
   const sorted = [...days].reverse();
   if (sorted.length === 0) return "";
 
-  const chartWidth = 760;
-  const leftPad = 36;
-  const chartHeight = 120;
-  const labelHeight = 40;
-  const topPadding = 16;
-  const usable = chartWidth - leftPad;
+  const W = 760, L = 36, H = 120, labelH = 40, top = 16;
+  const usable = W - L;
   const gap = Math.max(1, Math.floor(usable / sorted.length * 0.15));
-  const barWidth = Math.max(2, Math.floor((usable - gap * sorted.length) / sorted.length));
-  const svgWidth = chartWidth;
-  const svgHeight = chartHeight + labelHeight + topPadding;
+  const bw = Math.max(2, Math.floor((usable - gap * sorted.length) / sorted.length));
+  const svgH = H + labelH + top;
   const maxRate = Math.max(10, ...sorted.map((d) => d.total > 0 ? (d.cancelled / d.total) * 100 : 0));
+  const maxLabels = Math.floor(usable / 40);
 
-  const bars = sorted
-    .map((d, i) => {
-      const rate = d.total > 0 ? (d.cancelled / d.total) * 100 : 0;
-      const barH = maxRate > 0 ? (rate / maxRate) * chartHeight : 0;
-      const x = leftPad + i * (barWidth + gap) + gap;
-      const y = topPadding + chartHeight - barH;
-      const color = rate > 0 ? "#f85149" : "#21262d";
-      const label = d.date.slice(5);
-      const maxLabels = Math.floor(usable / 40);
-      const showLabel = sorted.length <= maxLabels || i % Math.ceil(sorted.length / maxLabels) === 0;
-      return `<rect x="${x}" y="${y}" width="${barWidth}" height="${Math.max(barH, 1)}" rx="3" fill="${color}" opacity="${rate > 0 ? 0.85 : 0.4}">
-        <title>${d.date}: ${rate.toFixed(1)}% (${d.cancelled}/${d.total})</title>
-      </rect>
-      ${rate > 0 && barWidth >= 14 ? `<text x="${x + barWidth / 2}" y="${y - 3}" text-anchor="middle" font-size="8" fill="#7d8590">${rate.toFixed(0)}%</text>` : ""}
-      ${showLabel ? `<text x="${x + barWidth / 2}" y="${topPadding + chartHeight + 12}" text-anchor="middle" font-size="8" fill="#484f58" transform="rotate(45 ${x + barWidth / 2} ${topPadding + chartHeight + 12})">${label}</text>` : ""}`;
-    })
-    .join("\n");
+  const bars = sorted.map((d, i) => {
+    const rate = d.total > 0 ? (d.cancelled / d.total) * 100 : 0;
+    const barH = (rate / maxRate) * H;
+    const x = L + i * (bw + gap) + gap;
+    const y = top + H - barH;
+    const showLabel = sorted.length <= maxLabels || i % Math.ceil(sorted.length / maxLabels) === 0;
+    return `<rect x="${x}" y="${y}" width="${bw}" height="${Math.max(barH, 1)}" rx="3" fill="${rate > 0 ? "#f85149" : "#21262d"}" opacity="${rate > 0 ? 0.85 : 0.4}">
+      <title>${d.date}: ${rate.toFixed(1)}% (${d.cancelled}/${d.total})</title>
+    </rect>
+    ${rate > 0 && bw >= 14 ? `<text x="${x + bw / 2}" y="${y - 3}" text-anchor="middle" font-size="8" fill="#7d8590">${rate.toFixed(0)}%</text>` : ""}
+    ${showLabel ? `<text x="${x + bw / 2}" y="${top + H + 12}" text-anchor="middle" font-size="8" fill="#484f58" transform="rotate(45 ${x + bw / 2} ${top + H + 12})">${d.date.slice(5)}</text>` : ""}`;
+  }).join("\n");
 
-  const gridLines = [0, 25, 50, 75, 100]
-    .filter((v) => v <= maxRate * 1.1)
-    .map((v) => {
-      const y = topPadding + chartHeight - (v / maxRate) * chartHeight;
-      return `<line x1="${leftPad - 2}" x2="${svgWidth}" y1="${y}" y2="${y}" stroke="#21262d" stroke-width="1"/>
-      <text x="${leftPad - 4}" y="${y + 3}" text-anchor="end" font-size="8" fill="#484f58">${v}%</text>`;
-    })
-    .join("\n");
+  const grid = [0, 25, 50, 75, 100].filter((v) => v <= maxRate * 1.1).map((v) => {
+    const y = top + H - (v / maxRate) * H;
+    return `<line x1="${L - 2}" x2="${W}" y1="${y}" y2="${y}" stroke="#21262d"/>
+    <text x="${L - 4}" y="${y + 3}" text-anchor="end" font-size="8" fill="#484f58">${v}%</text>`;
+  }).join("\n");
 
-  return `<div class="chart-container">
-    <svg viewBox="0 0 ${svgWidth} ${svgHeight}" preserveAspectRatio="xMinYMid meet">
-      ${gridLines}
-      ${bars}
-    </svg>
+  return `<div class="chart-wrap">
+    <svg viewBox="0 0 ${W} ${svgH}" preserveAspectRatio="xMinYMid meet">${grid}\n${bars}</svg>
   </div>`;
 }
 
-function formatLastChange(iso: string | null): string {
-  if (!iso) return "";
-  return dayjs(iso).tz(TZ).format("DD.MM.YYYY, HH:mm");
-}
+// --- Pages ---
 
 function renderOverview(stats: Stats, nextDeps: NextDeparture[]): string {
   const today = todayBerlin();
   const todayStats = stats.days.find((d) => d.date === today);
   const todayCancelled = todayStats?.cancelled ?? 0;
   const todayTotal = todayStats?.total ?? 0;
-  const todayRate = pct(todayCancelled, todayTotal);
-  const avgRate = stats.days.length > 0
-    ? pct(
-        stats.days.reduce((s, d) => s + d.cancelled, 0),
-        stats.days.reduce((s, d) => s + d.total, 0)
-      )
-    : "0.0";
 
-  const tableRows = stats.days
-    .map((d) => {
-      const rate = pct(d.cancelled, d.total);
-      const isToday = d.date === today;
-      const delayStr = d.avgDelay !== null ? `${d.avgDelay >= 0 ? "+" : ""}${d.avgDelay.toFixed(1)} min` : "&mdash;";
-      return `<tr>
-        <td><a href="/day/${d.date}">${d.date}${isToday ? " (today)" : ""}</a></td>
-        <td>${d.total}</td>
-        <td>${d.cancelled > 0 ? `<span class="badge cancelled">${d.cancelled}</span>` : `<span class="badge ok">0</span>`}</td>
-        <td>${rate}%</td>
-        <td class="bar-cell"><div class="bar-wrap"><div class="bar-fill" style="width:${Math.min(parseFloat(rate) * 2, 100)}%"></div></div></td>
-        <td>${delayStr}</td>
-        <td>${d.plannedFreq}</td>
-        <td>${d.actualFreq}</td>
-      </tr>`;
-    })
-    .join("\n");
+  const tableRows = stats.days.map((d) => {
+    const rate = pct(d.cancelled, d.total);
+    return `<tr>
+      <td><a href="/day/${d.date}">${d.date}${d.date === today ? " (today)" : ""}</a></td>
+      <td>${d.total}</td>
+      <td>${d.cancelled > 0 ? `<span class="badge cancelled">${d.cancelled}</span>` : `<span class="badge ok">0</span>`}</td>
+      <td>${rate}%</td>
+      <td class="bar-cell"><div class="bar-wrap"><div class="bar-fill" style="width:${Math.min(parseFloat(rate) * 2, 100)}%"></div></div></td>
+      <td>${fmtDelay(d.avgDelay)}</td>
+      <td>${fmtFreq(d.plannedFreq)}</td>
+      <td>${fmtFreq(d.actualFreq)}</td>
+    </tr>`;
+  }).join("\n");
 
-  return `<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>${STATION_NAME}</title>
-  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🚌</text></svg>">
-  <style>${CSS}</style>
-</head>
+  const nextCards = nextDeps.map((d) => {
+    const time = d.time.slice(0, 5);
+    const rt = d.rt_time?.slice(0, 5);
+    const delay = rt && rt !== time ? ` <span style="color:#d29922">&rarr; ${rt}</span>` : "";
+    return `<div class="card">
+      <div class="label">${esc(shortDir(d.direction))}</div>
+      <div class="value" style="font-size:1.5rem">${time}${delay}</div>
+      <div class="detail">${esc(d.line)}</div>
+    </div>`;
+  }).join("\n");
+
+  return `${head(STATION_NAME)}
 <body>
 <div class="wrap">
   <header>
-    <h1><span class="icon">🚌</span> ${STATION_NAME}</h1>
-    <p class="subtitle">Bus M43 cancellation tracker &mdash; collecting since ${COLLECTION_START}${stats.lastChange ? ` &mdash; last updated ${formatLastChange(stats.lastChange)}` : ""}</p>
+    <h1>🚌 ${STATION_NAME}</h1>
+    <p class="subtitle">Bus M43 cancellation tracker &mdash; collecting since ${COLLECTION_START}${stats.lastChange ? ` &mdash; last updated ${fmtTimestamp(stats.lastChange)}` : ""}</p>
   </header>
   <div class="cards">
     <div class="card">
       <div class="label">Today</div>
       <div class="value${todayCancelled > 0 ? " warn" : " ok"}">${todayStats ? todayCancelled : "&mdash;"}</div>
-      <div class="detail">${todayStats ? `of ${todayTotal} departures (${todayRate}%)` : "no data yet"}</div>
+      <div class="detail">${todayStats ? `of ${todayTotal} departures (${pct(todayCancelled, todayTotal)}%)` : "no data yet"}</div>
     </div>
     <div class="card">
       <div class="label">Avg / day</div>
       <div class="value">${stats.avgCancelledPerDay.toFixed(1)}</div>
-      <div class="detail">cancelled (${avgRate}% rate)</div>
+      <div class="detail">cancelled (${stats.days.length > 0 ? pct(stats.days.reduce((s, d) => s + d.cancelled, 0), stats.days.reduce((s, d) => s + d.total, 0)) : "0.0"}% rate)</div>
     </div>
     <div class="card">
       <div class="label">Days tracked</div>
@@ -452,20 +433,7 @@ function renderOverview(stats: Stats, nextDeps: NextDeparture[]): string {
       <div class="detail">${stats.days.length > 0 ? `since ${COLLECTION_START}` : ""}</div>
     </div>
   </div>
-  ${nextDeps.length > 0 ? `
-  <div class="section-title">Next departures</div>
-  <div class="cards">
-    ${nextDeps.map((d) => {
-      const time = d.time.slice(0, 5);
-      const rt = d.rt_time ? d.rt_time.slice(0, 5) : null;
-      const delay = rt && rt !== time ? ` <span style="color:#d29922">&rarr; ${rt}</span>` : "";
-      return `<div class="card">
-      <div class="label">${esc(shortDirection(d.direction))}</div>
-      <div class="value" style="font-size:1.5rem">${time}${delay}</div>
-      <div class="detail">${esc(d.line)}</div>
-    </div>`;
-    }).join("\n")}
-  </div>` : ""}
+  ${nextDeps.length > 0 ? `<div class="section-title">Next departures</div><div class="cards">${nextCards}</div>` : ""}
   <div class="section-title">Cancellation rate</div>
   ${renderChart(stats.days)}
   <div class="section-title">Daily breakdown</div>
@@ -474,54 +442,39 @@ function renderOverview(stats: Stats, nextDeps: NextDeparture[]): string {
     <tbody>${tableRows || '<tr><td colspan="8" class="empty">No data yet</td></tr>'}</tbody>
   </table>
 </div>
-</body>
-</html>`;
+</body></html>`;
 }
 
 function renderDayDetail(date: string, departures: DepartureRow[]): string {
   const isToday = date === todayBerlin();
-  const nowTime = nowBerlin().format("HH:mm:ss");
-  const currentHour = nowTime.slice(0, 2);
-  const cancelled = departures.filter((d) => d.cancelled);
-  const rate = pct(cancelled.length, departures.length);
+  const currentHour = nowBerlin().format("HH");
+  const cancelledCount = departures.filter((d) => d.cancelled).length;
+  const avgDel = dayAvgDelay(departures);
 
   let anchorPlaced = false;
-  const tableRows = departures
-    .map((d) => {
-      const time = d.time.slice(0, 5);
-      const hour = d.time.slice(0, 2);
-      const rtTime = d.rt_time ? d.rt_time.slice(0, 5) : null;
-      const delayMin = rtTime
-        ? timeToMinutes(rtTime) - timeToMinutes(time)
-        : null;
-      let id = "";
-      if (isToday && !anchorPlaced && hour >= currentHour) {
-        id = ' id="now"';
-        anchorPlaced = true;
-      }
-      const delayStr = delayMin !== null && delayMin !== 0
-        ? ` <span style="color:${delayMin > 0 ? "#d29922" : "#3fb950"}">${delayMin > 0 ? "+" : ""}${delayMin} min</span>`
-        : "";
-      return `<tr${id}>
-        <td>${time}${rtTime && rtTime !== time ? ` <span style="color:#d29922">&rarr; ${rtTime}</span>` : ""}</td>
-        <td>${esc(d.line)}</td>
-        <td>${esc(shortDirection(d.direction))}</td>
-        <td>${d.cancelled ? '<span class="badge cancelled">cancelled</span>' : '<span class="badge ok">ok</span>'}</td>
-        <td>${delayStr || '<span class="dir-label">on time</span>'}</td>
-        <td class="dir-label">${d.fetched_at.slice(0, 16).replace("T", " ")}</td>
-      </tr>`;
-    })
-    .join("\n");
+  const tableRows = departures.map((d) => {
+    const time = d.time.slice(0, 5);
+    const rtTime = d.rt_time?.slice(0, 5) ?? null;
+    const delayMin = rtTime ? timeToMinutes(rtTime) - timeToMinutes(time) : null;
+    let id = "";
+    if (isToday && !anchorPlaced && d.time.slice(0, 2) >= currentHour) {
+      id = ' id="now"';
+      anchorPlaced = true;
+    }
+    const delayCell = delayMin !== null && delayMin !== 0
+      ? `<span style="color:${delayMin > 0 ? "#d29922" : "#3fb950"}">${delayMin > 0 ? "+" : ""}${delayMin} min</span>`
+      : '<span class="muted">on time</span>';
+    return `<tr${id}>
+      <td>${time}${rtTime && rtTime !== time ? ` <span style="color:#d29922">&rarr; ${rtTime}</span>` : ""}</td>
+      <td>${esc(d.line)}</td>
+      <td>${esc(shortDir(d.direction))}</td>
+      <td>${d.cancelled ? '<span class="badge cancelled">cancelled</span>' : '<span class="badge ok">ok</span>'}</td>
+      <td>${delayCell}</td>
+      <td class="muted">${d.fetched_at.slice(0, 16).replace("T", " ")}</td>
+    </tr>`;
+  }).join("\n");
 
-  return `<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>${date} &mdash; ${STATION_NAME}</title>
-  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🚌</text></svg>">
-  <style>${CSS}</style>
-</head>
+  return `${head(`${date} — ${STATION_NAME}`)}
 <body>
 <div class="wrap">
   <a href="/" class="back">&larr; Back to overview</a>
@@ -536,38 +489,13 @@ function renderDayDetail(date: string, departures: DepartureRow[]): string {
     </div>
     <div class="card">
       <div class="label">Cancelled</div>
-      <div class="value${cancelled.length > 0 ? " warn" : " ok"}">${cancelled.length}</div>
-      <div class="detail">${rate}% cancellation rate</div>
+      <div class="value${cancelledCount > 0 ? " warn" : " ok"}">${cancelledCount}</div>
+      <div class="detail">${pct(cancelledCount, departures.length)}% cancellation rate</div>
     </div>
     <div class="card">
       <div class="label">Avg delay</div>
-      <div class="value" style="font-size:1.5rem">${(() => {
-        const directions = new Map<string, DepartureRow[]>();
-        for (const d of departures) {
-          const arr = directions.get(d.direction) ?? [];
-          arr.push(d);
-          directions.set(d.direction, arr);
-        }
-        let totalDelay = 0;
-        let count = 0;
-        for (const [, deps] of directions) {
-          const sorted = deps.sort((a, b) => a.time.localeCompare(b.time));
-          const freq = freqMinutes(sorted.length, sorted[0].time, sorted[sorted.length - 1].time);
-          for (const d of sorted) {
-            if (d.cancelled && freq !== null) {
-              totalDelay += freq;
-              count++;
-            } else if (!d.cancelled && d.rt_time) {
-              totalDelay += timeToMinutes(d.rt_time) - timeToMinutes(d.time);
-              count++;
-            }
-          }
-        }
-        if (count === 0) return "&mdash;";
-        const avg = totalDelay / count;
-        return `${avg >= 0 ? "+" : ""}${avg.toFixed(1)} min`;
-      })()}</div>
-      <div class="detail">cancelled = planned freq delay</div>
+      <div class="value" style="font-size:1.5rem">${fmtDelay(avgDel)}</div>
+      <div class="detail">cancelled = planned freq</div>
     </div>
   </div>
   <div class="section-title">All departures</div>
@@ -576,28 +504,26 @@ function renderDayDetail(date: string, departures: DepartureRow[]): string {
     <tbody>${tableRows || '<tr><td colspan="6" class="empty">No departures</td></tr>'}</tbody>
   </table>
 </div>
-${isToday ? `<script>document.getElementById("now")?.scrollIntoView({behavior:"smooth",block:"center"})</script>` : ""}
-</body>
-</html>`;
+${isToday ? '<script>document.getElementById("now")?.scrollIntoView({behavior:"smooth",block:"center"})</script>' : ""}
+</body></html>`;
 }
 
+// --- Worker ---
+
 export default {
-  async scheduled(_controller: ScheduledController, env: Env, ctx: ExecutionContext) {
+  async scheduled(_controller: ScheduledController, env: Env) {
     const count = await collectDepartures(env);
     console.log(`Upserted ${count} departures for ${todayBerlin()}`);
   },
 
-  async fetch(request: Request, env: Env, ctx: ExecutionContext) {
-    const url = new URL(request.url);
+  async fetch(request: Request, env: Env) {
+    const { pathname } = new URL(request.url);
 
-    if (url.pathname === "/api/stats") {
-      const stats = await getStats(env.DB);
-      return new Response(JSON.stringify(stats), {
-        headers: { "Content-Type": "application/json" },
-      });
+    if (pathname === "/api/stats") {
+      return Response.json(await getStats(env.DB));
     }
 
-    const dayMatch = url.pathname.match(/^\/day\/(\d{4}-\d{2}-\d{2})$/);
+    const dayMatch = pathname.match(/^\/day\/(\d{4}-\d{2}-\d{2})$/);
     if (dayMatch) {
       const departures = await getDayDepartures(env.DB, dayMatch[1]);
       return new Response(renderDayDetail(dayMatch[1], departures), {
