@@ -8,7 +8,7 @@ preview_urls = false
 enabled = true
 
 [triggers]
-crons = ["0 * * * *"]
+crons = ["*/10 * * * *"]
 
 [[routes]]
 pattern = "dummrum.jonas-strassel.de"
