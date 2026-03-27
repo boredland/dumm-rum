@@ -581,11 +581,11 @@ function renderStationList(): string {
     </a>`,
 	).join("\n");
 
-	return `${head("Dummrum")}
+	return `${head("DummRum")}
 <body>
 <div class="wrap">
   <header>
-    <h1>🚌 Dummrum</h1>
+    <h1>🚌🚋🚇 DummRum</h1>
     <p class="subtitle">Public transport cancellation and delay tracker</p>
   </header>
   <div class="section-title">Stations</div>
