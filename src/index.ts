@@ -2,13 +2,14 @@ const STATION_ID = "3001586";
 const STATION_NAME = "Frankfurt (Main) Draisbornstraße";
 
 const UPSERT_SQL = `
-INSERT INTO departures (date, time, rt_date, rt_time, line, direction, journey_status, operator, category, journey_num, reachable, stop, stop_ext_id, fetched_at)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+INSERT INTO departures (date, time, rt_date, rt_time, line, direction, journey_status, cancelled, operator, category, journey_num, reachable, stop, stop_ext_id, fetched_at)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 ON CONFLICT(date, time, line, direction, journey_num)
 DO UPDATE SET
   rt_date = excluded.rt_date,
   rt_time = excluded.rt_time,
   journey_status = excluded.journey_status,
+  cancelled = excluded.cancelled,
   reachable = excluded.reachable,
   fetched_at = excluded.fetched_at`;
 
@@ -19,6 +20,7 @@ interface HafasDeparture {
   rtTime?: string;
   direction: string;
   JourneyStatus: string;
+  cancelled?: boolean;
   reachable?: boolean;
   stopExtId?: string;
   stop?: string;
@@ -70,6 +72,7 @@ async function collectDepartures(env: Env): Promise<number> {
         p.line,
         dep.direction,
         dep.JourneyStatus,
+        dep.cancelled ? 1 : 0,
         p.operator,
         p.catOut,
         p.num,
@@ -106,7 +109,7 @@ async function getStats(db: D1Database): Promise<{ days: DayStats[]; avgCancelle
         date,
         direction,
         COUNT(*) as total,
-        SUM(CASE WHEN journey_status = 'C' THEN 1 ELSE 0 END) as cancelled
+        SUM(cancelled) as cancelled
       FROM departures
       GROUP BY date, direction
       ORDER BY date DESC, direction`

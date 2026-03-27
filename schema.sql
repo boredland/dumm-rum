@@ -7,6 +7,7 @@ CREATE TABLE IF NOT EXISTS departures (
   line           TEXT NOT NULL,
   direction      TEXT NOT NULL,
   journey_status TEXT NOT NULL DEFAULT 'P',
+  cancelled      INTEGER NOT NULL DEFAULT 0,
   operator       TEXT,
   category       TEXT,
   journey_num    TEXT NOT NULL,
@@ -18,4 +19,4 @@ CREATE TABLE IF NOT EXISTS departures (
 );
 
 CREATE INDEX IF NOT EXISTS idx_departures_date ON departures(date);
-CREATE INDEX IF NOT EXISTS idx_departures_status ON departures(date, journey_status);
+CREATE INDEX IF NOT EXISTS idx_departures_cancelled ON departures(date, cancelled);
