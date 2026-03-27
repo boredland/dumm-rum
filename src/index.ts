@@ -144,10 +144,11 @@ async function generateDailyHaiku(env: Env): Promise<void> {
 	console.log(`Generated haiku: ${haiku}`);
 
 	await env.DB.prepare(
-		"INSERT OR IGNORE INTO haikus (date, haiku) VALUES (?, ?)",
+		"INSERT INTO haikus (date, haiku) VALUES (?, ?) ON CONFLICT(date) DO NOTHING",
 	)
 		.bind(today, haiku)
 		.run();
+	console.log(`Stored haiku for ${today}`);
 }
 
 // --- Queries ---
