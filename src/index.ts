@@ -191,12 +191,16 @@ async function getStats(db: D1Database): Promise<Stats> {
     }
   }
 
-  for (const [date, day] of dayMap) {
-    const allRows = rows.filter((r) => r.date === date);
-    const firstTime = allRows.reduce((m, r) => r.first_time < m ? r.first_time : m, "99:99");
-    const lastTime = allRows.reduce((m, r) => r.last_time > m ? r.last_time : m, "00:00");
-    day.plannedFreq = formatFreq(day.total, firstTime, lastTime);
-    day.actualFreq = formatFreq(day.total - day.cancelled, firstTime, lastTime);
+  for (const day of days) {
+    const dirFreqs = day.directions.map((d) => {
+      const r = rows.find((r) => r.date === day.date && r.direction === d.direction)!;
+      return { planned: freqMinutes(d.total, r.first_time, r.last_time), actual: freqMinutes(d.total - d.cancelled, r.first_time, r.last_time) };
+    });
+    const planned = dirFreqs.map((f) => f.planned).filter((f): f is number => f !== null);
+    const actual = dirFreqs.map((f) => f.actual).filter((f): f is number => f !== null);
+    const avg = (arr: number[]) => arr.length > 0 ? `~${(arr.reduce((a, b) => a + b, 0) / arr.length).toFixed(0)} min` : "&mdash;";
+    day.plannedFreq = avg(planned);
+    day.actualFreq = avg(actual);
   }
   const totalCancelled = days.reduce((sum, d) => sum + d.cancelled, 0);
   const avgCancelledPerDay = days.length > 0 ? totalCancelled / days.length : 0;
@@ -392,9 +396,6 @@ function renderOverview(stats: Stats, nextDeps: NextDeparture[]): string {
       const rate = pct(d.cancelled, d.total);
       const isToday = d.date === today;
       const delayStr = d.avgDelay !== null ? `${d.avgDelay >= 0 ? "+" : ""}${d.avgDelay.toFixed(1)} min` : "&mdash;";
-      const dirSummary = d.directions
-        .map((dir) => `<span class="dir-label">${esc(shortDirection(dir.direction))}: ${dir.cancelled}/${dir.total}, ${dir.plannedFreq} &rarr; ${dir.actualFreq}</span>`)
-        .join("&nbsp;&nbsp;");
       return `<tr>
         <td><a href="/day/${d.date}">${d.date}${isToday ? " (today)" : ""}</a></td>
         <td>${d.total}</td>
@@ -404,7 +405,6 @@ function renderOverview(stats: Stats, nextDeps: NextDeparture[]): string {
         <td>${delayStr}</td>
         <td>${d.plannedFreq}</td>
         <td>${d.actualFreq}</td>
-        <td>${dirSummary}</td>
       </tr>`;
     })
     .join("\n");
@@ -459,8 +459,8 @@ function renderOverview(stats: Stats, nextDeps: NextDeparture[]): string {
   ${renderChart(stats.days)}
   <div class="section-title">Daily breakdown</div>
   <table>
-    <thead><tr><th>Date</th><th>Total</th><th>Cancelled</th><th>Rate</th><th class="bar-cell"></th><th>Avg delay</th><th>Planned freq</th><th>Actual freq</th><th>By direction</th></tr></thead>
-    <tbody>${tableRows || '<tr><td colspan="9" class="empty">No data yet</td></tr>'}</tbody>
+    <thead><tr><th>Date</th><th>Total</th><th>Cancelled</th><th>Rate</th><th class="bar-cell"></th><th>Avg delay</th><th>Planned freq</th><th>Actual freq</th></tr></thead>
+    <tbody>${tableRows || '<tr><td colspan="8" class="empty">No data yet</td></tr>'}</tbody>
   </table>
 </div>
 </body>
