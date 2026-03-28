@@ -146,14 +146,22 @@ async function generateDailyHaiku(
 		.onConflictDoNothing();
 }
 
+function pickKey(apiKeys: string): string {
+	const keys = apiKeys
+		.split(",")
+		.map((k) => k.trim())
+		.filter(Boolean);
+	return keys[Math.floor(Math.random() * keys.length)];
+}
+
 export async function runCollection(
 	db: Db,
 	ai: Ai,
-	apiKey: string,
+	apiKeys: string,
 ): Promise<Record<string, number>> {
 	const results = await Promise.all(
 		STATIONS.flatMap((s) => [
-			collectDepartures(db, apiKey, s),
+			collectDepartures(db, pickKey(apiKeys), s),
 			generateDailyHaiku(db, ai, s),
 		]),
 	);
