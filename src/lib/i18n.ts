@@ -56,7 +56,6 @@ const translations = {
 
 		"section.weekday_pattern": "Wochentag-Muster",
 		"section.next_departures": "N\u00e4chste Abfahrten",
-		"section.cancellation_rate": "Ausfallquote",
 		"section.daily_breakdown": "Tages\u00fcbersicht",
 		"section.all_departures": "Alle Abfahrten",
 
@@ -140,7 +139,6 @@ const translations = {
 
 		"section.weekday_pattern": "Day-of-week pattern",
 		"section.next_departures": "Next departures",
-		"section.cancellation_rate": "Cancellation rate",
 		"section.daily_breakdown": "Daily breakdown",
 		"section.all_departures": "All departures",
 

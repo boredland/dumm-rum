@@ -1,6 +1,5 @@
 ---
 import { env } from "cloudflare:workers";
-import CancellationChart from "../../../components/CancellationChart.astro";
 import HoursToggle from "../../../components/HoursToggle.astro";
 import NextDepartures from "../../../components/NextDepartures.astro";
 import WeekdayChart from "../../../components/WeekdayChart.astro";
@@ -122,9 +121,6 @@ const today = todayBerlin();
 
 	<p class="text-xs uppercase tracking-wide text-muted font-semibold mb-3">{t(lang, "section.weekday_pattern")}</p>
 	<WeekdayChart days={stats.days} lang={lang} />
-
-	<p class="text-xs uppercase tracking-wide text-muted font-semibold mb-3">{t(lang, "section.cancellation_rate")}</p>
-	<CancellationChart days={stats.days} />
 
 	<p class="text-xs uppercase tracking-wide text-muted font-semibold mb-3">{t(lang, "section.daily_breakdown")}</p>
 	<div class="bg-surface border border-border rounded-xl overflow-hidden">
