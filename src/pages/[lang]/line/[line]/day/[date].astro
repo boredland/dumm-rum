@@ -1,5 +1,6 @@
 ---
 import { env } from "cloudflare:workers";
+import DepartureFilter from "../../../../../components/DepartureFilter.astro";
 import { createDb } from "../../../../../db/client";
 import Layout from "../../../../../layouts/Layout.astro";
 import { langFromParams, t } from "../../../../../lib/i18n";
@@ -43,6 +44,7 @@ const cancelledCount = departures.filter((d) => d.cancelled).length;
 	</div>
 
 	<p class="text-xs uppercase tracking-wide text-muted font-semibold mb-3">{t(lang, "section.all_departures")}</p>
+	<DepartureFilter lang={lang} />
 	<div class="bg-surface border border-border rounded-xl overflow-hidden">
 		<table class="w-full border-collapse">
 			<thead>
@@ -62,8 +64,9 @@ const cancelledCount = departures.filter((d) => d.cancelled).length;
 								? Math.round(delayMinutes(d.date, d.time, d.rtDate, d.rtTime))
 								: null;
 							const msgs: string[] = d.messages ? JSON.parse(d.messages) : [];
+							const status = d.cancelled ? "cancelled" : (delayMin !== null && delayMin >= 8) ? "delayed" : "ok";
 							return (
-								<tr class="border-b border-border-dim last:border-b-0 hover:bg-surface-hover">
+								<tr data-status={status} class="border-b border-border-dim last:border-b-0 hover:bg-surface-hover">
 									<td class="px-4 py-2.5 text-sm tabular-nums">
 										{time}
 										{rtTime && rtTime !== time && <span class="text-warning"> &rarr; {rtTime}</span>}

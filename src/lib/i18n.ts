@@ -78,6 +78,10 @@ const translations = {
 		"table.no_data": "Noch keine Daten",
 		"table.no_departures": "Keine Abfahrten",
 
+		"filter.all": "Alle",
+		"filter.issues": "Ausfälle & Verspätungen",
+		"filter.on_time": "Pünktlich",
+
 		"status.cancelled": "ausgefallen",
 		"status.ok": "ok",
 		"status.on_time": "p\u00fcnktlich",
@@ -157,6 +161,10 @@ const translations = {
 		"table.today": "today",
 		"table.no_data": "No data yet",
 		"table.no_departures": "No departures",
+
+		"filter.all": "All",
+		"filter.issues": "Cancelled & delayed",
+		"filter.on_time": "On time",
 
 		"status.cancelled": "cancelled",
 		"status.ok": "ok",

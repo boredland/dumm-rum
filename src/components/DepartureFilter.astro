@@ -1,0 +1,46 @@
+---
+import type { Lang } from "../lib/i18n";
+import { t } from "../lib/i18n";
+
+interface Props {
+	lang: Lang;
+}
+
+const { lang } = Astro.props;
+const pill =
+	"px-3 py-1 rounded-full text-xs font-medium cursor-pointer transition-colors select-none";
+---
+
+<div class="flex gap-2 mb-3" data-departure-filter>
+	<button class:list={[pill, "bg-surface-hover text-emphasis"]} data-filter="issues">{t(lang, "filter.issues")}</button>
+	<button class:list={[pill, "text-muted"]} data-filter="all">{t(lang, "filter.all")}</button>
+	<button class:list={[pill, "text-muted"]} data-filter="on_time">{t(lang, "filter.on_time")}</button>
+</div>
+
+<script>
+	document.querySelectorAll("[data-departure-filter]").forEach((container) => {
+		const buttons = container.querySelectorAll<HTMLButtonElement>("[data-filter]");
+		const table = container.nextElementSibling?.querySelector("tbody");
+		if (!table) return;
+
+		function apply(filter: string) {
+			for (const btn of buttons) {
+				btn.classList.toggle("bg-surface-hover", btn.dataset.filter === filter);
+				btn.classList.toggle("text-emphasis", btn.dataset.filter === filter);
+				btn.classList.toggle("text-muted", btn.dataset.filter !== filter);
+			}
+			for (const row of table!.querySelectorAll("tr[data-status]")) {
+				const status = (row as HTMLElement).dataset.status;
+				const show =
+					filter === "all" ||
+					(filter === "issues" && (status === "cancelled" || status === "delayed")) ||
+					(filter === "on_time" && status === "ok");
+				(row as HTMLElement).style.display = show ? "" : "none";
+			}
+		}
+
+		for (const btn of buttons) {
+			btn.addEventListener("click", () => apply(btn.dataset.filter!));
+		}
+	});
+</script>
