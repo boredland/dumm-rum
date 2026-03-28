@@ -7,7 +7,12 @@
 	},
 	"files": {
 		"ignoreUnknown": false,
-		"includes": ["src/**", "astro.config.ts", "knip.config.ts"]
+		"includes": [
+			"src/**",
+			"astro.config.ts",
+			"knip.config.ts",
+			"drizzle.config.ts"
+		]
 	},
 	"formatter": {
 		"enabled": true,

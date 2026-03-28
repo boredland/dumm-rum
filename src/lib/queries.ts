@@ -1,11 +1,13 @@
+import { and, count, desc, eq, sql, sum } from "drizzle-orm";
+import type { Db } from "../db/client";
+import { departures, haikus } from "../db/schema";
 import type { Station } from "./stations";
 import { nowBerlin, todayBerlin } from "./utils";
 
-const CORE_HOURS =
-	"((time >= '06:00:00' AND time < '09:00:00') OR (time >= '16:00:00' AND time < '19:00:00'))";
+const CORE_HOURS = sql`((time >= '06:00:00' AND time < '09:00:00') OR (time >= '16:00:00' AND time < '19:00:00'))`;
 
-function coreHoursFilter(coreOnly: boolean): string {
-	return coreOnly ? `AND ${CORE_HOURS}` : "";
+function coreFilter(coreOnly: boolean) {
+	return coreOnly ? CORE_HOURS : undefined;
 }
 
 interface DirRow {
@@ -94,37 +96,41 @@ function avgNonNull(nums: (number | null)[]): number | null {
 }
 
 export async function getStats(
-	db: D1Database,
+	db: Db,
 	station: Station,
 	coreOnly = false,
 ): Promise<Stats> {
-	const coreFilter = coreHoursFilter(coreOnly);
-	const [statsResult, lastChangeResult, haikuResult] = await db.batch([
+	const core = coreFilter(coreOnly);
+
+	const [statsRows, lastChangeRows, haikuRows] = await Promise.all([
+		db.all<DirRow>(sql`
+			SELECT date, direction, COUNT(*) as total, SUM(cancelled) as cancelled,
+				AVG(CASE WHEN cancelled = 0 AND rt_time IS NOT NULL THEN
+					(strftime('%s', rt_time) - strftime('%s', time)) / 60.0
+				END) as avg_delay,
+				SUM(CASE WHEN cancelled = 0 AND rt_time IS NOT NULL THEN 1 ELSE 0 END) as rt_count,
+				MIN(time) as first_time, MAX(time) as last_time
+			FROM departures WHERE station_id = ${station.id}
+				${core ? sql`AND ${core}` : sql``}
+			GROUP BY date, direction ORDER BY date DESC, direction
+		`),
 		db
-			.prepare(
-				`SELECT date, direction, COUNT(*) as total, SUM(cancelled) as cancelled,
-        AVG(CASE WHEN cancelled = 0 AND rt_time IS NOT NULL THEN
-          (strftime('%s', rt_time) - strftime('%s', time)) / 60.0
-        END) as avg_delay,
-        SUM(CASE WHEN cancelled = 0 AND rt_time IS NOT NULL THEN 1 ELSE 0 END) as rt_count,
-        MIN(time) as first_time, MAX(time) as last_time
-       FROM departures WHERE station_id = ? ${coreFilter}
-       GROUP BY date, direction ORDER BY date DESC, direction`,
+			.select({ fetchedAt: departures.fetchedAt })
+			.from(departures)
+			.where(eq(departures.stationId, station.id))
+			.orderBy(desc(departures.fetchedAt))
+			.limit(1),
+		db
+			.select({ haiku: haikus.haiku })
+			.from(haikus)
+			.where(
+				and(eq(haikus.date, todayBerlin()), eq(haikus.stationId, station.id)),
 			)
-			.bind(station.id),
-		db
-			.prepare(
-				"SELECT fetched_at FROM departures WHERE station_id = ? ORDER BY fetched_at DESC LIMIT 1",
-			)
-			.bind(station.id),
-		db
-			.prepare("SELECT haiku FROM haikus WHERE date = ? AND station_id = ?")
-			.bind(todayBerlin(), station.id),
+			.limit(1),
 	]);
 
-	const rows = (statsResult.results as DirRow[]) ?? [];
 	const dayMap = new Map<string, { dirs: DirRow[] }>();
-	for (const row of rows) {
+	for (const row of statsRows) {
 		const entry = dayMap.get(row.date) ?? { dirs: [] };
 		entry.dirs.push(row);
 		dayMap.set(row.date, entry);
@@ -148,87 +154,93 @@ export async function getStats(
 	});
 
 	const totalCancelled = days.reduce((s, d) => s + d.cancelled, 0);
-	const lastChange =
-		(lastChangeResult.results?.[0] as { fetched_at: string } | undefined)
-			?.fetched_at ?? null;
-	const haiku =
-		(haikuResult.results?.[0] as { haiku: string } | undefined)?.haiku ?? null;
 
 	return {
 		days,
 		avgCancelledPerDay: days.length > 0 ? totalCancelled / days.length : 0,
-		lastChange,
-		haiku,
+		lastChange: lastChangeRows[0]?.fetchedAt ?? null,
+		haiku: haikuRows[0]?.haiku ?? null,
 	};
 }
 
 export async function getStationSummaries(
-	db: D1Database,
+	db: Db,
 	stations: Station[],
 	coreOnly = false,
 ): Promise<Map<string, { cancelled: number; total: number }>> {
-	const results = await db.batch(
-		stations.map((s) =>
-			db
-				.prepare(
-					`SELECT SUM(cancelled) as cancelled, COUNT(*) as total FROM departures WHERE station_id = ? ${coreHoursFilter(coreOnly)}`,
-				)
-				.bind(s.id),
-		),
+	const results = await Promise.all(
+		stations.map((s) => {
+			const conditions = [eq(departures.stationId, s.id)];
+			const core = coreFilter(coreOnly);
+			if (core) conditions.push(core);
+			return db
+				.select({
+					cancelled: sum(departures.cancelled),
+					total: count(),
+				})
+				.from(departures)
+				.where(and(...conditions));
+		}),
 	);
 	return new Map(
 		stations.map((s, i) => {
-			const row = results[i].results?.[0] as
-				| { cancelled: number; total: number }
-				| undefined;
+			const row = results[i][0];
 			return [
 				s.id,
-				{ cancelled: row?.cancelled ?? 0, total: row?.total ?? 0 },
+				{
+					cancelled: Number(row?.cancelled ?? 0),
+					total: Number(row?.total ?? 0),
+				},
 			] as const;
 		}),
 	);
 }
 
 export async function getDayDepartures(
-	db: D1Database,
+	db: Db,
 	station: Station,
 	date: string,
 ): Promise<DepartureRow[]> {
-	const { results } = await db
-		.prepare(
-			`SELECT time, rt_time, line, direction, cancelled, fetched_at FROM departures WHERE station_id = ? AND date = ? ORDER BY time, direction`,
-		)
-		.bind(station.id, date)
-		.all<DepartureRow>();
-	return results ?? [];
+	const rows = await db
+		.select({
+			time: departures.time,
+			rt_time: departures.rtTime,
+			line: departures.line,
+			direction: departures.direction,
+			cancelled: departures.cancelled,
+			fetched_at: departures.fetchedAt,
+		})
+		.from(departures)
+		.where(and(eq(departures.stationId, station.id), eq(departures.date, date)))
+		.orderBy(departures.time, departures.direction);
+	return rows;
 }
 
 export async function getHaiku(
-	db: D1Database,
+	db: Db,
 	station: Station,
 	date: string,
 ): Promise<string | null> {
-	const row = await db
-		.prepare("SELECT haiku FROM haikus WHERE date = ? AND station_id = ?")
-		.bind(date, station.id)
-		.first<{ haiku: string }>();
-	return row?.haiku ?? null;
+	const rows = await db
+		.select({ haiku: haikus.haiku })
+		.from(haikus)
+		.where(and(eq(haikus.date, date), eq(haikus.stationId, station.id)))
+		.limit(1);
+	return rows[0]?.haiku ?? null;
 }
 
 export async function getNextDepartures(
-	db: D1Database,
+	db: Db,
 	station: Station,
 ): Promise<NextDeparture[]> {
-	const { results } = await db
-		.prepare(
-			`SELECT time, rt_time, direction, line FROM departures
-       WHERE station_id = ? AND date = ? AND cancelled = 0 AND time >= ?
-       GROUP BY direction HAVING time = MIN(time)
-       ORDER BY time`,
-		)
-		.bind(station.id, todayBerlin(), nowBerlin().format("HH:mm:ss"))
-		.all<NextDeparture>();
-	return results ?? [];
+	const rows = await db.all<NextDeparture>(sql`
+		SELECT time, rt_time, direction, line FROM departures
+		WHERE station_id = ${station.id} AND date = ${todayBerlin()}
+			AND cancelled = 0 AND time >= ${nowBerlin().format("HH:mm:ss")}
+		GROUP BY direction HAVING time = MIN(time)
+		ORDER BY time
+	`);
+	return rows;
 }
 
 export interface OperatorSummary {
@@ -239,24 +251,24 @@ export interface OperatorSummary {
 }
 
 export async function getOperatorSummaries(
-	db: D1Database,
+	db: Db,
 	coreOnly = false,
 ): Promise<OperatorSummary[]> {
-	const { results } = await db
-		.prepare(
-			`SELECT operator, line, COUNT(*) as total, SUM(cancelled) as cancelled
-       FROM departures WHERE operator IS NOT NULL ${coreHoursFilter(coreOnly)}
-       GROUP BY operator, line ORDER BY operator, line`,
-		)
-		.all<{
-			operator: string;
-			line: string;
-			total: number;
-			cancelled: number;
-		}>();
+	const core = coreFilter(coreOnly);
+	const rows = await db.all<{
+		operator: string;
+		line: string;
+		total: number;
+		cancelled: number;
+	}>(sql`
+		SELECT operator, line, COUNT(*) as total, SUM(cancelled) as cancelled
+		FROM departures WHERE operator IS NOT NULL
+			${core ? sql`AND ${core}` : sql``}
+		GROUP BY operator, line ORDER BY operator, line
+	`);
 
 	const map = new Map<string, OperatorSummary>();
-	for (const row of results ?? []) {
+	for (const row of rows) {
 		const existing = map.get(row.operator);
 		if (existing) {
 			existing.lines.push(row.line);
@@ -281,35 +293,32 @@ export interface OperatorDayStats {
 }
 
 export async function getOperatorStats(
-	db: D1Database,
+	db: Db,
 	operator: string,
 	coreOnly = false,
 ): Promise<{ days: OperatorDayStats[]; lines: string[] }> {
-	const [daysResult, linesResult] = await db.batch([
+	const core = coreFilter(coreOnly);
+	const [days, lineRows] = await Promise.all([
+		db.all<OperatorDayStats>(sql`
+			SELECT date, COUNT(*) as total, SUM(cancelled) as cancelled
+			FROM departures WHERE operator = ${operator}
+				${core ? sql`AND ${core}` : sql``}
+			GROUP BY date ORDER BY date DESC
+		`),
 		db
-			.prepare(
-				`SELECT date, COUNT(*) as total, SUM(cancelled) as cancelled
-         FROM departures WHERE operator = ? ${coreHoursFilter(coreOnly)}
-         GROUP BY date ORDER BY date DESC`,
-			)
-			.bind(operator),
-		db
-			.prepare(
-				"SELECT DISTINCT line FROM departures WHERE operator = ? ORDER BY line",
-			)
-			.bind(operator),
+			.selectDistinct({ line: departures.line })
+			.from(departures)
+			.where(eq(departures.operator, operator))
+			.orderBy(departures.line),
 	]);
 
-	const days = (daysResult.results as OperatorDayStats[]) ?? [];
-	const lines =
-		(linesResult.results as { line: string }[])?.map((r) => r.line) ?? [];
-	return { days, lines };
+	return { days, lines: lineRows.map((r) => r.line) };
 }
 
-export function dayAvgDelay(departures: DepartureRow[]): number | null {
-	const byDir = Map.groupBy(departures, (d) => d.direction);
+export function dayAvgDelay(departureRows: DepartureRow[]): number | null {
+	const byDir = Map.groupBy(departureRows, (d) => d.direction);
 	let totalDelay = 0;
-	let count = 0;
+	let delayCount = 0;
 	for (const [, deps] of byDir) {
 		const sorted = deps.toSorted((a, b) => a.time.localeCompare(b.time));
 		const freq = freqMinutes(
@@ -320,12 +329,12 @@ export function dayAvgDelay(departures: DepartureRow[]): number | null {
 		for (const d of sorted) {
 			if (d.cancelled && freq !== null) {
 				totalDelay += freq;
-				count++;
+				delayCount++;
 			} else if (!d.cancelled && d.rt_time) {
 				totalDelay += timeToMinutes(d.rt_time) - timeToMinutes(d.time);
-				count++;
+				delayCount++;
 			}
 		}
 	}
-	return count > 0 ? totalDelay / count : null;
+	return delayCount > 0 ? totalDelay / delayCount : null;
 }

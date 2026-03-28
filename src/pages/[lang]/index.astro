@@ -1,18 +1,20 @@
 ---
 import { env } from "cloudflare:workers";
 import HoursToggle from "../../components/HoursToggle.astro";
+import { createDb } from "../../db/client";
 import Layout from "../../layouts/Layout.astro";
 import { langFromParams, t } from "../../lib/i18n";
 import { getOperatorSummaries, getStationSummaries } from "../../lib/queries";
 import { STATIONS, stationIcon } from "../../lib/stations";
 import { pct, shortDir } from "../../lib/utils";
 
+const db = createDb(env.DB);
 const lang = langFromParams(Astro.params);
 const coreOnly = Astro.url.searchParams.get("hours") === "core";
 const hoursParam = coreOnly ? "?hours=core" : "";
 const [stationStats, operators] = await Promise.all([
-	getStationSummaries(env.DB, STATIONS, coreOnly),
-	getOperatorSummaries(env.DB, coreOnly),
+	getStationSummaries(db, STATIONS, coreOnly),
+	getOperatorSummaries(db, coreOnly),
 ]);
 ---
 

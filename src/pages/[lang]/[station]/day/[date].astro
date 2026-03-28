@@ -1,5 +1,6 @@
 ---
 import { env } from "cloudflare:workers";
+import { createDb } from "../../../../db/client";
 import Layout from "../../../../layouts/Layout.astro";
 import { langFromParams, t } from "../../../../lib/i18n";
 import {
@@ -21,10 +22,11 @@ const lang = langFromParams(Astro.params);
 const station = findStation(Astro.params.station!);
 if (!station) return new Response("Not found", { status: 404 });
 
+const db = createDb(env.DB);
 const date = Astro.params.date!;
 const [departures, haiku] = await Promise.all([
-	getDayDepartures(env.DB, station, date),
-	getHaiku(env.DB, station, date),
+	getDayDepartures(db, station, date),
+	getHaiku(db, station, date),
 ]);
 
 const isToday = date === todayBerlin();

@@ -1,0 +1,47 @@
+import {
+	index,
+	integer,
+	primaryKey,
+	sqliteTable,
+	text,
+	unique,
+} from "drizzle-orm/sqlite-core";
+
+export const departures = sqliteTable(
+	"departures",
+	{
+		id: integer().primaryKey({ autoIncrement: true }),
+		stationId: text("station_id").notNull(),
+		date: text().notNull(),
+		time: text().notNull(),
+		rtDate: text("rt_date"),
+		rtTime: text("rt_time"),
+		line: text().notNull(),
+		direction: text().notNull(),
+		journeyStatus: text("journey_status").notNull().default("P"),
+		cancelled: integer().notNull().default(0),
+		operator: text(),
+		category: text(),
+		journeyNum: text("journey_num").notNull(),
+		reachable: integer(),
+		stop: text(),
+		stopExtId: text("stop_ext_id"),
+		fetchedAt: text("fetched_at").notNull(),
+	},
+	(t) => [
+		unique().on(t.stationId, t.date, t.time, t.line, t.direction, t.journeyNum),
+		index("idx_departures_station_date").on(t.stationId, t.date),
+		index("idx_departures_next").on(t.stationId, t.date, t.cancelled, t.time),
+		index("idx_departures_fetched").on(t.fetchedAt),
+	],
+);
+
+export const haikus = sqliteTable(
+	"haikus",
+	{
+		date: text().notNull(),
+		stationId: text("station_id").notNull(),
+		haiku: text().notNull(),
+	},
+	(t) => [primaryKey({ columns: [t.date, t.stationId] })],
+);

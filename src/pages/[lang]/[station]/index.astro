@@ -3,6 +3,7 @@ import { env } from "cloudflare:workers";
 import CancellationChart from "../../../components/CancellationChart.astro";
 import HoursToggle from "../../../components/HoursToggle.astro";
 import NextDepartures from "../../../components/NextDepartures.astro";
+import { createDb } from "../../../db/client";
 import Layout from "../../../layouts/Layout.astro";
 import { langFromParams, t } from "../../../lib/i18n";
 import { getStats } from "../../../lib/queries";
@@ -15,12 +16,13 @@ import {
 	todayBerlin,
 } from "../../../lib/utils";
 
+const db = createDb(env.DB);
 const lang = langFromParams(Astro.params);
 const station = findStation(Astro.params.station!);
 if (!station) return new Response("Not found", { status: 404 });
 
 const coreOnly = Astro.url.searchParams.get("hours") === "core";
-const stats = await getStats(env.DB, station, coreOnly);
+const stats = await getStats(db, station, coreOnly);
 
 const today = todayBerlin();
 const todayStats = stats.days.find((d) => d.date === today);

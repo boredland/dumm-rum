@@ -8,13 +8,17 @@
 		"preview": "astro preview",
 		"check": "tsgo --noEmit && biome check && knip",
 		"generate:api": "openapi-typescript https://www.rmv.de/hapi/api-doc -o src/lib/hafas-types.ts",
-		"deploy": "astro build && wrangler pages deploy dist",
+		"db:generate": "drizzle-kit generate",
+		"db:migrate": "wrangler d1 migrations apply rmv-departures --remote",
+		"db:migrate:local": "wrangler d1 migrations apply rmv-departures --local",
+		"deploy": "astro build && wrangler d1 migrations apply rmv-departures --remote && wrangler deploy",
 		"prepare": "lefthook install"
 	},
 	"dependencies": {
 		"@astrojs/cloudflare": "^13.1.4",
 		"astro": "^6.1.1",
 		"dayjs": "^1.11.20",
+		"drizzle-orm": "^1.0.0-beta.20",
 		"openapi-fetch": "^0.17.0"
 	},
 	"devDependencies": {
@@ -22,6 +26,7 @@
 		"@cloudflare/workers-types": "^4.20260317.1",
 		"@tailwindcss/vite": "^4.2.2",
 		"@typescript/native-preview": "^7.0.0-dev.20260327.2",
+		"drizzle-kit": "^1.0.0-beta.20",
 		"knip": "^6.1.0",
 		"lefthook": "^2.1.4",
 		"openapi-typescript": "^7.13.0",

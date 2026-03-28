@@ -2,16 +2,18 @@
 import { env } from "cloudflare:workers";
 import CancellationChart from "../../../components/CancellationChart.astro";
 import HoursToggle from "../../../components/HoursToggle.astro";
+import { createDb } from "../../../db/client";
 import Layout from "../../../layouts/Layout.astro";
 import { langFromParams, t } from "../../../lib/i18n";
 import { getOperatorStats } from "../../../lib/queries";
 import { pct } from "../../../lib/utils";
 
+const db = createDb(env.DB);
 const lang = langFromParams(Astro.params);
 const operator = decodeURIComponent(Astro.params.operator!);
 const coreOnly = Astro.url.searchParams.get("hours") === "core";
 
-const { days, lines } = await getOperatorStats(env.DB, operator, coreOnly);
+const { days, lines } = await getOperatorStats(db, operator, coreOnly);
 
 const totalDepartures = days.reduce((s, d) => s + d.total, 0);
 const totalCancelled = days.reduce((s, d) => s + d.cancelled, 0);

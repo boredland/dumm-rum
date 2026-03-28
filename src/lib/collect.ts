@@ -1,3 +1,6 @@
+import { and, eq, sql } from "drizzle-orm";
+import type { Db } from "../db/client";
+import { departures, haikus } from "../db/schema";
 import { createHafasClient } from "./hafas";
 import type { components } from "./hafas-types";
 import type { Station } from "./stations";
@@ -6,20 +9,8 @@ import { nowBerlin, todayBerlin } from "./utils";
 
 type Departure = components["schemas"]["Departure"];
 
-const UPSERT_SQL = `
-INSERT INTO departures (station_id, date, time, rt_date, rt_time, line, direction, journey_status, cancelled, operator, category, journey_num, reachable, stop, stop_ext_id, fetched_at)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-ON CONFLICT(station_id, date, time, line, direction, journey_num)
-DO UPDATE SET
-  rt_date = COALESCE(excluded.rt_date, departures.rt_date),
-  rt_time = COALESCE(excluded.rt_time, departures.rt_time),
-  journey_status = excluded.journey_status,
-  cancelled = MAX(departures.cancelled, excluded.cancelled),
-  reachable = CASE WHEN excluded.cancelled THEN 0 ELSE excluded.reachable END,
-  fetched_at = excluded.fetched_at`;
-
 async function collectDepartures(
-	db: D1Database,
+	db: Db,
 	apiKey: string,
 	station: Station,
 ): Promise<number> {
@@ -45,55 +36,76 @@ async function collectDepartures(
 		return 0;
 	}
 
-	const departures = (data.Departure ?? []).filter(
+	const deps = (data.Departure ?? []).filter(
 		(d: Departure) => d.ProductAtStop?.line && d.ProductAtStop?.num,
 	);
-	if (departures.length === 0) return 0;
+	if (deps.length === 0) return 0;
 
 	const now = new Date().toISOString();
 	const BATCH_SIZE = 50;
 
-	for (let i = 0; i < departures.length; i += BATCH_SIZE) {
-		const stmts = departures.slice(i, i + BATCH_SIZE).map((dep: Departure) => {
-			const p = dep.ProductAtStop!;
-			return db
-				.prepare(UPSERT_SQL)
-				.bind(
-					station.id,
-					dep.date,
-					dep.time,
-					dep.rtDate ?? null,
-					dep.rtTime ?? null,
-					p.line,
-					dep.direction ?? null,
-					dep.JourneyStatus ?? "P",
-					dep.cancelled ? 1 : 0,
-					p.operator,
-					p.catOut,
-					p.num,
-					dep.reachable ? 1 : 0,
-					dep.stop ?? null,
-					dep.stopExtId ?? null,
-					now,
-				);
-		});
-		await db.batch(stmts);
+	for (let i = 0; i < deps.length; i += BATCH_SIZE) {
+		const batch = deps.slice(i, i + BATCH_SIZE);
+		await db
+			.insert(departures)
+			.values(
+				batch.map((dep: Departure) => {
+					const p = dep.ProductAtStop!;
+					return {
+						stationId: station.id,
+						date: dep.date,
+						time: dep.time,
+						rtDate: dep.rtDate ?? null,
+						rtTime: dep.rtTime ?? null,
+						line: p.line!,
+						direction: dep.direction ?? "",
+						journeyStatus: dep.JourneyStatus ?? "P",
+						cancelled: dep.cancelled ? 1 : 0,
+						operator: p.operator ?? null,
+						category: p.catOut ?? null,
+						journeyNum: p.num!,
+						reachable: dep.reachable ? 1 : 0,
+						stop: dep.stop ?? null,
+						stopExtId: dep.stopExtId ?? null,
+						fetchedAt: now,
+					};
+				}),
+			)
+			.onConflictDoUpdate({
+				target: [
+					departures.stationId,
+					departures.date,
+					departures.time,
+					departures.line,
+					departures.direction,
+					departures.journeyNum,
+				],
+				set: {
+					rtDate: sql`COALESCE(excluded.rt_date, ${departures.rtDate})`,
+					rtTime: sql`COALESCE(excluded.rt_time, ${departures.rtTime})`,
+					journeyStatus: sql`excluded.journey_status`,
+					cancelled: sql`MAX(${departures.cancelled}, excluded.cancelled)`,
+					reachable: sql`CASE WHEN excluded.cancelled THEN 0 ELSE excluded.reachable END`,
+					fetchedAt: sql`excluded.fetched_at`,
+				},
+			});
 	}
 
-	return departures.length;
+	return deps.length;
 }
 
 async function generateDailyHaiku(
-	db: D1Database,
+	db: Db,
 	ai: Ai,
 	station: Station,
 ): Promise<void> {
 	const today = todayBerlin();
 	const existing = await db
-		.prepare("SELECT 1 FROM haikus WHERE date = ? AND station_id = ?")
-		.bind(today, station.id)
-		.first();
-	if (existing) return;
+		.select({ date: haikus.date })
+		.from(haikus)
+		.where(and(eq(haikus.date, today), eq(haikus.stationId, station.id)))
+		.limit(1);
+	if (existing.length > 0) return;
 
 	const vehicle =
 		station.type === "tram"
@@ -129,15 +141,13 @@ async function generateDailyHaiku(
 	console.log(`Generated haiku for ${station.slug}: ${haiku}`);
 
 	await db
-		.prepare(
-			"INSERT INTO haikus (date, station_id, haiku) VALUES (?, ?, ?) ON CONFLICT(date, station_id) DO NOTHING",
-		)
-		.bind(today, station.id, haiku)
-		.run();
+		.insert(haikus)
+		.values({ date: today, stationId: station.id, haiku })
+		.onConflictDoNothing();
 }
 
 export async function runCollection(
-	db: D1Database,
+	db: Db,
 	ai: Ai,
 	apiKey: string,
 ): Promise<Record<string, number>> {
