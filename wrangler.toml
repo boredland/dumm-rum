@@ -1,6 +1,6 @@
 name = "dummrum"
 main = "dist/_worker.js/index.js"
-compatibility_date = "2026-03-27"
+compatibility_date = "2026-03-17"
 compatibility_flags = ["nodejs_compat"]
 
 [observability.logs]
@@ -9,6 +9,9 @@ enabled = true
 [assets]
 binding = "ASSETS"
 directory = "./dist"
+
+[ai]
+binding = "AI"
 
 [[d1_databases]]
 binding = "DB"

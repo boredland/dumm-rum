@@ -11,19 +11,19 @@
 		"prepare": "lefthook install"
 	},
 	"dependencies": {
-		"@astrojs/cloudflare": "^12.5.1",
-		"astro": "^5.10.1",
+		"@astrojs/cloudflare": "^12.6.13",
+		"astro": "^5.18.1",
 		"dayjs": "^1.11.20"
 	},
 	"devDependencies": {
 		"@biomejs/biome": "^2.4.9",
 		"@cloudflare/workers-types": "^4.20260317.1",
-		"@tailwindcss/vite": "^4.1.10",
+		"@tailwindcss/vite": "^4.2.2",
 		"@typescript/native-preview": "^7.0.0-dev.20260327.2",
-		"knip": "^6.0.6",
+		"knip": "^6.1.0",
 		"lefthook": "^2.1.4",
-		"tailwindcss": "^4.1.10",
+		"tailwindcss": "^4.2.2",
 		"typescript": "^5.4.0",
-		"wrangler": "^4.77.0"
+		"wrangler": "^4.78.0"
 	}
 }
