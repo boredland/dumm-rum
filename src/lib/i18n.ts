@@ -13,6 +13,10 @@ const translations = {
 		"hours.core": "Hauptverkehrszeit",
 		"hours.core_range": "6\u20139 & 16\u201319 (HVZ)",
 
+		"days.all": "Alle Tage",
+		"days.weekdays": "Werktage",
+		"days.weekends": "Wochenende",
+
 		"nav.all_stations": "Alle Haltestellen",
 		"nav.back": "Zur\u00fcck zur \u00dcbersicht",
 		"nav.github": "Quellcode auf GitHub",
@@ -71,6 +75,10 @@ const translations = {
 		"hours.all": "All hours",
 		"hours.core": "Core hours",
 		"hours.core_range": "6\u20139 & 16\u201319 (HVZ)",
+
+		"days.all": "All days",
+		"days.weekdays": "Weekdays",
+		"days.weekends": "Weekends",
 
 		"nav.all_stations": "All stations",
 		"nav.back": "Back to overview",

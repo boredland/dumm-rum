@@ -5,15 +5,16 @@ import HoursToggle from "../../../components/HoursToggle.astro";
 import { createDb } from "../../../db/client";
 import Layout from "../../../layouts/Layout.astro";
 import { langFromParams, t } from "../../../lib/i18n";
-import { getOperatorStats } from "../../../lib/queries";
+import { getOperatorStats, parseFilter } from "../../../lib/queries";
 import { fmtDate, fmtDelay, pct } from "../../../lib/utils";
 
 const db = createDb(env.DB);
 const lang = langFromParams(Astro.params);
 const operator = decodeURIComponent(Astro.params.operator!);
-const coreOnly = Astro.url.searchParams.get("hours") === "core";
+const filter = parseFilter(Astro.url);
+const { coreOnly, days: daysFilter } = filter;
 
-const { days, lines } = await getOperatorStats(db, operator, coreOnly);
+const { days, lines } = await getOperatorStats(db, operator, filter);
 
 const totalDepartures = days.reduce((s, d) => s + d.total, 0);
 const totalCancelled = days.reduce((s, d) => s + d.cancelled, 0);
@@ -48,6 +49,7 @@ const chartDays = days.map((d) => ({
 	<HoursToggle
 		basePath={`/${lang}/operator/${encodeURIComponent(operator)}`}
 		coreOnly={coreOnly}
+		daysFilter={daysFilter}
 		lang={lang}
 	/>
 

@@ -5,34 +5,83 @@ import { t } from "../lib/i18n";
 interface Props {
 	basePath: string;
 	coreOnly: boolean;
+	daysFilter: string;
 	lang: Lang;
 }
 
-const { basePath, coreOnly, lang } = Astro.props;
+const { basePath, coreOnly, daysFilter, lang } = Astro.props;
+
+function buildHref(params: { hours?: string; days?: string }): string {
+	const search = new URLSearchParams();
+	const hours = params.hours ?? (coreOnly ? "core" : "");
+	const days = params.days ?? daysFilter;
+	if (hours) search.set("hours", hours);
+	if (days) search.set("days", days);
+	const qs = search.toString();
+	return qs ? `${basePath}?${qs}` : basePath;
+}
 ---
 
-<div class="flex gap-2 mb-6 items-center">
-	<a
-		href={basePath}
-		class:list={[
-			"inline-block px-3 py-1 rounded-full text-xs font-semibold no-underline",
-			!coreOnly
-				? "bg-success/10 text-success"
-				: "bg-success/10 text-success opacity-50",
-		]}
-	>
-		{t(lang, "hours.all")}
-	</a>
-	<a
-		href={`${basePath}?hours=core`}
-		class:list={[
-			"inline-block px-3 py-1 rounded-full text-xs font-semibold no-underline",
-			coreOnly
-				? "bg-success/10 text-success"
-				: "bg-success/10 text-success opacity-50",
-		]}
-	>
-		{t(lang, "hours.core")}
-	</a>
-	{coreOnly && <span class="text-muted text-sm">{t(lang, "hours.core_range")}</span>}
+<div class="flex flex-wrap gap-x-4 gap-y-2 mb-6 items-center">
+	<div class="flex gap-2 items-center">
+		<a
+			href={buildHref({ hours: "" })}
+			class:list={[
+				"inline-block px-3 py-1 rounded-full text-xs font-semibold no-underline",
+				!coreOnly
+					? "bg-success/10 text-success"
+					: "bg-success/10 text-success opacity-50",
+			]}
+		>
+			{t(lang, "hours.all")}
+		</a>
+		<a
+			href={buildHref({ hours: "core" })}
+			class:list={[
+				"inline-block px-3 py-1 rounded-full text-xs font-semibold no-underline",
+				coreOnly
+					? "bg-success/10 text-success"
+					: "bg-success/10 text-success opacity-50",
+			]}
+		>
+			{t(lang, "hours.core")}
+		</a>
+		{coreOnly && <span class="text-muted text-sm">{t(lang, "hours.core_range")}</span>}
+	</div>
+
+	<div class="flex gap-2 items-center">
+		<a
+			href={buildHref({ days: "" })}
+			class:list={[
+				"inline-block px-3 py-1 rounded-full text-xs font-semibold no-underline",
+				!daysFilter
+					? "bg-link/10 text-link"
+					: "bg-link/10 text-link opacity-50",
+			]}
+		>
+			{t(lang, "days.all")}
+		</a>
+		<a
+			href={buildHref({ days: "weekdays" })}
+			class:list={[
+				"inline-block px-3 py-1 rounded-full text-xs font-semibold no-underline",
+				daysFilter === "weekdays"
+					? "bg-link/10 text-link"
+					: "bg-link/10 text-link opacity-50",
+			]}
+		>
+			{t(lang, "days.weekdays")}
+		</a>
+		<a
+			href={buildHref({ days: "weekends" })}
+			class:list={[
+				"inline-block px-3 py-1 rounded-full text-xs font-semibold no-underline",
+				daysFilter === "weekends"
+					? "bg-link/10 text-link"
+					: "bg-link/10 text-link opacity-50",
+			]}
+		>
+			{t(lang, "days.weekends")}
+		</a>
+	</div>
 </div>

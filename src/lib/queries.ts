@@ -12,7 +12,29 @@ import { nowBerlin, timeToMinutes, todayBerlin } from "./utils";
 
 const CORE_HOURS = sql`((${departures.time} >= '06:00:00' AND ${departures.time} < '09:00:00') OR (${departures.time} >= '16:00:00' AND ${departures.time} < '19:00:00'))`;
 
+export type DaysFilter = "" | "weekdays" | "weekends";
+
+function daysCondition(dateCol: unknown, filter: DaysFilter) {
+	if (filter === "weekdays")
+		return sql`strftime('%w', ${dateCol}) NOT IN ('0', '6')`;
+	if (filter === "weekends")
+		return sql`strftime('%w', ${dateCol}) IN ('0', '6')`;
+	return undefined;
+}
+
+export function parseFilter(url: URL): QueryFilter {
+	return {
+		coreOnly: url.searchParams.get("hours") === "core",
+		days: (url.searchParams.get("days") as DaysFilter) || "",
+	};
+}
+
 export type DayStats = InferSelectModel<typeof stationDailyStats>;
+
+export interface QueryFilter {
+	coreOnly?: boolean;
+	days?: DaysFilter;
+}
 
 export interface Stats {
 	days: DayStats[];
@@ -24,17 +46,21 @@ export interface Stats {
 export async function getStats(
 	db: Db,
 	station: Station,
-	coreOnly = false,
+	filter: QueryFilter = {},
 ): Promise<Stats> {
-	if (coreOnly) {
-		return getStatsFallback(db, station);
+	if (filter.coreOnly) {
+		return getStatsFallback(db, station, filter);
 	}
+
+	const daysCond = daysCondition(stationDailyStats.date, filter.days ?? "");
+	const conditions = [eq(stationDailyStats.stationId, station.id)];
+	if (daysCond) conditions.push(daysCond);
 
 	const [dayRows, lastChangeRows, haikuRows] = await Promise.all([
 		db
 			.select()
 			.from(stationDailyStats)
-			.where(eq(stationDailyStats.stationId, station.id))
+			.where(and(...conditions))
 			.orderBy(desc(stationDailyStats.date)),
 		db
 			.select({ fetchedAt: departures.fetchedAt })
@@ -113,7 +139,15 @@ function avgNonNull(nums: (number | null)[]): number | null {
 		: null;
 }
 
-async function getStatsFallback(db: Db, station: Station): Promise<Stats> {
+async function getStatsFallback(
+	db: Db,
+	station: Station,
+	filter: QueryFilter = {},
+): Promise<Stats> {
+	const daysCond = daysCondition(departures.date, filter.days ?? "");
+	const conditions = [eq(departures.stationId, station.id), CORE_HOURS];
+	if (daysCond) conditions.push(daysCond);
+
 	const [statsRows, lastChangeRows, haikuRows] = await Promise.all([
 		db
 			.select({
@@ -127,7 +161,7 @@ async function getStatsFallback(db: Db, station: Station): Promise<Stats> {
 				last_time: sql<string>`MAX(${departures.time})`.as("last_time"),
 			})
 			.from(departures)
-			.where(and(eq(departures.stationId, station.id), CORE_HOURS))
+			.where(and(...conditions))
 			.groupBy(departures.date, departures.direction)
 			.orderBy(desc(departures.date), departures.direction),
 		db
@@ -205,10 +239,16 @@ export interface StationSummary {
 export async function getStationSummaries(
 	db: Db,
 	stations: Station[],
-	coreOnly = false,
+	filter: QueryFilter = {},
 ): Promise<Map<string, StationSummary>> {
+	const depDaysCond = daysCondition(departures.date, filter.days ?? "");
+	const statsDaysCond = daysCondition(
+		stationDailyStats.date,
+		filter.days ?? "",
+	);
+
 	const [statsRows, catRows] = await Promise.all([
-		coreOnly
+		filter.coreOnly
 			? db
 					.select({
 						stationId: departures.stationId,
@@ -216,7 +256,7 @@ export async function getStationSummaries(
 						total: count().as("total"),
 					})
 					.from(departures)
-					.where(CORE_HOURS)
+					.where(and(CORE_HOURS, depDaysCond))
 					.groupBy(departures.stationId)
 			: db
 					.select({
@@ -225,6 +265,7 @@ export async function getStationSummaries(
 						total: sum(stationDailyStats.total).as("total"),
 					})
 					.from(stationDailyStats)
+					.where(statsDaysCond)
 					.groupBy(stationDailyStats.stationId),
 		db
 			.selectDistinct({
@@ -333,10 +374,13 @@ export interface OperatorSummary {
 
 export async function getOperatorSummaries(
 	db: Db,
-	coreOnly = false,
+	filter: QueryFilter = {},
 ): Promise<OperatorSummary[]> {
+	const depDaysCond = daysCondition(departures.date, filter.days ?? "");
+	const opDaysCond = daysCondition(operatorDailyStats.date, filter.days ?? "");
+
 	const [statsRows, lineRows] = await Promise.all([
-		coreOnly
+		filter.coreOnly
 			? db
 					.select({
 						operator: departures.operator,
@@ -347,7 +391,7 @@ export async function getOperatorSummaries(
 						avgDelay: avgDelaySql.as("avg_delay"),
 					})
 					.from(departures)
-					.where(and(isNotNull(departures.operator), CORE_HOURS))
+					.where(and(isNotNull(departures.operator), CORE_HOURS, depDaysCond))
 					.groupBy(departures.operator)
 			: db
 					.select({
@@ -361,6 +405,7 @@ export async function getOperatorSummaries(
 						),
 					})
 					.from(operatorDailyStats)
+					.where(opDaysCond)
 					.groupBy(operatorDailyStats.operator),
 		db
 			.selectDistinct({
@@ -393,10 +438,13 @@ export type OperatorDayStats = InferSelectModel<typeof operatorDailyStats>;
 export async function getOperatorStats(
 	db: Db,
 	operator: string,
-	coreOnly = false,
+	filter: QueryFilter = {},
 ): Promise<{ days: OperatorDayStats[]; lines: string[] }> {
+	const depDaysCond = daysCondition(departures.date, filter.days ?? "");
+	const opDaysCond = daysCondition(operatorDailyStats.date, filter.days ?? "");
+
 	const [dayRows, lineRows] = await Promise.all([
-		coreOnly
+		filter.coreOnly
 			? db
 					.select({
 						operator: departures.operator,
@@ -408,13 +456,15 @@ export async function getOperatorStats(
 						avgDelay: avgDelaySql.as("avg_delay"),
 					})
 					.from(departures)
-					.where(and(eq(departures.operator, operator), CORE_HOURS))
+					.where(
+						and(eq(departures.operator, operator), CORE_HOURS, depDaysCond),
+					)
 					.groupBy(departures.date)
 					.orderBy(desc(departures.date))
 			: db
 					.select()
 					.from(operatorDailyStats)
-					.where(eq(operatorDailyStats.operator, operator))
+					.where(and(eq(operatorDailyStats.operator, operator), opDaysCond))
 					.orderBy(desc(operatorDailyStats.date)),
 		db
 			.selectDistinct({ line: departures.line })
