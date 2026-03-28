@@ -93,6 +93,46 @@ const [
 
 	<details class="group mb-8" open>
 		<summary class="text-xs uppercase tracking-wide text-muted font-semibold mb-3 cursor-pointer select-none">
+			{t(lang, "home.lines")}
+		</summary>
+		<div class="grid grid-cols-[repeat(auto-fit,minmax(140px,1fr))] gap-3 max-sm:grid-cols-2 mt-3">
+			{
+				[...lines].sort((a, b) => {
+					const scoreA = reliabilityScore(a.cancelled, a.delayed, a.total);
+					const scoreB = reliabilityScore(b.cancelled, b.delayed, b.total);
+					return scoreA - scoreB;
+				}).map((l) => {
+					const tr = lineTrends.get(l.line);
+					const arrow = tr ? trendArrow(tr, { cancelled: tr.prevCancelled, total: tr.prevTotal }) : "";
+					const borderColor = scoreBorderColor(reliabilityScore(l.cancelled, l.delayed, l.total));
+					return (
+						<a
+							href={`/${lang}/line/${encodeURIComponent(l.line)}${Astro.url.search}`}
+							class:list={[
+								"bg-surface border rounded-xl p-4 no-underline hover:bg-surface-hover transition-colors",
+								borderColor,
+							]}
+						>
+							<div class="text-lg font-bold text-emphasis">{categoryIcons([l.category])} {l.line}</div>
+							<div class="text-xs text-muted">{l.operators.join(", ")}</div>
+							<div class="text-sm text-muted mt-1">
+								{pct(l.cancelled, l.total)}% {t(lang, "home.cancelled")} &middot; {pct(l.delayed, l.total)}% {t(lang, "home.delayed")}
+							</div>
+							{l.total > 0 && (
+								<div class="text-xs text-muted mt-1">
+									{t(lang, "stat.reliability")}: {reliabilityScore(l.cancelled, l.delayed, l.total)}/100
+									{arrow && <span class={trendColor(arrow)}> {arrow}</span>}
+								</div>
+							)}
+						</a>
+					);
+				})
+			}
+		</div>
+	</details>
+
+	<details class="group mb-8">
+		<summary class="text-xs uppercase tracking-wide text-muted font-semibold mb-3 cursor-pointer select-none">
 			{t(lang, "home.stations")}
 		</summary>
 		<div class="grid grid-cols-[repeat(auto-fit,minmax(180px,1fr))] gap-4 max-sm:grid-cols-1 mt-3">
@@ -188,43 +228,5 @@ const [
 		</div>
 	</details>
 
-	<details class="mb-8">
-		<summary class="text-xs uppercase tracking-wide text-muted font-semibold mb-3 cursor-pointer select-none">
-			{t(lang, "home.lines")}
-		</summary>
-		<div class="grid grid-cols-[repeat(auto-fit,minmax(140px,1fr))] gap-3 max-sm:grid-cols-2 mt-3">
-			{
-				[...lines].sort((a, b) => {
-					const scoreA = reliabilityScore(a.cancelled, a.delayed, a.total);
-					const scoreB = reliabilityScore(b.cancelled, b.delayed, b.total);
-					return scoreA - scoreB;
-				}).map((l) => {
-					const tr = lineTrends.get(l.line);
-					const arrow = tr ? trendArrow(tr, { cancelled: tr.prevCancelled, total: tr.prevTotal }) : "";
-					const borderColor = scoreBorderColor(reliabilityScore(l.cancelled, l.delayed, l.total));
-					return (
-						<a
-							href={`/${lang}/line/${encodeURIComponent(l.line)}${Astro.url.search}`}
-							class:list={[
-								"bg-surface border rounded-xl p-4 no-underline hover:bg-surface-hover transition-colors",
-								borderColor,
-							]}
-						>
-							<div class="text-lg font-bold text-emphasis">{categoryIcons([l.category])} {l.line}</div>
-							<div class="text-xs text-muted">{l.operators.join(", ")}</div>
-							<div class="text-sm text-muted mt-1">
-								{pct(l.cancelled, l.total)}% {t(lang, "home.cancelled")} &middot; {pct(l.delayed, l.total)}% {t(lang, "home.delayed")}
-							</div>
-							{l.total > 0 && (
-								<div class="text-xs text-muted mt-1">
-									{t(lang, "stat.reliability")}: {reliabilityScore(l.cancelled, l.delayed, l.total)}/100
-									{arrow && <span class={trendColor(arrow)}> {arrow}</span>}
-								</div>
-							)}
-						</a>
-					);
-				})
-			}
-		</div>
-	</details>
+
 </Layout>
