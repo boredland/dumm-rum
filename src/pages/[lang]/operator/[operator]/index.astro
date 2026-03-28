@@ -7,7 +7,7 @@ import { createDb } from "../../../../db/client";
 import Layout from "../../../../layouts/Layout.astro";
 import { langFromParams, t } from "../../../../lib/i18n";
 import { getOperatorStats, parseFilter } from "../../../../lib/queries";
-import { fmtDate, fmtDelay, pct } from "../../../../lib/utils";
+import { fmtDate, fmtDelay, pct, todayBerlin } from "../../../../lib/utils";
 
 const db = createDb(env.DB);
 const lang = langFromParams(Astro.params);
@@ -19,12 +19,6 @@ const { days, lines } = await getOperatorStats(db, operator, filter);
 
 const totalDepartures = days.reduce((s, d) => s + d.total, 0);
 const totalCancelled = days.reduce((s, d) => s + d.cancelled, 0);
-const delayDays = days.filter((d) => d.avgDelay !== null);
-const overallDelay =
-	delayDays.length > 0
-		? delayDays.reduce((s, d) => s + d.avgDelay! * d.total, 0) /
-			delayDays.reduce((s, d) => s + d.total, 0)
-		: null;
 ---
 
 <Layout title={operator} lang={lang}>
@@ -56,6 +50,8 @@ const overallDelay =
 
 	{(() => {
 		const totalDelayed = days.reduce((s, d) => s + d.delayed, 0);
+		const today = todayBerlin();
+		const todayStats = days.find((d) => d.date === today);
 		return (
 			<div class="grid grid-cols-3 gap-4 mb-8 max-sm:grid-cols-1">
 				<div class="bg-surface border border-border rounded-xl p-5">
@@ -73,8 +69,17 @@ const overallDelay =
 					<div class="text-sm text-muted mt-1">{pct(totalDelayed, totalDepartures)}% {t(lang, "stat.rate")}</div>
 				</div>
 				<div class="bg-surface border border-border rounded-xl p-5">
-					<div class="text-[0.7rem] uppercase tracking-wide text-muted mb-1">{t(lang, "stat.avg_delay")}</div>
-					<div class="text-2xl font-bold tabular-nums">{fmtDelay(overallDelay)}</div>
+					<div class="text-[0.7rem] uppercase tracking-wide text-muted mb-1">{t(lang, "stat.today")}</div>
+					{todayStats ? (
+						<div class="text-sm tabular-nums mt-1">
+							<span class:list={[todayStats.cancelled > 0 ? "text-danger" : "text-success"]}>{todayStats.cancelled} {t(lang, "stat.cancelled")}</span>
+							{" / "}
+							<span class:list={[todayStats.delayed > 0 ? "text-warning" : "text-success"]}>{todayStats.delayed} {t(lang, "table.delayed").toLowerCase()}</span>
+							<div class="text-muted mt-1">{t(lang, "stat.of_departures", { total: todayStats.total, pct: pct(todayStats.cancelled, todayStats.total) })}</div>
+						</div>
+					) : (
+						<div class="text-2xl font-bold tabular-nums text-muted">&mdash;</div>
+					)}
 				</div>
 			</div>
 		);

@@ -7,7 +7,7 @@ import { createDb } from "../../../../db/client";
 import Layout from "../../../../layouts/Layout.astro";
 import { langFromParams, t } from "../../../../lib/i18n";
 import { getLineStats, parseFilter } from "../../../../lib/queries";
-import { fmtDate, fmtDelay, pct } from "../../../../lib/utils";
+import { fmtDate, pct, todayBerlin } from "../../../../lib/utils";
 
 const db = createDb(env.DB);
 const lang = langFromParams(Astro.params);
@@ -20,12 +20,6 @@ const { days, operators } = await getLineStats(db, line, filter);
 const totalDepartures = days.reduce((s, d) => s + d.total, 0);
 const totalCancelled = days.reduce((s, d) => s + d.cancelled, 0);
 const totalDelayed = days.reduce((s, d) => s + d.delayed, 0);
-const delayDays = days.filter((d) => d.avgDelay !== null);
-const overallDelay =
-	delayDays.length > 0
-		? delayDays.reduce((s, d) => s + d.avgDelay! * d.total, 0) /
-			delayDays.reduce((s, d) => s + d.total, 0)
-		: null;
 ---
 
 <Layout title={`${t(lang, "table.line")} ${line}`} lang={lang}>
@@ -55,26 +49,41 @@ const overallDelay =
 		lang={lang}
 	/>
 
-	<div class="grid grid-cols-3 gap-4 mb-8 max-sm:grid-cols-1">
-		<div class="bg-surface border border-border rounded-xl p-5">
-			<div class="text-[0.7rem] uppercase tracking-wide text-muted mb-1">{t(lang, "stat.cancelled")} {t(lang, "stat.avg_per_day").toLowerCase()}</div>
-			<div class:list={["text-4xl font-bold tabular-nums", totalCancelled > 0 ? "text-danger" : "text-success"]}>
-				{days.length > 0 ? (totalCancelled / days.length).toFixed(1) : "0"}
+	{(() => {
+		const today = todayBerlin();
+		const todayStats = days.find((d) => d.date === today);
+		return (
+			<div class="grid grid-cols-3 gap-4 mb-8 max-sm:grid-cols-1">
+				<div class="bg-surface border border-border rounded-xl p-5">
+					<div class="text-[0.7rem] uppercase tracking-wide text-muted mb-1">{t(lang, "stat.cancelled")} {t(lang, "stat.avg_per_day").toLowerCase()}</div>
+					<div class:list={["text-4xl font-bold tabular-nums", totalCancelled > 0 ? "text-danger" : "text-success"]}>
+						{days.length > 0 ? (totalCancelled / days.length).toFixed(1) : "0"}
+					</div>
+					<div class="text-sm text-muted mt-1">{pct(totalCancelled, totalDepartures)}% {t(lang, "stat.rate")}</div>
+				</div>
+				<div class="bg-surface border border-border rounded-xl p-5">
+					<div class="text-[0.7rem] uppercase tracking-wide text-muted mb-1">{t(lang, "table.delayed")} {t(lang, "stat.avg_per_day").toLowerCase()}</div>
+					<div class:list={["text-4xl font-bold tabular-nums", totalDelayed > 0 ? "text-warning" : "text-success"]}>
+						{days.length > 0 ? (totalDelayed / days.length).toFixed(1) : "0"}
+					</div>
+					<div class="text-sm text-muted mt-1">{pct(totalDelayed, totalDepartures)}% {t(lang, "stat.rate")}</div>
+				</div>
+				<div class="bg-surface border border-border rounded-xl p-5">
+					<div class="text-[0.7rem] uppercase tracking-wide text-muted mb-1">{t(lang, "stat.today")}</div>
+					{todayStats ? (
+						<div class="text-sm tabular-nums mt-1">
+							<span class:list={[todayStats.cancelled > 0 ? "text-danger" : "text-success"]}>{todayStats.cancelled} {t(lang, "stat.cancelled")}</span>
+							{" / "}
+							<span class:list={[todayStats.delayed > 0 ? "text-warning" : "text-success"]}>{todayStats.delayed} {t(lang, "table.delayed").toLowerCase()}</span>
+							<div class="text-muted mt-1">{t(lang, "stat.of_departures", { total: todayStats.total, pct: pct(todayStats.cancelled, todayStats.total) })}</div>
+						</div>
+					) : (
+						<div class="text-2xl font-bold tabular-nums text-muted">&mdash;</div>
+					)}
+				</div>
 			</div>
-			<div class="text-sm text-muted mt-1">{pct(totalCancelled, totalDepartures)}% {t(lang, "stat.rate")}</div>
-		</div>
-		<div class="bg-surface border border-border rounded-xl p-5">
-			<div class="text-[0.7rem] uppercase tracking-wide text-muted mb-1">{t(lang, "table.delayed")} {t(lang, "stat.avg_per_day").toLowerCase()}</div>
-			<div class:list={["text-4xl font-bold tabular-nums", totalDelayed > 0 ? "text-warning" : "text-success"]}>
-				{days.length > 0 ? (totalDelayed / days.length).toFixed(1) : "0"}
-			</div>
-			<div class="text-sm text-muted mt-1">{pct(totalDelayed, totalDepartures)}% {t(lang, "stat.rate")}</div>
-		</div>
-		<div class="bg-surface border border-border rounded-xl p-5">
-			<div class="text-[0.7rem] uppercase tracking-wide text-muted mb-1">{t(lang, "stat.avg_delay")}</div>
-			<div class="text-2xl font-bold tabular-nums">{fmtDelay(overallDelay)}</div>
-		</div>
-	</div>
+		);
+	})()}
 
 	<p class="text-xs uppercase tracking-wide text-muted font-semibold mb-3">{t(lang, "section.weekday_pattern")}</p>
 	<WeekdayChart days={days} lang={lang} />

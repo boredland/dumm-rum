@@ -77,10 +77,7 @@ const today = todayBerlin();
 		const totalCancelled = stats.days.reduce((s, d) => s + d.cancelled, 0);
 		const totalDelayed = stats.days.reduce((s, d) => s + d.delayed, 0);
 		const totalDep = stats.days.reduce((s, d) => s + d.total, 0);
-		const delayDays = stats.days.filter((d) => d.avgDelay !== null);
-		const overallDelay = delayDays.length > 0
-			? delayDays.reduce((s, d) => s + d.avgDelay! * d.total, 0) / delayDays.reduce((s, d) => s + d.total, 0)
-			: null;
+		const todayStats = stats.days.find((d) => d.date === today);
 		return (
 			<div class="grid grid-cols-3 gap-4 mb-8 max-sm:grid-cols-1">
 				<div class="bg-surface border border-border rounded-xl p-5">
@@ -98,8 +95,17 @@ const today = todayBerlin();
 					<div class="text-sm text-muted mt-1">{pct(totalDelayed, totalDep)}% {t(lang, "stat.rate")}</div>
 				</div>
 				<div class="bg-surface border border-border rounded-xl p-5">
-					<div class="text-[0.7rem] uppercase tracking-wide text-muted mb-1">{t(lang, "stat.avg_delay")}</div>
-					<div class="text-2xl font-bold tabular-nums">{fmtDelay(overallDelay)}</div>
+					<div class="text-[0.7rem] uppercase tracking-wide text-muted mb-1">{t(lang, "stat.today")}</div>
+					{todayStats ? (
+						<div class="text-sm tabular-nums mt-1">
+							<span class:list={[todayStats.cancelled > 0 ? "text-danger" : "text-success"]}>{todayStats.cancelled} {t(lang, "stat.cancelled")}</span>
+							{" / "}
+							<span class:list={[todayStats.delayed > 0 ? "text-warning" : "text-success"]}>{todayStats.delayed} {t(lang, "table.delayed").toLowerCase()}</span>
+							<div class="text-muted mt-1">{t(lang, "stat.of_departures", { total: todayStats.total, pct: pct(todayStats.cancelled, todayStats.total) })}</div>
+						</div>
+					) : (
+						<div class="text-2xl font-bold tabular-nums text-muted">&mdash;</div>
+					)}
 				</div>
 			</div>
 		);
