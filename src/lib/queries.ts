@@ -353,6 +353,7 @@ export async function getOperatorSummaries(
 export interface LineSummary {
 	line: string;
 	category: string;
+	operators: string[];
 	total: number;
 	cancelled: number;
 	delayed: number;
@@ -371,6 +372,9 @@ export async function getLineSummaries(
 		.select({
 			line: departures.line,
 			category: departures.category,
+			operators: sql<string>`GROUP_CONCAT(DISTINCT ${departures.operator})`.as(
+				"operators",
+			),
 			total: count().as("total"),
 			cancelled: sql<number>`SUM(${departures.cancelled})`.as("cancelled"),
 			delayed: delayedSql.as("delayed"),
@@ -383,6 +387,7 @@ export async function getLineSummaries(
 	return rows.map((r) => ({
 		line: r.line,
 		category: r.category ?? "Bus",
+		operators: r.operators ? r.operators.split(",") : [],
 		total: r.total,
 		cancelled: r.cancelled,
 		delayed: r.delayed,
@@ -505,6 +510,28 @@ export async function getOperatorStats(
 		avgDelay: d.avgDelay,
 	}));
 	return { days, lines: lineRows.map((r) => r.line) };
+}
+
+export async function getOperatorDayDepartures(
+	db: Db,
+	operator: string,
+	date: string,
+) {
+	return db
+		.select({
+			date: departures.date,
+			time: departures.time,
+			rtDate: departures.rtDate,
+			rtTime: departures.rtTime,
+			line: departures.line,
+			direction: departures.direction,
+			cancelled: departures.cancelled,
+			stop: departures.stop,
+			fetchedAt: departures.fetchedAt,
+		})
+		.from(departures)
+		.where(and(eq(departures.operator, operator), eq(departures.date, date)))
+		.orderBy(departures.time, departures.line, departures.direction);
 }
 
 const DELAY_THRESHOLD_MIN = 7.5;

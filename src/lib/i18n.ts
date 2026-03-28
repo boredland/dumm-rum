@@ -6,8 +6,16 @@ const translations = {
 		"home.title": "DummRum",
 		"home.subtitle": "Wissen, ob man dumm rumsteht",
 		"home.methodology_title": "Wie wir messen",
-		"home.methodology":
-			"Alle 5 Minuten fragen wir die RMV-Echtzeitdaten ab und speichern Abfahrten, Ausfälle und Verspätungen. Die Ausfallquote ist der Anteil der ausgefallenen Abfahrten an der Gesamtzahl. Die Durchschnittsverspätung vergleicht die tatsächliche Abfahrtszeit mit der geplanten \u2014 bei Ausfällen wird der geplante Takt als Wartezeit angenommen. Als versp\u00e4tet gilt eine Abfahrt, wenn die Versp\u00e4tung \u226550% des geplanten Takts oder \u22657,5 Minuten betr\u00e4gt (50% der angenommenen durchschnittlichen Fahrtzeit von 15 Minuten innerhalb Frankfurts). Farben: gr\u00fcn unter 1% Ausfallquote, orange ab 1%, rot ab 2%.",
+		"home.methodology_collection":
+			"Alle 5 Minuten fragen wir die RMV-Echtzeitdaten ab und speichern Abfahrten, Ausfälle und Verspätungen.",
+		"home.methodology_cancellation":
+			"Die Ausfallquote ist der Anteil der ausgefallenen Abfahrten an der Gesamtzahl.",
+		"home.methodology_delay":
+			"Die Durchschnittsverspätung vergleicht die tatsächliche Abfahrtszeit mit der geplanten \u2014 bei Ausfällen wird der geplante Takt als Wartezeit angenommen.",
+		"home.methodology_delayed":
+			"Als verspätet gilt eine Abfahrt, wenn die Verspätung \u226550% des geplanten Takts oder \u22657,5 Minuten beträgt (50% der angenommenen durchschnittlichen Fahrtzeit von 15 Minuten innerhalb Frankfurts).",
+		"home.methodology_colors":
+			"Farben: grün unter 1% Ausfallquote, orange ab 1%, rot ab 2%.",
 		"home.stations": "Haltestellen",
 		"home.operators": "Betreiber",
 		"home.lines": "Linien",
@@ -25,6 +33,7 @@ const translations = {
 		"nav.all_stations": "Alle Haltestellen",
 		"nav.back": "Zur\u00fcck zur \u00dcbersicht",
 		"nav.back_to_line": "Zur\u00fcck zur Linie",
+		"nav.back_to_operator": "Zur\u00fcck zum Betreiber",
 		"nav.github": "Quellcode auf GitHub",
 
 		"station.subtitle": "Ausfall- & Versp\u00e4tungstracker",
@@ -76,8 +85,16 @@ const translations = {
 		"home.title": "DummRum",
 		"home.subtitle": "Know if you\u2019re standing around for nothing",
 		"home.methodology_title": "How we measure",
-		"home.methodology":
-			"Every 5 minutes we poll the RMV realtime feed and store departures, cancellations, and delays. The cancellation rate is the share of cancelled departures out of the total. Average delay compares actual departure time to the scheduled time \u2014 for cancellations, we assume the wait equals the planned frequency. A departure counts as delayed if the delay is \u226550% of the planned frequency or \u22657.5 minutes (50% of the assumed average 15-minute trip time within Frankfurt). Colors: green below 1% cancellation rate, orange from 1%, red from 2%.",
+		"home.methodology_collection":
+			"Every 5 minutes we poll the RMV realtime feed and store departures, cancellations, and delays.",
+		"home.methodology_cancellation":
+			"The cancellation rate is the share of cancelled departures out of the total.",
+		"home.methodology_delay":
+			"Average delay compares actual departure time to the scheduled time \u2014 for cancellations, we assume the wait equals the planned frequency.",
+		"home.methodology_delayed":
+			"A departure counts as delayed if the delay is \u226550% of the planned frequency or \u22657.5 minutes (50% of the assumed average 15-minute trip time within Frankfurt).",
+		"home.methodology_colors":
+			"Colors: green below 1% cancellation rate, orange from 1%, red from 2%.",
 		"home.stations": "Stations",
 		"home.operators": "Operators",
 		"home.lines": "Lines",
@@ -95,6 +112,7 @@ const translations = {
 		"nav.all_stations": "All stations",
 		"nav.back": "Back to overview",
 		"nav.back_to_line": "Back to line",
+		"nav.back_to_operator": "Back to operator",
 		"nav.github": "View source on GitHub",
 
 		"station.subtitle": "Cancellation & delay tracker",

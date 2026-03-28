@@ -1,12 +1,12 @@
 ---
 import { env } from "cloudflare:workers";
-import CancellationChart from "../../../components/CancellationChart.astro";
-import HoursToggle from "../../../components/HoursToggle.astro";
-import { createDb } from "../../../db/client";
-import Layout from "../../../layouts/Layout.astro";
-import { langFromParams, t } from "../../../lib/i18n";
-import { getOperatorStats, parseFilter } from "../../../lib/queries";
-import { fmtDate, fmtDelay, pct } from "../../../lib/utils";
+import CancellationChart from "../../../../components/CancellationChart.astro";
+import HoursToggle from "../../../../components/HoursToggle.astro";
+import { createDb } from "../../../../db/client";
+import Layout from "../../../../layouts/Layout.astro";
+import { langFromParams, t } from "../../../../lib/i18n";
+import { getOperatorStats, parseFilter } from "../../../../lib/queries";
+import { fmtDate, fmtDelay, pct } from "../../../../lib/utils";
 
 const db = createDb(env.DB);
 const lang = langFromParams(Astro.params);
@@ -112,7 +112,11 @@ const overallDelay =
 							const rate = pct(d.cancelled, d.total);
 							return (
 								<tr class="border-b border-border-dim last:border-b-0 hover:bg-surface-hover">
-									<td class="px-4 py-2.5 text-sm tabular-nums"><time datetime={d.date}>{fmtDate(d.date, lang)}</time></td>
+									<td class="px-4 py-2.5 text-sm tabular-nums">
+											<a href={`/${lang}/operator/${encodeURIComponent(operator)}/day/${d.date}${Astro.url.search}`} class="text-link no-underline hover:underline">
+												<time datetime={d.date}>{fmtDate(d.date, lang)}</time>
+											</a>
+										</td>
 									<td class="px-4 py-2.5 text-sm tabular-nums">{d.total}</td>
 									<td class="px-4 py-2.5 text-sm">
 										{d.cancelled > 0 ? (

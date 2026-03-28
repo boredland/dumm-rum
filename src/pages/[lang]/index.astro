@@ -36,7 +36,13 @@ const [stationStats, operators, lines] = await Promise.all([
 
 	<details class="mb-6 text-sm text-muted">
 		<summary class="cursor-pointer select-none font-medium">{t(lang, "home.methodology_title")}</summary>
-		<p class="mt-2">{t(lang, "home.methodology")}</p>
+		<ul class="mt-2 list-disc pl-5 space-y-1">
+			<li>{t(lang, "home.methodology_collection")}</li>
+			<li>{t(lang, "home.methodology_cancellation")}</li>
+			<li>{t(lang, "home.methodology_delay")}</li>
+			<li>{t(lang, "home.methodology_delayed")}</li>
+			<li>{t(lang, "home.methodology_colors")}</li>
+		</ul>
 	</details>
 
 	<HoursToggle basePath={`/${lang}`} coreOnly={coreOnly} daysFilter={daysFilter} lang={lang} />
@@ -140,7 +146,7 @@ const [stationStats, operators, lines] = await Promise.all([
 							]}
 						>
 							<div class="text-lg font-bold text-emphasis">{l.line}</div>
-							<div class="text-xs text-muted">{l.category}</div>
+							<div class="text-xs text-muted">{l.category} &middot; {l.operators.join(", ")}</div>
 							<div class="text-sm text-muted mt-1">
 								{pct(l.cancelled, l.total)}% {t(lang, "home.cancelled")}
 							</div>
