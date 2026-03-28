@@ -8,7 +8,7 @@ import {
 	stationDailyStats,
 } from "../db/schema";
 import type { Station } from "./stations";
-import { delayMinutes, nowBerlin, todayBerlin } from "./utils";
+import { nowBerlin, todayBerlin } from "./utils";
 
 const CORE_HOURS = sql`((${departures.time} >= '06:00:00' AND ${departures.time} < '09:00:00') OR (${departures.time} >= '16:00:00' AND ${departures.time} < '19:00:00'))`;
 
@@ -245,8 +245,6 @@ export async function getDayDepartures(db: Db, station: Station, date: string) {
 		.where(and(eq(departures.stationId, station.id), eq(departures.date, date)))
 		.orderBy(departures.time, departures.direction);
 }
-
-type DepartureRow = Awaited<ReturnType<typeof getDayDepartures>>[number];
 
 export async function getStationCategories(
 	db: Db,
@@ -723,21 +721,4 @@ export async function getLineTrends(db: Db): Promise<Map<string, TrendData>> {
 		map.set(r.line, entry);
 	}
 	return map;
-}
-
-const DELAY_THRESHOLD_MIN = 7.5;
-
-export function dayAvgDelay(departureRows: DepartureRow[]): number | null {
-	let totalDelay = 0;
-	let delayCount = 0;
-	for (const d of departureRows) {
-		if (d.cancelled) {
-			totalDelay += DELAY_THRESHOLD_MIN;
-			delayCount++;
-		} else if (d.rtTime && d.rtDate) {
-			totalDelay += delayMinutes(d.date, d.time, d.rtDate, d.rtTime);
-			delayCount++;
-		}
-	}
-	return delayCount > 0 ? totalDelay / delayCount : null;
 }
