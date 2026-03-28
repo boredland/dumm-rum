@@ -1,0 +1,29 @@
+---
+interface Props {
+	title: string;
+}
+
+const { title } = Astro.props;
+---
+
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<title>{title}</title>
+		<link
+			rel="icon"
+			href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🚌</text></svg>"
+		/>
+	</head>
+	<body class="bg-[#0f1117] text-gray-200 min-h-screen font-sans">
+		<div class="max-w-[800px] mx-auto px-6 py-8 max-sm:px-4">
+			<slot />
+		</div>
+	</body>
+</html>
+
+<style>
+	@import "../styles/app.css";
+</style>

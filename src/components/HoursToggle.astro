@@ -1,0 +1,34 @@
+---
+interface Props {
+	basePath: string;
+	coreOnly: boolean;
+}
+
+const { basePath, coreOnly } = Astro.props;
+---
+
+<div class="flex gap-2 mb-6 items-center">
+	<a
+		href={basePath}
+		class:list={[
+			"inline-block px-3 py-1 rounded-full text-xs font-semibold no-underline",
+			!coreOnly
+				? "bg-success/10 text-success"
+				: "bg-success/10 text-success opacity-50",
+		]}
+	>
+		All hours
+	</a>
+	<a
+		href={`${basePath}?hours=core`}
+		class:list={[
+			"inline-block px-3 py-1 rounded-full text-xs font-semibold no-underline",
+			coreOnly
+				? "bg-success/10 text-success"
+				: "bg-success/10 text-success opacity-50",
+		]}
+	>
+		Core hours
+	</a>
+	{coreOnly && <span class="text-muted text-sm">6–9 & 16–19 (HVZ)</span>}
+</div>

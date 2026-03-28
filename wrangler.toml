@@ -1,22 +1,14 @@
-name = "rmv-collector"
-main = "src/index.ts"
+name = "dummrum"
+main = "dist/_worker.js/index.js"
 compatibility_date = "2026-03-27"
-workers_dev = false
-preview_urls = false
+compatibility_flags = ["nodejs_compat"]
 
 [observability.logs]
 enabled = true
 
-[triggers]
-crons = ["*/5 * * * *"]
-
-[[routes]]
-pattern = "dummrum.jonas-strassel.de"
-zone_name = "jonas-strassel.de"
-custom_domain = true
-
-[ai]
-binding = "AI"
+[assets]
+binding = "ASSETS"
+directory = "./dist"
 
 [[d1_databases]]
 binding = "DB"

@@ -1,25 +1,29 @@
 {
-	"name": "rmv-collector",
+	"name": "dummrum",
+	"type": "module",
 	"private": true,
 	"scripts": {
-		"build": "wrangler deploy",
+		"dev": "astro dev",
+		"build": "astro build",
+		"preview": "astro preview",
 		"check": "tsgo --noEmit && biome check && knip",
-		"dev": "wrangler dev",
-		"deploy": "wrangler deploy",
-		"db:init": "wrangler d1 execute rmv-departures --file=./schema.sql",
-		"db:init:local": "wrangler d1 execute rmv-departures --local --file=./schema.sql",
+		"deploy": "astro build && wrangler pages deploy dist",
 		"prepare": "lefthook install"
+	},
+	"dependencies": {
+		"@astrojs/cloudflare": "^12.5.1",
+		"astro": "^5.10.1",
+		"dayjs": "^1.11.20"
 	},
 	"devDependencies": {
 		"@biomejs/biome": "^2.4.9",
-		"@cloudflare/workers-types": "^4.20240301.0",
+		"@cloudflare/workers-types": "^4.20260317.1",
+		"@tailwindcss/vite": "^4.1.10",
 		"@typescript/native-preview": "^7.0.0-dev.20260327.2",
 		"knip": "^6.0.6",
 		"lefthook": "^2.1.4",
+		"tailwindcss": "^4.1.10",
 		"typescript": "^5.4.0",
 		"wrangler": "^4.77.0"
-	},
-	"dependencies": {
-		"dayjs": "^1.11.20"
 	}
 }
