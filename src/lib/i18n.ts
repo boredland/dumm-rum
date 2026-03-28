@@ -7,7 +7,7 @@ const translations = {
 		"home.subtitle": "Wissen, ob man dumm rumsteht",
 		"home.methodology_title": "Wie wir messen",
 		"home.methodology":
-			"Alle 5 Minuten fragen wir die RMV-Echtzeitdaten ab und speichern Abfahrten, Ausfälle und Verspätungen. Die Ausfallquote ist der Anteil der ausgefallenen Abfahrten an der Gesamtzahl. Die Durchschnittsverspätung vergleicht die tatsächliche Abfahrtszeit mit der geplanten \u2014 bei Ausfällen wird der geplante Takt als Wartezeit angenommen.",
+			"Alle 5 Minuten fragen wir die RMV-Echtzeitdaten ab und speichern Abfahrten, Ausfälle und Verspätungen. Die Ausfallquote ist der Anteil der ausgefallenen Abfahrten an der Gesamtzahl. Die Durchschnittsverspätung vergleicht die tatsächliche Abfahrtszeit mit der geplanten \u2014 bei Ausfällen wird der geplante Takt als Wartezeit angenommen. Farben: gr\u00fcn unter 1% Ausfallquote, orange ab 1%, rot ab 2%.",
 		"home.stations": "Haltestellen",
 		"home.operators": "Betreiber",
 		"home.cancelled": "ausgefallen",
@@ -73,7 +73,7 @@ const translations = {
 		"home.subtitle": "Know if you\u2019re standing around for nothing",
 		"home.methodology_title": "How we measure",
 		"home.methodology":
-			"Every 5 minutes we poll the RMV realtime feed and store departures, cancellations, and delays. The cancellation rate is the share of cancelled departures out of the total. Average delay compares actual departure time to the scheduled time \u2014 for cancellations, we assume the wait equals the planned frequency.",
+			"Every 5 minutes we poll the RMV realtime feed and store departures, cancellations, and delays. The cancellation rate is the share of cancelled departures out of the total. Average delay compares actual departure time to the scheduled time \u2014 for cancellations, we assume the wait equals the planned frequency. Colors: green below 1% cancellation rate, orange from 1%, red from 2%.",
 		"home.stations": "Stations",
 		"home.operators": "Operators",
 		"home.cancelled": "cancelled",
