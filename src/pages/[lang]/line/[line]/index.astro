@@ -73,6 +73,15 @@ const overallDelay =
 			<div class="text-[0.7rem] uppercase tracking-wide text-muted mb-1">{t(lang, "stat.avg_delay")}</div>
 			<div class="text-2xl font-bold tabular-nums">{fmtDelay(overallDelay)}</div>
 		</div>
+		<div class="bg-surface border border-border rounded-xl p-5">
+			<div class="text-[0.7rem] uppercase tracking-wide text-muted mb-1">{t(lang, "stat.days_tracked")}</div>
+			<div class="text-4xl font-bold tabular-nums">{days.length}</div>
+			{days.length > 0 && (
+				<div class="text-sm text-muted mt-1">
+					<time datetime={days[days.length - 1].date}>{`${t(lang, "stat.since")} ${fmtDate(days[days.length - 1].date, lang)}`}</time>
+				</div>
+			)}
+		</div>
 	</div>
 
 	<p class="text-xs uppercase tracking-wide text-muted font-semibold mb-3">{t(lang, "section.weekday_pattern")}</p>
