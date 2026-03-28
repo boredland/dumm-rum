@@ -34,9 +34,6 @@ const [stats, categories] = await Promise.all([
 ]);
 
 const today = todayBerlin();
-const todayStats = stats.days.find((d) => d.date === today);
-const todayCancelled = todayStats?.cancelled ?? 0;
-const todayTotal = todayStats?.total ?? 0;
 ---
 
 <Layout title={station.name} lang={lang}>
@@ -75,15 +72,6 @@ const todayTotal = todayStats?.total ?? 0;
 
 	<div class="grid grid-cols-[repeat(auto-fit,minmax(160px,1fr))] gap-4 mb-8 max-sm:grid-cols-2">
 		<div class="bg-surface border border-border rounded-xl p-5">
-			<div class="text-[0.7rem] uppercase tracking-wide text-muted mb-1">{t(lang, "stat.today")}</div>
-			<div class:list={["text-4xl font-bold tabular-nums", todayCancelled > 0 ? "text-danger" : "text-success"]}>
-				{todayStats ? todayCancelled : "\u2014"}
-			</div>
-			<div class="text-sm text-muted mt-1">
-				{todayStats ? t(lang, "stat.of_departures", { total: todayTotal, pct: pct(todayCancelled, todayTotal) }) : t(lang, "stat.no_data")}
-			</div>
-		</div>
-		<div class="bg-surface border border-border rounded-xl p-5">
 			<div class="text-[0.7rem] uppercase tracking-wide text-muted mb-1">{t(lang, "stat.avg_per_day")}</div>
 			<div class="text-4xl font-bold tabular-nums">{stats.avgCancelledPerDay.toFixed(1)}</div>
 			<div class="text-sm text-muted mt-1">
@@ -91,16 +79,17 @@ const todayTotal = todayStats?.total ?? 0;
 			</div>
 		</div>
 		<div class="bg-surface border border-border rounded-xl p-5">
-			<div class="text-[0.7rem] uppercase tracking-wide text-muted mb-1">{t(lang, "table.delayed")}</div>
+			<div class="text-[0.7rem] uppercase tracking-wide text-muted mb-1">{t(lang, "table.delayed")} {t(lang, "stat.avg_per_day").toLowerCase()}</div>
 			{(() => {
 				const totalDelayed = stats.days.reduce((s, d) => s + d.delayed, 0);
 				const totalDep = stats.days.reduce((s, d) => s + d.total, 0);
+				const avgDelayed = stats.days.length > 0 ? totalDelayed / stats.days.length : 0;
 				return (
 					<>
-						<div class:list={["text-4xl font-bold tabular-nums", totalDelayed > 0 ? "text-warning" : "text-success"]}>
-							{totalDelayed}
+						<div class:list={["text-4xl font-bold tabular-nums", avgDelayed > 0 ? "text-warning" : "text-success"]}>
+							{avgDelayed.toFixed(1)}
 						</div>
-						<div class="text-sm text-muted mt-1">{pct(totalDelayed, totalDep)}%</div>
+						<div class="text-sm text-muted mt-1">{pct(totalDelayed, totalDep)}% {t(lang, "stat.rate")}</div>
 					</>
 				);
 			})()}
