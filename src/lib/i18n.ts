@@ -8,6 +8,10 @@ const translations = {
 		"home.stations": "Haltestellen",
 		"home.cancelled": "ausgefallen",
 
+		"type.bus": "Bus",
+		"type.tram": "Tram",
+		"type.underground": "U-Bahn",
+
 		"hours.all": "Alle Zeiten",
 		"hours.core": "Hauptverkehrszeit",
 		"hours.core_range": "6\u20139 & 16\u201319 (HVZ)",
@@ -17,7 +21,6 @@ const translations = {
 		"nav.github": "Quellcode auf GitHub",
 
 		"station.subtitle": "Ausfall- & Versp\u00e4tungstracker",
-		"station.collecting_since": "Daten seit",
 		"station.last_updated": "zuletzt aktualisiert",
 
 		"stat.today": "Heute",
@@ -65,6 +68,10 @@ const translations = {
 		"home.stations": "Stations",
 		"home.cancelled": "cancelled",
 
+		"type.bus": "Bus",
+		"type.tram": "Tram",
+		"type.underground": "Underground",
+
 		"hours.all": "All hours",
 		"hours.core": "Core hours",
 		"hours.core_range": "6\u20139 & 16\u201319 (HVZ)",
@@ -74,7 +81,6 @@ const translations = {
 		"nav.github": "View source on GitHub",
 
 		"station.subtitle": "Cancellation & delay tracker",
-		"station.collecting_since": "collecting since",
 		"station.last_updated": "last updated",
 
 		"stat.today": "Today",

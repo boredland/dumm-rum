@@ -4,9 +4,8 @@ import { nowBerlin, todayBerlin } from "./utils";
 const CORE_HOURS =
 	"((time >= '06:00:00' AND time < '09:00:00') OR (time >= '16:00:00' AND time < '19:00:00'))";
 
-function dataFilter(station: Station, coreOnly = false): string {
-	const base = `(date > '${station.collectionStart}' OR (date = '${station.collectionStart}' AND time >= '${station.collectionStartTime}'))`;
-	return coreOnly ? `${base} AND ${CORE_HOURS}` : base;
+function coreHoursFilter(coreOnly: boolean): string {
+	return coreOnly ? `AND ${CORE_HOURS}` : "";
 }
 
 interface DirRow {
@@ -99,7 +98,7 @@ export async function getStats(
 	station: Station,
 	coreOnly = false,
 ): Promise<Stats> {
-	const filter = dataFilter(station, coreOnly);
+	const coreFilter = coreHoursFilter(coreOnly);
 	const [statsResult, lastChangeResult, haikuResult] = await db.batch([
 		db
 			.prepare(
@@ -109,7 +108,7 @@ export async function getStats(
         END) as avg_delay,
         SUM(CASE WHEN cancelled = 0 AND rt_time IS NOT NULL THEN 1 ELSE 0 END) as rt_count,
         MIN(time) as first_time, MAX(time) as last_time
-       FROM departures WHERE station_id = ? AND ${filter}
+       FROM departures WHERE station_id = ? ${coreFilter}
        GROUP BY date, direction ORDER BY date DESC, direction`,
 			)
 			.bind(station.id),
@@ -172,7 +171,7 @@ export async function getStationSummaries(
 		stations.map((s) =>
 			db
 				.prepare(
-					`SELECT SUM(cancelled) as cancelled, COUNT(*) as total FROM departures WHERE station_id = ? AND ${dataFilter(s, coreOnly)}`,
+					`SELECT SUM(cancelled) as cancelled, COUNT(*) as total FROM departures WHERE station_id = ? ${coreHoursFilter(coreOnly)}`,
 				)
 				.bind(s.id),
 		),
@@ -197,7 +196,7 @@ export async function getDayDepartures(
 ): Promise<DepartureRow[]> {
 	const { results } = await db
 		.prepare(
-			`SELECT time, rt_time, line, direction, cancelled, fetched_at FROM departures WHERE station_id = ? AND date = ? AND ${dataFilter(station)} ORDER BY time, direction`,
+			`SELECT time, rt_time, line, direction, cancelled, fetched_at FROM departures WHERE station_id = ? AND date = ? ORDER BY time, direction`,
 		)
 		.bind(station.id, date)
 		.all<DepartureRow>();

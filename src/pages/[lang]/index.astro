@@ -52,7 +52,7 @@ const stationStats = await getStationSummaries(env.DB, STATIONS, coreOnly);
 						]}
 					>
 						<div class="text-[0.7rem] uppercase tracking-wide text-muted mb-1">
-							{stationIcon(s.type)} {s.type}
+							{stationIcon(s.type)} {t(lang, `type.${s.type}`)}
 						</div>
 						<div class="text-lg font-bold text-emphasis">
 							{shortDir(s.name)}
