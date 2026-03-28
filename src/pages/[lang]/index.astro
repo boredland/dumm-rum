@@ -64,7 +64,7 @@ const [stationStats, operators] = await Promise.all([
 						</div>
 						{st && (
 							<div class="text-sm text-muted mt-1">
-								{pct(st.cancelled, st.total)}% {t(lang, "home.cancelled")}
+								{pct(st.cancelled, st.total)}% {t(lang, "home.cancelled")} &middot; {pct(st.delayed, st.total)}% {t(lang, "home.delayed")}
 							</div>
 						)}
 					</a>

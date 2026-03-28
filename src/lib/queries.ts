@@ -236,6 +236,7 @@ async function getStatsFallback(
 
 export interface StationSummary {
 	cancelled: number;
+	delayed: number;
 	total: number;
 	categories: string[];
 }
@@ -254,6 +255,7 @@ export async function getStationSummaries(
 					.select({
 						stationId: departures.stationId,
 						cancelled: sum(departures.cancelled).as("cancelled"),
+						delayed: sql<number>`0`.as("delayed"),
 						total: count().as("total"),
 					})
 					.from(departures)
@@ -263,6 +265,7 @@ export async function getStationSummaries(
 					.select({
 						stationId: stationDailyStats.stationId,
 						cancelled: sum(stationDailyStats.cancelled).as("cancelled"),
+						delayed: sum(stationDailyStats.delayed).as("delayed"),
 						total: sum(stationDailyStats.total).as("total"),
 					})
 					.from(stationDailyStats)
@@ -280,7 +283,11 @@ export async function getStationSummaries(
 	const statsMap = new Map(
 		statsRows.map((r) => [
 			r.stationId,
-			{ cancelled: Number(r.cancelled ?? 0), total: Number(r.total ?? 0) },
+			{
+				cancelled: Number(r.cancelled ?? 0),
+				delayed: Number(r.delayed ?? 0),
+				total: Number(r.total ?? 0),
+			},
 		]),
 	);
 
@@ -296,6 +303,7 @@ export async function getStationSummaries(
 			s.id,
 			{
 				cancelled: statsMap.get(s.id)?.cancelled ?? 0,
+				delayed: statsMap.get(s.id)?.delayed ?? 0,
 				total: statsMap.get(s.id)?.total ?? 0,
 				categories: catMap.get(s.id) ?? [],
 			},

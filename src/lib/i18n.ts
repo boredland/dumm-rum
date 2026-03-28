@@ -11,6 +11,7 @@ const translations = {
 		"home.stations": "Haltestellen",
 		"home.operators": "Betreiber",
 		"home.cancelled": "ausgefallen",
+		"home.delayed": "versp\u00e4tet",
 
 		"hours.all": "Alle Zeiten",
 		"hours.core": "Hauptverkehrszeit",
@@ -81,6 +82,7 @@ const translations = {
 		"home.stations": "Stations",
 		"home.operators": "Operators",
 		"home.cancelled": "cancelled",
+		"home.delayed": "delayed",
 
 		"hours.all": "All hours",
 		"hours.core": "Core hours",
