@@ -60,6 +60,21 @@ export const STATIONS: Station[] = [
 		name: "Frankfurt (Main) Zeilsheim Bahnhof",
 		slug: "zeilsheim-bahnhof",
 	},
+	{
+		id: "3007011",
+		name: "Frankfurt (Main) Hauptbahnhof Südseite",
+		slug: "hauptbahnhof-suedseite",
+	},
+	{
+		id: "3001507",
+		name: "Frankfurt (Main) Bornheim Mitte",
+		slug: "bornheim-mitte",
+	},
+	{
+		id: "3001008",
+		name: "Frankfurt (Main) Höchst Bahnhof",
+		slug: "hoechst-bahnhof",
+	},
 ];
 
 export function findStation(slug: string): Station | undefined {
