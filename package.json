@@ -8,10 +8,11 @@
 		"preview": "astro preview",
 		"check": "tsgo --noEmit && biome check && knip",
 		"generate:api": "openapi-typescript https://www.rmv.de/hapi/api-doc -o src/lib/hafas-types.ts",
-		"db:generate": "drizzle-kit generate",
+		"db:generate": "drizzle-kit generate && npm run db:sync",
+		"db:sync": "for f in drizzle/*/migration.sql; do d=$(basename $(dirname $f)); cp $f migrations/$d.sql; done",
 		"db:migrate": "wrangler d1 migrations apply rmv-departures --remote",
 		"db:migrate:local": "wrangler d1 migrations apply rmv-departures --local",
-		"deploy": "astro build && wrangler d1 migrations apply rmv-departures --remote && wrangler deploy",
+		"deploy": "astro build && npm run db:migrate && wrangler deploy",
 		"prepare": "lefthook install"
 	},
 	"dependencies": {
