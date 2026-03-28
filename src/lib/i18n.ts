@@ -6,6 +6,7 @@ const translations = {
 		"home.title": "DummRum",
 		"home.subtitle": "Wissen, ob man dumm rumsteht",
 		"home.stations": "Haltestellen",
+		"home.operators": "Betreiber",
 		"home.cancelled": "ausgefallen",
 
 		"type.bus": "Bus",
@@ -21,6 +22,8 @@ const translations = {
 		"nav.github": "Quellcode auf GitHub",
 
 		"station.subtitle": "Ausfall- & Versp\u00e4tungstracker",
+		"operator.lines": "Linien",
+		"operator.daily_breakdown": "Tages\u00fcbersicht",
 		"station.last_updated": "zuletzt aktualisiert",
 
 		"stat.today": "Heute",
@@ -66,6 +69,7 @@ const translations = {
 		"home.title": "DummRum",
 		"home.subtitle": "Know if you\u2019re standing around for nothing",
 		"home.stations": "Stations",
+		"home.operators": "Operators",
 		"home.cancelled": "cancelled",
 
 		"type.bus": "Bus",
@@ -81,6 +85,8 @@ const translations = {
 		"nav.github": "View source on GitHub",
 
 		"station.subtitle": "Cancellation & delay tracker",
+		"operator.lines": "Lines",
+		"operator.daily_breakdown": "Daily breakdown",
 		"station.last_updated": "last updated",
 
 		"stat.today": "Today",

@@ -231,6 +231,81 @@ export async function getNextDepartures(
 	return results ?? [];
 }
 
+export interface OperatorSummary {
+	operator: string;
+	lines: string[];
+	total: number;
+	cancelled: number;
+}
+
+export async function getOperatorSummaries(
+	db: D1Database,
+	coreOnly = false,
+): Promise<OperatorSummary[]> {
+	const { results } = await db
+		.prepare(
+			`SELECT operator, line, COUNT(*) as total, SUM(cancelled) as cancelled
+       FROM departures WHERE operator IS NOT NULL ${coreHoursFilter(coreOnly)}
+       GROUP BY operator, line ORDER BY operator, line`,
+		)
+		.all<{
+			operator: string;
+			line: string;
+			total: number;
+			cancelled: number;
+		}>();
+
+	const map = new Map<string, OperatorSummary>();
+	for (const row of results ?? []) {
+		const existing = map.get(row.operator);
+		if (existing) {
+			existing.lines.push(row.line);
+			existing.total += row.total;
+			existing.cancelled += row.cancelled;
+		} else {
+			map.set(row.operator, {
+				operator: row.operator,
+				lines: [row.line],
+				total: row.total,
+				cancelled: row.cancelled,
+			});
+		}
+	}
+	return [...map.values()];
+}
+
+export interface OperatorDayStats {
+	date: string;
+	total: number;
+	cancelled: number;
+}
+
+export async function getOperatorStats(
+	db: D1Database,
+	operator: string,
+	coreOnly = false,
+): Promise<{ days: OperatorDayStats[]; lines: string[] }> {
+	const [daysResult, linesResult] = await db.batch([
+		db
+			.prepare(
+				`SELECT date, COUNT(*) as total, SUM(cancelled) as cancelled
+         FROM departures WHERE operator = ? ${coreHoursFilter(coreOnly)}
+         GROUP BY date ORDER BY date DESC`,
+			)
+			.bind(operator),
+		db
+			.prepare(
+				"SELECT DISTINCT line FROM departures WHERE operator = ? ORDER BY line",
+			)
+			.bind(operator),
+	]);
+
+	const days = (daysResult.results as OperatorDayStats[]) ?? [];
+	const lines =
+		(linesResult.results as { line: string }[])?.map((r) => r.line) ?? [];
+	return { days, lines };
+}
+
 export function dayAvgDelay(departures: DepartureRow[]): number | null {
 	const byDir = Map.groupBy(departures, (d) => d.direction);
 	let totalDelay = 0;

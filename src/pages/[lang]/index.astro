@@ -3,14 +3,17 @@ import { env } from "cloudflare:workers";
 import HoursToggle from "../../components/HoursToggle.astro";
 import Layout from "../../layouts/Layout.astro";
 import { langFromParams, t } from "../../lib/i18n";
-import { getStationSummaries } from "../../lib/queries";
+import { getOperatorSummaries, getStationSummaries } from "../../lib/queries";
 import { STATIONS, stationIcon } from "../../lib/stations";
 import { pct, shortDir } from "../../lib/utils";
 
 const lang = langFromParams(Astro.params);
 const coreOnly = Astro.url.searchParams.get("hours") === "core";
 const hoursParam = coreOnly ? "?hours=core" : "";
-const stationStats = await getStationSummaries(env.DB, STATIONS, coreOnly);
+const [stationStats, operators] = await Promise.all([
+	getStationSummaries(env.DB, STATIONS, coreOnly),
+	getOperatorSummaries(env.DB, coreOnly),
+]);
 ---
 
 <Layout title={t(lang, "home.title")} lang={lang}>
@@ -24,6 +27,43 @@ const stationStats = await getStationSummaries(env.DB, STATIONS, coreOnly);
 	</header>
 
 	<HoursToggle basePath={`/${lang}`} coreOnly={coreOnly} lang={lang} />
+
+	<p class="text-xs uppercase tracking-wide text-muted font-semibold mb-3">
+		{t(lang, "home.operators")}
+	</p>
+
+	<div class="grid grid-cols-[repeat(auto-fit,minmax(220px,1fr))] gap-4 mb-8 max-sm:grid-cols-1">
+		{
+			operators.map((op) => {
+				const rate = op.total > 0 ? (op.cancelled / op.total) * 100 : 0;
+				const borderColor =
+					rate >= 5
+						? "border-danger"
+						: rate >= 1
+							? "border-warning"
+							: "border-success";
+				return (
+					<a
+						href={`/${lang}/operator/${encodeURIComponent(op.operator)}${hoursParam}`}
+						class:list={[
+							"bg-surface border rounded-xl p-5 no-underline hover:bg-surface-hover transition-colors",
+							borderColor,
+						]}
+					>
+						<div class="text-lg font-bold text-emphasis">
+							{op.operator}
+						</div>
+						<div class="text-sm text-muted mt-1">
+							{op.lines.join(", ")}
+						</div>
+						<div class="text-sm text-muted mt-1">
+							{pct(op.cancelled, op.total)}% {t(lang, "home.cancelled")}
+						</div>
+					</a>
+				);
+			})
+		}
+	</div>
 
 	<p class="text-xs uppercase tracking-wide text-muted font-semibold mb-3">
 		{t(lang, "home.stations")}
