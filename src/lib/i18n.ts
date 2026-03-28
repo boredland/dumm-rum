@@ -41,11 +41,9 @@ const translations = {
 
 		"station.subtitle": "Ausfall- & Versp\u00e4tungstracker",
 		"operator.lines": "Linien",
-		"operator.daily_breakdown": "Tages\u00fcbersicht",
 		"station.last_updated": "zuletzt aktualisiert",
 
 		"stat.today": "Heute",
-		"stat.no_data": "noch keine Daten",
 		"stat.of_departures": "von {total} Abfahrten",
 		"stat.avg_per_day": "\u00d8 / Tag",
 		"stat.cancelled": "ausgefallen",
@@ -125,11 +123,9 @@ const translations = {
 
 		"station.subtitle": "Cancellation & delay tracker",
 		"operator.lines": "Lines",
-		"operator.daily_breakdown": "Daily breakdown",
 		"station.last_updated": "last updated",
 
 		"stat.today": "Today",
-		"stat.no_data": "no data yet",
 		"stat.of_departures": "of {total} departures",
 		"stat.avg_per_day": "Avg / day",
 		"stat.cancelled": "cancelled",

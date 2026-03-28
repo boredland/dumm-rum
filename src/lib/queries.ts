@@ -1,15 +1,5 @@
 import type { InferSelectModel } from "drizzle-orm";
-import {
-	and,
-	count,
-	desc,
-	eq,
-	gte,
-	isNotNull,
-	lt,
-	sql,
-	sum,
-} from "drizzle-orm";
+import { and, count, desc, eq, gte, isNotNull, sql, sum } from "drizzle-orm";
 import type { Db } from "../db/client";
 import {
 	departures,
@@ -256,7 +246,7 @@ export async function getDayDepartures(db: Db, station: Station, date: string) {
 		.orderBy(departures.time, departures.direction);
 }
 
-export type DepartureRow = Awaited<ReturnType<typeof getDayDepartures>>[number];
+type DepartureRow = Awaited<ReturnType<typeof getDayDepartures>>[number];
 
 export async function getStationCategories(
 	db: Db,
@@ -498,7 +488,7 @@ export async function getLineDayDepartures(db: Db, line: string, date: string) {
 		.orderBy(departures.time, departures.direction);
 }
 
-export type OperatorDayStats = InferSelectModel<typeof operatorDailyStats>;
+type OperatorDayStats = InferSelectModel<typeof operatorDailyStats>;
 
 export async function getOperatorStats(
 	db: Db,
