@@ -75,7 +75,7 @@ export function reliabilityScore(
 		0,
 		Math.min(
 			100,
-			Math.round(100 - cancelRate * 4 - delayedRate * 3.5 - delayPenalty * 2.5),
+			Math.round(100 - cancelRate * 4 - delayedRate * 2 - delayPenalty * 2.5),
 		),
 	);
 }
