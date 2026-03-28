@@ -1,4 +1,4 @@
-CREATE TABLE `departures` (
+CREATE TABLE IF NOT EXISTS `departures` (
 	`id` integer PRIMARY KEY AUTOINCREMENT,
 	`station_id` text NOT NULL,
 	`date` text NOT NULL,
@@ -19,13 +19,13 @@ CREATE TABLE `departures` (
 	CONSTRAINT `departures_station_id_date_time_line_direction_journey_num_unique` UNIQUE(`station_id`,`date`,`time`,`line`,`direction`,`journey_num`)
 );
 --> statement-breakpoint
-CREATE TABLE `haikus` (
+CREATE TABLE IF NOT EXISTS `haikus` (
 	`date` text NOT NULL,
 	`station_id` text NOT NULL,
 	`haiku` text NOT NULL,
 	CONSTRAINT `haikus_pk` PRIMARY KEY(`date`, `station_id`)
 );
 --> statement-breakpoint
-CREATE INDEX `idx_departures_station_date` ON `departures` (`station_id`,`date`);--> statement-breakpoint
-CREATE INDEX `idx_departures_next` ON `departures` (`station_id`,`date`,`cancelled`,`time`);--> statement-breakpoint
-CREATE INDEX `idx_departures_fetched` ON `departures` (`fetched_at`);
+CREATE INDEX IF NOT EXISTS `idx_departures_station_date` ON `departures` (`station_id`,`date`);--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS `idx_departures_next` ON `departures` (`station_id`,`date`,`cancelled`,`time`);--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS `idx_departures_fetched` ON `departures` (`fetched_at`);
