@@ -39,7 +39,6 @@ const translations = {
 		"nav.back_to_operator": "Zur\u00fcck zum Betreiber",
 		"nav.github": "Quellcode auf GitHub",
 
-		"station.subtitle": "Ausfall- & Versp\u00e4tungstracker",
 		"operator.lines": "Linien",
 		"station.last_updated": "zuletzt aktualisiert",
 
@@ -48,8 +47,7 @@ const translations = {
 		"stat.avg_per_day": "\u00d8 / Tag",
 		"stat.cancelled": "ausgefallen",
 		"stat.rate": "Quote",
-		"stat.days_tracked": "Tage erfasst",
-		"stat.since": "seit",
+		"stat.since": "Erfassung seit",
 		"stat.departures": "Abfahrten",
 		"stat.avg_delay": "\u00d8 Versp\u00e4tung",
 		"stat.cancelled_eq_freq": "Ausfall = geplanter Takt",
@@ -121,7 +119,6 @@ const translations = {
 		"nav.back_to_operator": "Back to operator",
 		"nav.github": "View source on GitHub",
 
-		"station.subtitle": "Cancellation & delay tracker",
 		"operator.lines": "Lines",
 		"station.last_updated": "last updated",
 
@@ -130,8 +127,7 @@ const translations = {
 		"stat.avg_per_day": "Avg / day",
 		"stat.cancelled": "cancelled",
 		"stat.rate": "rate",
-		"stat.days_tracked": "Days tracked",
-		"stat.since": "since",
+		"stat.since": "tracking since",
 		"stat.departures": "Departures",
 		"stat.avg_delay": "Avg delay",
 		"stat.cancelled_eq_freq": "cancelled = planned freq",

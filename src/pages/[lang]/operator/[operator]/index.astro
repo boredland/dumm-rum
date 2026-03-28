@@ -35,7 +35,7 @@ const totalCancelled = days.reduce((s, d) => s + d.cancelled, 0);
 			{t(lang, "operator.lines")}: {lines.join(", ")}
 			{days.length > 0 && (
 				<>
-					{` \u2014 ${days.length} ${t(lang, "stat.days_tracked").toLowerCase()}, ${t(lang, "stat.since")} `}<time datetime={days[days.length - 1].date}>{fmtDate(days[days.length - 1].date, lang)}</time>
+					{` \u2014 ${t(lang, "stat.since")} `}<time datetime={days[days.length - 1].date}>{fmtDate(days[days.length - 1].date, lang)}</time>
 				</>
 			)}
 		</p>
