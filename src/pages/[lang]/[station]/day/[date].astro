@@ -114,7 +114,9 @@ let anchorPlaced = false;
 										)}
 									</td>
 									<td class="px-4 py-2.5 text-sm tabular-nums">
-										{delayMin !== null && delayMin !== 0 ? (
+										{d.cancelled ? (
+											<span class="text-muted">&mdash;</span>
+										) : delayMin !== null && delayMin !== 0 ? (
 											<span class={delayMin > 0 ? "text-warning" : "text-success"}>
 												{delayMin > 0 ? "+" : ""}{delayMin} min
 											</span>
