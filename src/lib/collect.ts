@@ -1,6 +1,10 @@
+import { createHafasClient } from "./hafas";
+import type { components } from "./hafas-types";
 import type { Station } from "./stations";
 import { STATIONS } from "./stations";
 import { nowBerlin, todayBerlin } from "./utils";
+
+type Departure = components["schemas"]["Departure"];
 
 const UPSERT_SQL = `
 INSERT INTO departures (station_id, date, time, rt_date, rt_time, line, direction, journey_status, cancelled, operator, category, journey_num, reachable, stop, stop_ext_id, fetched_at)
@@ -14,44 +18,35 @@ DO UPDATE SET
   reachable = CASE WHEN excluded.cancelled THEN 0 ELSE excluded.reachable END,
   fetched_at = excluded.fetched_at`;
 
-interface HafasDeparture {
-	date: string;
-	time: string;
-	rtDate?: string;
-	rtTime?: string;
-	direction: string;
-	JourneyStatus: string;
-	cancelled?: boolean;
-	reachable?: boolean;
-	stopExtId?: string;
-	stop?: string;
-	ProductAtStop: {
-		line: string;
-		operator: string;
-		catOut: string;
-		num: string;
-	};
-}
-
 async function collectDepartures(
 	db: D1Database,
 	apiKey: string,
 	station: Station,
 ): Promise<number> {
+	const client = createHafasClient(apiKey);
 	const oneHourAgo = nowBerlin().subtract(1, "hour");
-	const url = `https://www.rmv.de/hapi/departureBoard?accessId=${apiKey}&id=${station.id}&date=${oneHourAgo.format("YYYY-MM-DD")}&time=${oneHourAgo.format("HH:mm")}&duration=120&maxJourneys=-1&format=json`;
 
-	const resp = await fetch(url, {
-		cf: { cacheTtl: 300, cacheEverything: true },
+	const { data, error } = await client.GET("/departureBoard", {
+		params: {
+			query: {
+				type: "DEP",
+				id: station.id,
+				date: oneHourAgo.format("YYYY-MM-DD"),
+				time: oneHourAgo.format("HH:mm"),
+				duration: 120,
+				maxJourneys: -1,
+				format: "json",
+			},
+		},
 	});
-	if (!resp.ok) {
-		console.error(`HAFAS API error: ${resp.status}`);
+
+	if (error || !data) {
+		console.error("HAFAS API error:", error);
 		return 0;
 	}
 
-	const data: { Departure?: HafasDeparture[] } = await resp.json();
 	const departures = (data.Departure ?? []).filter(
-		(d) => d.ProductAtStop?.line && d.ProductAtStop?.num,
+		(d: Departure) => d.ProductAtStop?.line && d.ProductAtStop?.num,
 	);
 	if (departures.length === 0) return 0;
 
@@ -59,8 +54,8 @@ async function collectDepartures(
 	const BATCH_SIZE = 50;
 
 	for (let i = 0; i < departures.length; i += BATCH_SIZE) {
-		const stmts = departures.slice(i, i + BATCH_SIZE).map((dep) => {
-			const p = dep.ProductAtStop;
+		const stmts = departures.slice(i, i + BATCH_SIZE).map((dep: Departure) => {
+			const p = dep.ProductAtStop!;
 			return db
 				.prepare(UPSERT_SQL)
 				.bind(
@@ -70,8 +65,8 @@ async function collectDepartures(
 					dep.rtDate ?? null,
 					dep.rtTime ?? null,
 					p.line,
-					dep.direction,
-					dep.JourneyStatus,
+					dep.direction ?? null,
+					dep.JourneyStatus ?? "P",
 					dep.cancelled ? 1 : 0,
 					p.operator,
 					p.catOut,
