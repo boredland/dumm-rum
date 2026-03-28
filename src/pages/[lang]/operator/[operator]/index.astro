@@ -6,6 +6,7 @@ import { createDb } from "../../../../db/client";
 import Layout from "../../../../layouts/Layout.astro";
 import { langFromParams, t } from "../../../../lib/i18n";
 import { getOperatorStats, parseFilter } from "../../../../lib/queries";
+import { categoryIcons } from "../../../../lib/stations";
 import {
 	fmtDate,
 	fmtDelay,
@@ -20,7 +21,11 @@ const operator = decodeURIComponent(Astro.params.operator!);
 const filter = parseFilter(Astro.url);
 const { coreOnly, days: daysFilter } = filter;
 
-const { days, lines } = await getOperatorStats(db, operator, filter);
+const { days, lines, categories } = await getOperatorStats(
+	db,
+	operator,
+	filter,
+);
 
 const totalDepartures = days.reduce((s, d) => s + d.total, 0);
 const totalCancelled = days.reduce((s, d) => s + d.cancelled, 0);
@@ -35,7 +40,7 @@ const totalCancelled = days.reduce((s, d) => s + d.cancelled, 0);
 	</a>
 
 	<header class="mb-6">
-		<h1 class="text-2xl font-bold text-emphasis">{operator}</h1>
+		<h1 class="text-2xl font-bold text-emphasis">{categoryIcons(categories)} {operator}</h1>
 		<p class="text-muted text-sm mt-1">
 			{t(lang, "operator.lines")}: {lines.join(", ")}
 			{(() => {

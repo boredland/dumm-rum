@@ -430,13 +430,17 @@ export async function getLineStats(
 	db: Db,
 	line: string,
 	filter: QueryFilter = {},
-): Promise<{ days: LineDayStats[]; operators: string[] }> {
+): Promise<{
+	days: LineDayStats[];
+	operators: string[];
+	categories: string[];
+}> {
 	const daysCond = daysCondition(departures.date, filter.days);
 	const conditions = [eq(departures.line, line)];
 	if (filter.coreOnly) conditions.push(CORE_HOURS);
 	if (daysCond) conditions.push(daysCond);
 
-	const [dayRows, opRows] = await Promise.all([
+	const [dayRows, opRows, catRows] = await Promise.all([
 		db
 			.select({
 				date: departures.date,
@@ -453,6 +457,10 @@ export async function getLineStats(
 			.selectDistinct({ operator: departures.operator })
 			.from(departures)
 			.where(and(eq(departures.line, line), isNotNull(departures.operator))),
+		db
+			.selectDistinct({ category: departures.category })
+			.from(departures)
+			.where(and(eq(departures.line, line), isNotNull(departures.category))),
 	]);
 
 	return {
@@ -464,6 +472,7 @@ export async function getLineStats(
 			avgDelay: d.avgDelay,
 		})),
 		operators: opRows.map((r) => r.operator!),
+		categories: catRows.map((r) => r.category!),
 	};
 }
 
@@ -492,11 +501,15 @@ export async function getOperatorStats(
 	db: Db,
 	operator: string,
 	filter: QueryFilter = {},
-): Promise<{ days: OperatorDayStats[]; lines: string[] }> {
+): Promise<{
+	days: OperatorDayStats[];
+	lines: string[];
+	categories: string[];
+}> {
 	const depDaysCond = daysCondition(departures.date, filter.days);
 	const opDaysCond = daysCondition(operatorDailyStats.date, filter.days);
 
-	const [dayRows, lineRows] = await Promise.all([
+	const [dayRows, lineRows, catRows] = await Promise.all([
 		filter.coreOnly
 			? db
 					.select({
@@ -524,6 +537,12 @@ export async function getOperatorStats(
 			.from(departures)
 			.where(eq(departures.operator, operator))
 			.orderBy(departures.line),
+		db
+			.selectDistinct({ category: departures.category })
+			.from(departures)
+			.where(
+				and(eq(departures.operator, operator), isNotNull(departures.category)),
+			),
 	]);
 
 	const days = dayRows.map((d) => ({
@@ -534,7 +553,11 @@ export async function getOperatorStats(
 		delayed: "delayed" in d ? Number(d.delayed) : 0,
 		avgDelay: d.avgDelay,
 	}));
-	return { days, lines: lineRows.map((r) => r.line) };
+	return {
+		days,
+		lines: lineRows.map((r) => r.line),
+		categories: catRows.map((r) => r.category!),
+	};
 }
 
 export async function getOperatorDayDepartures(
