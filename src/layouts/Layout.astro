@@ -76,6 +76,22 @@ const otherPath = Astro.url.pathname.replace(`/${lang}`, `/${otherLang}`);
 		<div class="max-w-[800px] mx-auto px-6 py-8 max-sm:px-4">
 			<slot />
 		</div>
+		<button
+			id="scroll-top"
+			class="fixed bottom-4 right-4 z-50 hidden w-10 h-10 rounded-full bg-surface border border-border text-muted hover:text-emphasis transition-all cursor-pointer"
+			aria-label="Scroll to top"
+		>
+			&uarr;
+		</button>
+		<script>
+			const btn = document.getElementById("scroll-top")!;
+			window.addEventListener("scroll", () => {
+				btn.classList.toggle("hidden", window.scrollY < 400);
+			}, { passive: true });
+			btn.addEventListener("click", () => {
+				window.scrollTo({ top: 0, behavior: "smooth" });
+			});
+		</script>
 	</body>
 </html>
 
