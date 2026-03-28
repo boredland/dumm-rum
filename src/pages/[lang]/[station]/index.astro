@@ -6,8 +6,8 @@ import NextDepartures from "../../../components/NextDepartures.astro";
 import { createDb } from "../../../db/client";
 import Layout from "../../../layouts/Layout.astro";
 import { langFromParams, t } from "../../../lib/i18n";
-import { getStats } from "../../../lib/queries";
-import { findStation, stationIcon } from "../../../lib/stations";
+import { getStationCategories, getStats } from "../../../lib/queries";
+import { categoryIcons, findStation } from "../../../lib/stations";
 import {
 	fmtDelay,
 	fmtFreq,
@@ -22,7 +22,10 @@ const station = findStation(Astro.params.station!);
 if (!station) return new Response("Not found", { status: 404 });
 
 const coreOnly = Astro.url.searchParams.get("hours") === "core";
-const stats = await getStats(db, station, coreOnly);
+const [stats, categories] = await Promise.all([
+	getStats(db, station, coreOnly),
+	getStationCategories(db, station),
+]);
 
 const today = todayBerlin();
 const todayStats = stats.days.find((d) => d.date === today);
@@ -41,7 +44,7 @@ const hoursParam = coreOnly ? "?hours=core" : "";
 
 	<header class="mb-6">
 		<h1 class="text-2xl font-bold text-emphasis flex items-center gap-2">
-			{stationIcon(station.type)}
+			{categoryIcons(categories)}
 			{station.name}
 		</h1>
 		<p class="text-muted text-sm mt-1">

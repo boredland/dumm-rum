@@ -9,10 +9,6 @@ const translations = {
 		"home.operators": "Betreiber",
 		"home.cancelled": "ausgefallen",
 
-		"type.bus": "Bus",
-		"type.tram": "Tram",
-		"type.underground": "U-Bahn",
-
 		"hours.all": "Alle Zeiten",
 		"hours.core": "Hauptverkehrszeit",
 		"hours.core_range": "6\u20139 & 16\u201319 (HVZ)",
@@ -71,10 +67,6 @@ const translations = {
 		"home.stations": "Stations",
 		"home.operators": "Operators",
 		"home.cancelled": "cancelled",
-
-		"type.bus": "Bus",
-		"type.tram": "Tram",
-		"type.underground": "Underground",
 
 		"hours.all": "All hours",
 		"hours.core": "Core hours",

@@ -195,37 +195,74 @@ export async function getStats(
 	};
 }
 
+export interface StationSummary {
+	cancelled: number;
+	total: number;
+	categories: string[];
+}
+
 export async function getStationSummaries(
 	db: Db,
 	stations: Station[],
 	coreOnly = false,
-): Promise<Map<string, { cancelled: number; total: number }>> {
-	const results = await Promise.all(
-		stations.map((s) => {
-			const conditions = [eq(departures.stationId, s.id)];
-			const core = coreFilter(coreOnly);
-			if (core) conditions.push(core);
-			return db
-				.select({
-					cancelled: sum(departures.cancelled),
-					total: count(),
-				})
-				.from(departures)
-				.where(and(...conditions));
-		}),
-	);
+): Promise<Map<string, StationSummary>> {
+	const core = coreFilter(coreOnly);
+	const [statsResults, catRows] = await Promise.all([
+		Promise.all(
+			stations.map((s) => {
+				const conditions = [eq(departures.stationId, s.id)];
+				if (core) conditions.push(core);
+				return db
+					.select({
+						cancelled: sum(departures.cancelled),
+						total: count(),
+					})
+					.from(departures)
+					.where(and(...conditions));
+			}),
+		),
+		db
+			.selectDistinct({
+				stationId: departures.stationId,
+				category: departures.category,
+			})
+			.from(departures)
+			.where(isNotNull(departures.category)),
+	]);
+
+	const catMap = new Map<string, string[]>();
+	for (const row of catRows) {
+		const cats = catMap.get(row.stationId) ?? [];
+		if (row.category) cats.push(row.category);
+		catMap.set(row.stationId, cats);
+	}
+
 	return new Map(
 		stations.map((s, i) => {
-			const row = results[i][0];
+			const row = statsResults[i][0];
 			return [
 				s.id,
 				{
 					cancelled: Number(row?.cancelled ?? 0),
 					total: Number(row?.total ?? 0),
+					categories: catMap.get(s.id) ?? [],
 				},
 			] as const;
 		}),
 	);
+}
+
+export async function getStationCategories(
+	db: Db,
+	station: Station,
+): Promise<string[]> {
+	const rows = await db
+		.selectDistinct({ category: departures.category })
+		.from(departures)
+		.where(
+			and(eq(departures.stationId, station.id), isNotNull(departures.category)),
+		);
+	return rows.map((r) => r.category!);
 }
 
 export async function getDayDepartures(

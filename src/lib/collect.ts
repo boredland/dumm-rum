@@ -107,12 +107,6 @@ async function generateDailyHaiku(
 		.limit(1);
 	if (existing.length > 0) return;
 
-	const vehicle =
-		station.type === "tram"
-			? "tram"
-			: station.type === "underground"
-				? "U-Bahn train"
-				: "bus";
 	const response = await ai.run("@cf/ibm-granite/granite-4.0-h-micro", {
 		messages: [
 			{
@@ -122,7 +116,8 @@ async function generateDailyHaiku(
 			},
 			{
 				role: "user",
-				content: `Write a haiku about waiting at a ${vehicle} stop, not knowing if the ${vehicle} was cancelled or if it ever existed. Theme: missing ${vehicle}s, uncertainty, urban melancholy.`,
+				content:
+					"Write a haiku about waiting at a bus stop, not knowing if the bus was cancelled or if it ever existed. Theme: missing buses, uncertainty, urban melancholy.",
 			},
 		],
 		max_tokens: 100,
