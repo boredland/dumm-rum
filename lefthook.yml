@@ -4,6 +4,7 @@ pre-commit:
     - name: typecheck
       run: npx tsgo --noEmit
     - name: lint-format
+      glob: "*.{ts,js,json,css,astro}"
       run: npx biome check --write {staged_files}
       stage_fixed: true
     - name: unused
