@@ -6,7 +6,7 @@ import Layout from "../../layouts/Layout.astro";
 import { langFromParams, t } from "../../lib/i18n";
 import { getOperatorSummaries, getStationSummaries } from "../../lib/queries";
 import { STATIONS, stationIcon } from "../../lib/stations";
-import { pct, shortDir } from "../../lib/utils";
+import { fmtDelay, pct, shortDir } from "../../lib/utils";
 
 const db = createDb(env.DB);
 const lang = langFromParams(Astro.params);
@@ -60,6 +60,7 @@ const [stationStats, operators] = await Promise.all([
 						</div>
 						<div class="text-sm text-muted mt-1">
 							{pct(op.cancelled, op.total)}% {t(lang, "home.cancelled")}
+							{op.avgDelay !== null && <> &middot; {fmtDelay(op.avgDelay)}</>}
 						</div>
 					</a>
 				);

@@ -248,6 +248,7 @@ export interface OperatorSummary {
 	lines: string[];
 	total: number;
 	cancelled: number;
+	avgDelay: number | null;
 }
 
 export async function getOperatorSummaries(
@@ -260,36 +261,54 @@ export async function getOperatorSummaries(
 		line: string;
 		total: number;
 		cancelled: number;
+		avg_delay: number | null;
 	}>(sql`
-		SELECT operator, line, COUNT(*) as total, SUM(cancelled) as cancelled
+		SELECT operator, line, COUNT(*) as total, SUM(cancelled) as cancelled,
+			AVG(CASE WHEN cancelled = 0 AND rt_time IS NOT NULL THEN
+				(strftime('%s', rt_time) - strftime('%s', time)) / 60.0
+			END) as avg_delay
 		FROM departures WHERE operator IS NOT NULL
 			${core ? sql`AND ${core}` : sql``}
 		GROUP BY operator, line ORDER BY operator, line
 	`);
 
-	const map = new Map<string, OperatorSummary>();
+	const map = new Map<
+		string,
+		OperatorSummary & { rtWeightSum: number; rtWeightCount: number }
+	>();
 	for (const row of rows) {
 		const existing = map.get(row.operator);
 		if (existing) {
 			existing.lines.push(row.line);
 			existing.total += row.total;
 			existing.cancelled += row.cancelled;
+			if (row.avg_delay !== null) {
+				existing.rtWeightSum += row.avg_delay * row.total;
+				existing.rtWeightCount += row.total;
+			}
 		} else {
 			map.set(row.operator, {
 				operator: row.operator,
 				lines: [row.line],
 				total: row.total,
 				cancelled: row.cancelled,
+				avgDelay: row.avg_delay,
+				rtWeightSum: row.avg_delay !== null ? row.avg_delay * row.total : 0,
+				rtWeightCount: row.avg_delay !== null ? row.total : 0,
 			});
 		}
 	}
-	return [...map.values()];
+	return [...map.values()].map(({ rtWeightSum, rtWeightCount, ...op }) => ({
+		...op,
+		avgDelay: rtWeightCount > 0 ? rtWeightSum / rtWeightCount : null,
+	}));
 }
 
 export interface OperatorDayStats {
 	date: string;
 	total: number;
 	cancelled: number;
+	avgDelay: number | null;
 }
 
 export async function getOperatorStats(
@@ -298,9 +317,17 @@ export async function getOperatorStats(
 	coreOnly = false,
 ): Promise<{ days: OperatorDayStats[]; lines: string[] }> {
 	const core = coreFilter(coreOnly);
-	const [days, lineRows] = await Promise.all([
-		db.all<OperatorDayStats>(sql`
-			SELECT date, COUNT(*) as total, SUM(cancelled) as cancelled
+	const [rawDays, lineRows] = await Promise.all([
+		db.all<{
+			date: string;
+			total: number;
+			cancelled: number;
+			avg_delay: number | null;
+		}>(sql`
+			SELECT date, COUNT(*) as total, SUM(cancelled) as cancelled,
+				AVG(CASE WHEN cancelled = 0 AND rt_time IS NOT NULL THEN
+					(strftime('%s', rt_time) - strftime('%s', time)) / 60.0
+				END) as avg_delay
 			FROM departures WHERE operator = ${operator}
 				${core ? sql`AND ${core}` : sql``}
 			GROUP BY date ORDER BY date DESC
@@ -312,6 +339,12 @@ export async function getOperatorStats(
 			.orderBy(departures.line),
 	]);
 
+	const days = rawDays.map((d) => ({
+		date: d.date,
+		total: d.total,
+		cancelled: d.cancelled,
+		avgDelay: d.avg_delay,
+	}));
 	return { days, lines: lineRows.map((r) => r.line) };
 }
 
