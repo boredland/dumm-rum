@@ -14,6 +14,8 @@ const translations = {
 			"Die Durchschnittsverspätung vergleicht die tatsächliche Abfahrtszeit mit der geplanten \u2014 bei Ausfällen wird der geplante Takt als Wartezeit angenommen.",
 		"home.methodology_delayed":
 			"Als verspätet gilt eine Abfahrt, wenn die Verspätung \u226550% des geplanten Takts oder \u22657,5 Minuten beträgt (50% der angenommenen durchschnittlichen Fahrtzeit von 15 Minuten innerhalb Frankfurts).",
+		"home.methodology_reliability":
+			"Die Zuverlässigkeit (0\u2013100) kombiniert: Ausfallquote (Gewicht \u00d74), Verspätungsquote (Gewicht \u00d73,5) und durchschnittliche Verspätung (Gewicht \u00d72,5, gedeckelt). 100 = perfekter Betrieb.",
 		"home.methodology_colors":
 			"Farben: grün unter 1% Ausfallquote, orange ab 1%, rot ab 2%.",
 		"home.stations": "Haltestellen",
@@ -95,6 +97,8 @@ const translations = {
 			"Average delay compares actual departure time to the scheduled time \u2014 for cancellations, we assume the wait equals the planned frequency.",
 		"home.methodology_delayed":
 			"A departure counts as delayed if the delay is \u226550% of the planned frequency or \u22657.5 minutes (50% of the assumed average 15-minute trip time within Frankfurt).",
+		"home.methodology_reliability":
+			"The reliability score (0\u2013100) combines: cancellation rate (weight \u00d74), delayed departure rate (weight \u00d73.5), and average delay penalty (weight \u00d72.5, capped). 100 = perfect service.",
 		"home.methodology_colors":
 			"Colors: green below 1% cancellation rate, orange from 1%, red from 2%.",
 		"home.stations": "Stations",
