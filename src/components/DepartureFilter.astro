@@ -22,7 +22,12 @@ const pill =
 		var container = document.currentScript.previousElementSibling;
 		if (!container || !container.hasAttribute("data-departure-filter")) return;
 		var buttons = container.querySelectorAll("[data-filter]");
-		var table = container.nextElementSibling && container.nextElementSibling.querySelector("tbody");
+		var sibling = container;
+		var table = null;
+		while ((sibling = sibling.nextElementSibling)) {
+			table = sibling.querySelector("tbody");
+			if (table) break;
+		}
 		if (!table) return;
 
 		function apply(filter) {
