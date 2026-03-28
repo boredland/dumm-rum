@@ -33,6 +33,13 @@ const [departures, haiku] = await Promise.all([
 const isToday = date === todayBerlin();
 const nowTime = nowBerlin().format("HH:mm:ss");
 const cancelledCount = departures.filter((d) => d.cancelled).length;
+const delayedCount = departures.filter(
+	(d) =>
+		!d.cancelled &&
+		d.rtTime &&
+		d.rtDate &&
+		delayMinutes(d.date, d.time, d.rtDate, d.rtTime) >= 7.5,
+).length;
 const avgDel = dayAvgDelay(departures);
 
 let anchorPlaced = false;
@@ -69,6 +76,13 @@ let anchorPlaced = false;
 				{cancelledCount}
 			</div>
 			<div class="text-sm text-muted mt-1">{pct(cancelledCount, departures.length)}% {t(lang, "stat.cancellation_rate")}</div>
+		</div>
+		<div class="bg-surface border border-border rounded-xl p-5">
+			<div class="text-[0.7rem] uppercase tracking-wide text-muted mb-1">{t(lang, "table.delayed")}</div>
+			<div class:list={["text-4xl font-bold tabular-nums", delayedCount > 0 ? "text-warning" : "text-success"]}>
+				{delayedCount}
+			</div>
+			<div class="text-sm text-muted mt-1">{pct(delayedCount, departures.length)}%</div>
 		</div>
 		<div class="bg-surface border border-border rounded-xl p-5">
 			<div class="text-[0.7rem] uppercase tracking-wide text-muted mb-1">{t(lang, "stat.avg_delay")}</div>
