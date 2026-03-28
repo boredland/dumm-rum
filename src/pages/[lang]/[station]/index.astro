@@ -56,7 +56,7 @@ const todayTotal = todayStats?.total ?? 0;
 			{
 				stats.lastChange && (
 					<>
-						{` \u2014 ${t(lang, "station.last_updated")} ${fmtTimestamp(stats.lastChange)}`}
+						{` \u2014 ${t(lang, "station.last_updated")} `}<time datetime={stats.lastChange}>{fmtTimestamp(stats.lastChange)}</time>
 					</>
 				)
 			}
@@ -93,7 +93,7 @@ const todayTotal = todayStats?.total ?? 0;
 			<div class="text-[0.7rem] uppercase tracking-wide text-muted mb-1">{t(lang, "stat.days_tracked")}</div>
 			<div class="text-4xl font-bold tabular-nums">{stats.days.length}</div>
 			<div class="text-sm text-muted mt-1">
-				{stats.days.length > 0 ? `${t(lang, "stat.since")} ${fmtDate(stats.days[stats.days.length - 1].date)}` : ""}
+				{stats.days.length > 0 ? <>{t(lang, "stat.since")} <time datetime={stats.days[stats.days.length - 1].date}>{fmtDate(stats.days[stats.days.length - 1].date)}</time></> : ""}
 			</div>
 		</div>
 	</div>
@@ -125,7 +125,7 @@ const todayTotal = todayStats?.total ?? 0;
 								<tr class="border-b border-border-dim last:border-b-0 hover:bg-surface-hover">
 									<td class="px-4 py-2.5 text-sm tabular-nums">
 										<a href={`/${lang}/${station.slug}/day/${d.date}${Astro.url.search}`} class="text-link no-underline hover:underline">
-											{fmtDate(d.date)}{d.date === today ? ` (${t(lang, "table.today")})` : ""}
+											<time datetime={d.date}>{fmtDate(d.date)}{d.date === today ? ` (${t(lang, "table.today")})` : ""}</time>
 										</a>
 									</td>
 									<td class="px-4 py-2.5 text-sm tabular-nums">{d.total}</td>
@@ -138,9 +138,7 @@ const todayTotal = todayStats?.total ?? 0;
 									</td>
 									<td class="px-4 py-2.5 text-sm tabular-nums">{rate}%</td>
 									<td class="w-[120px] px-4 py-2.5 max-sm:hidden">
-										<div class="bg-border-dim rounded h-1.5 overflow-hidden">
-											<div class="h-full rounded bg-danger" style={`width:${Math.min(parseFloat(rate) * 2, 100)}%`} />
-										</div>
+										<meter min="0" max="100" value={Math.min(parseFloat(rate) * 2, 100)} class="w-full h-1.5">{rate}%</meter>
 									</td>
 									<td class="px-4 py-2.5 text-sm">
 										{d.delayed > 0 ? (

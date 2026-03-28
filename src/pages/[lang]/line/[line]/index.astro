@@ -99,7 +99,7 @@ const overallDelay =
 								<tr class="border-b border-border-dim last:border-b-0 hover:bg-surface-hover">
 									<td class="px-4 py-2.5 text-sm tabular-nums">
 										<a href={`/${lang}/line/${encodeURIComponent(line)}/day/${d.date}${Astro.url.search}`} class="text-link no-underline hover:underline">
-											{fmtDate(d.date)}
+											<time datetime={d.date}>{fmtDate(d.date)}</time>
 										</a>
 									</td>
 									<td class="px-4 py-2.5 text-sm tabular-nums">{d.total}</td>
@@ -112,9 +112,7 @@ const overallDelay =
 									</td>
 									<td class="px-4 py-2.5 text-sm tabular-nums">{rate}%</td>
 									<td class="w-[120px] px-4 py-2.5 max-sm:hidden">
-										<div class="bg-border-dim rounded h-1.5 overflow-hidden">
-											<div class="h-full rounded bg-danger" style={`width:${Math.min(parseFloat(rate) * 2, 100)}%`} />
-										</div>
+										<meter min="0" max="100" value={Math.min(parseFloat(rate) * 2, 100)} class="w-full h-1.5">{rate}%</meter>
 									</td>
 									<td class="px-4 py-2.5 text-sm">
 										{d.delayed > 0 ? (

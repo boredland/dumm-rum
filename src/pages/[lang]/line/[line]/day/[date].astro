@@ -39,7 +39,7 @@ const avgDel =
 	</a>
 
 	<header class="mb-6">
-		<h1 class="text-2xl font-bold text-emphasis">{line} &mdash; {fmtDate(date)}</h1>
+		<h1 class="text-2xl font-bold text-emphasis">{line} &mdash; <time datetime={date}>{fmtDate(date)}</time></h1>
 	</header>
 
 	<div class="grid grid-cols-[repeat(auto-fit,minmax(160px,1fr))] gap-4 mb-8 max-sm:grid-cols-2">
@@ -104,7 +104,7 @@ const avgDel =
 											<span class="text-muted">{t(lang, "status.on_time")}</span>
 										)}
 									</td>
-									<td class="px-4 py-2.5 text-sm text-muted">{d.fetchedAt.slice(0, 16).replace("T", " ")}</td>
+									<td class="px-4 py-2.5 text-sm text-muted"><time datetime={d.fetchedAt}>{d.fetchedAt.slice(0, 16).replace("T", " ")}</time></td>
 								</tr>
 							);
 						})

@@ -16,3 +16,25 @@
 	--color-emphasis: light-dark(#1f2328, #ffffff);
 	--color-haiku: light-dark(#57606a, #8b949e);
 }
+
+meter {
+	appearance: none;
+	border: none;
+	border-radius: 4px;
+	overflow: hidden;
+	background: var(--color-border-dim);
+}
+meter::-webkit-meter-bar {
+	background: var(--color-border-dim);
+	border-radius: 4px;
+}
+meter::-webkit-meter-optimum-value,
+meter::-webkit-meter-suboptimum-value,
+meter::-webkit-meter-even-less-good-value {
+	background: var(--color-danger);
+	border-radius: 4px;
+}
+meter::-moz-meter-bar {
+	background: var(--color-danger);
+	border-radius: 4px;
+}
