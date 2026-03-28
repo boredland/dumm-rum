@@ -18,29 +18,38 @@ const pill =
 </div>
 
 <script>
-	document.querySelectorAll("[data-departure-filter]").forEach((container) => {
-		const buttons = container.querySelectorAll<HTMLButtonElement>("[data-filter]");
-		const table = container.nextElementSibling?.querySelector("tbody");
-		if (!table) return;
+	function initFilters() {
+		document.querySelectorAll("[data-departure-filter]").forEach((container) => {
+			if ((container as HTMLElement).dataset.initialized) return;
+			(container as HTMLElement).dataset.initialized = "1";
+			const buttons = container.querySelectorAll<HTMLButtonElement>("[data-filter]");
+			const table = container.nextElementSibling?.querySelector("tbody");
+			if (!table) return;
 
-		function apply(filter: string) {
+			function apply(filter: string) {
+				for (const btn of buttons) {
+					btn.classList.toggle("bg-surface-hover", btn.dataset.filter === filter);
+					btn.classList.toggle("text-emphasis", btn.dataset.filter === filter);
+					btn.classList.toggle("text-muted", btn.dataset.filter !== filter);
+				}
+				for (const row of table!.querySelectorAll("tr[data-status]")) {
+					const status = (row as HTMLElement).dataset.status;
+					const show =
+						filter === "all" ||
+						(filter === "issues" && (status === "cancelled" || status === "delayed")) ||
+						(filter === "on_time" && status === "ok");
+					(row as HTMLElement).style.display = show ? "" : "none";
+				}
+			}
+
 			for (const btn of buttons) {
-				btn.classList.toggle("bg-surface-hover", btn.dataset.filter === filter);
-				btn.classList.toggle("text-emphasis", btn.dataset.filter === filter);
-				btn.classList.toggle("text-muted", btn.dataset.filter !== filter);
+				btn.addEventListener("click", () => apply(btn.dataset.filter!));
 			}
-			for (const row of table!.querySelectorAll("tr[data-status]")) {
-				const status = (row as HTMLElement).dataset.status;
-				const show =
-					filter === "all" ||
-					(filter === "issues" && (status === "cancelled" || status === "delayed")) ||
-					(filter === "on_time" && status === "ok");
-				(row as HTMLElement).style.display = show ? "" : "none";
-			}
-		}
 
-		for (const btn of buttons) {
-			btn.addEventListener("click", () => apply(btn.dataset.filter!));
-		}
-	});
+			apply("issues");
+		});
+	}
+
+	initFilters();
+	document.addEventListener("astro:page-load", initFilters);
 </script>
