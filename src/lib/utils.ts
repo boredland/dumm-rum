@@ -19,10 +19,6 @@ export function pct(cancelled: number, total: number): string {
 	return total > 0 ? ((cancelled / total) * 100).toFixed(1) : "0.0";
 }
 
-export function fmtFreq(freq: number | null): string {
-	return freq !== null ? `~${freq.toFixed(0)} min` : "\u2014";
-}
-
 export function fmtDelay(delay: number | null): string {
 	if (delay === null) return "\u2014";
 	return `${delay >= 0 ? "+" : ""}${delay.toFixed(1)} min`;

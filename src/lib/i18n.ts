@@ -52,8 +52,9 @@ const translations = {
 		"table.cancelled": "Ausf\u00e4lle",
 		"table.rate": "Quote",
 		"table.avg_delay": "\u00d8 Versp\u00e4tung",
-		"table.planned_freq": "Soll-Takt",
-		"table.actual_freq": "Ist-Takt",
+		"table.freq_deviation": "Taktabweichung",
+		"table.freq_deviation_tooltip":
+			"Abweichung zwischen Ist- und Soll-Takt in Minuten. Positiv = seltener als geplant, negativ = h\u00e4ufiger. Berechnung: Ist-Takt \u2212 Soll-Takt.",
 		"table.time": "Zeit",
 		"table.line": "Linie",
 		"table.direction": "Richtung",
@@ -118,8 +119,9 @@ const translations = {
 		"table.cancelled": "Cancelled",
 		"table.rate": "Rate",
 		"table.avg_delay": "Avg delay",
-		"table.planned_freq": "Planned freq",
-		"table.actual_freq": "Actual freq",
+		"table.freq_deviation": "Freq deviation",
+		"table.freq_deviation_tooltip":
+			"Difference between actual and planned frequency in minutes. Positive = less frequent than planned, negative = more frequent. Calculation: actual freq \u2212 planned freq.",
 		"table.time": "Time",
 		"table.line": "Line",
 		"table.direction": "Direction",
