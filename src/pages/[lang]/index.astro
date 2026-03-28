@@ -91,6 +91,16 @@ const [
 		) : null;
 	})()}
 
+	<div class="relative mb-6">
+		<input
+			id="search"
+			type="search"
+			placeholder={t(lang, "search.placeholder")}
+			class="w-full bg-surface border border-border rounded-xl px-4 py-2.5 text-sm text-text placeholder:text-muted focus:outline-none focus:border-link"
+		/>
+		<kbd class="absolute right-3 top-1/2 -translate-y-1/2 text-[0.6rem] text-dimmed bg-surface-hover border border-border-dim rounded px-1.5 py-0.5 pointer-events-none">Ctrl K</kbd>
+	</div>
+
 	<details class="group mb-8" open>
 		<summary class="text-xs uppercase tracking-wide text-muted font-semibold mb-3 cursor-pointer select-none">
 			{t(lang, "home.lines")}
@@ -108,6 +118,7 @@ const [
 					return (
 						<a
 							href={`/${lang}/line/${encodeURIComponent(l.line)}${Astro.url.search}`}
+							data-search={`${l.line} ${l.category} ${l.operators.join(" ")}`.toLowerCase()}
 							class:list={[
 								"bg-surface border rounded-xl p-4 no-underline hover:bg-surface-hover transition-colors",
 								borderColor,
@@ -152,6 +163,7 @@ const [
 				return (
 					<a
 						href={`/${lang}/${s.slug}${Astro.url.search}`}
+						data-search={s.name.toLowerCase()}
 						class:list={[
 							"bg-surface border rounded-xl p-5 no-underline hover:bg-surface-hover transition-colors",
 							borderColor,
@@ -198,6 +210,7 @@ const [
 					return (
 						<a
 							href={`/${lang}/operator/${encodeURIComponent(op.operator)}${Astro.url.search}`}
+							data-search={`${op.operator} ${op.lines.join(" ")}`.toLowerCase()}
 							class:list={[
 								"bg-surface border rounded-xl p-5 no-underline hover:bg-surface-hover transition-colors",
 								borderColor,

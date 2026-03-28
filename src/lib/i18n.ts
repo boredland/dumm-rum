@@ -77,6 +77,8 @@ const translations = {
 		"table.no_data": "Noch keine Daten",
 		"table.no_departures": "Keine Abfahrten",
 
+		"search.placeholder": "Linie, Haltestelle oder Betreiber suchen\u2026",
+
 		"filter.all": "Alle",
 		"filter.issues": "Ausfälle & Verspätungen",
 		"filter.on_time": "Pünktlich",
@@ -159,6 +161,8 @@ const translations = {
 		"table.today": "today",
 		"table.no_data": "No data yet",
 		"table.no_departures": "No departures",
+
+		"search.placeholder": "Search lines, stations, or operators\u2026",
 
 		"filter.all": "All",
 		"filter.issues": "Cancelled & delayed",

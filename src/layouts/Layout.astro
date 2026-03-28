@@ -128,6 +128,36 @@ const otherPath = Astro.url.pathname.replace(`/${lang}`, `/${otherLang}`);
 				}
 			}
 			document.addEventListener("astro:page-load", initDepartureFilters);
+
+			function initSearch() {
+				const input = document.getElementById("search") as HTMLInputElement | null;
+				if (!input || input.dataset.initialized) return;
+				input.dataset.initialized = "1";
+				const cards = document.querySelectorAll<HTMLElement>("[data-search]");
+
+				input.addEventListener("input", () => {
+					const q = input.value.toLowerCase().trim();
+					const sections = new Set<HTMLElement>();
+					for (const card of cards) {
+						const match = !q || card.dataset.search!.includes(q);
+						card.style.display = match ? "" : "none";
+						const section = card.closest("details");
+						if (section && match) sections.add(section as HTMLElement);
+					}
+					for (const details of document.querySelectorAll<HTMLDetailsElement>("details.group")) {
+						if (q) details.open = sections.has(details);
+					}
+				});
+			}
+
+			document.addEventListener("keydown", (e) => {
+				if ((e.ctrlKey || e.metaKey) && e.key === "k") {
+					e.preventDefault();
+					const input = document.getElementById("search") as HTMLInputElement | null;
+					if (input) { input.focus(); input.select(); }
+				}
+			});
+			document.addEventListener("astro:page-load", initSearch);
 		</script>
 	</body>
 </html>
