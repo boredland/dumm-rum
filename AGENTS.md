@@ -53,6 +53,78 @@ src/
 3. It also generates a daily haiku per station using Workers AI (once per day)
 4. Page requests query D1 directly via `import { env } from "cloudflare:workers"`
 
+## RMV HAFAS API reference
+
+Base URL: `https://www.rmv.de/hapi`
+
+OpenAPI 3.0.1 spec: `https://www.rmv.de/hapi/api-doc`
+
+Authentication: `accessId=<key>` query parameter or `Authorization: Bearer <key>` header.
+
+### Endpoints used
+
+#### `GET /departureBoard` — Departure Board (Section 2.25)
+
+Returns departures from a station within a time window. Default duration is 60 minutes.
+
+| Parameter | Required | Default | Description |
+|-----------|----------|---------|-------------|
+| `accessId` | M | — | API key |
+| `id` | O | — | Station/stop ID (from `location.name`). Required if `extId` not set |
+| `date` | O | today | Start date (`YYYY-MM-DD`) |
+| `time` | O | now | Start time (`HH:mm`) |
+| `duration` | O | 60 | Time window in minutes (0–1439) |
+| `maxJourneys` | O | -1 | Max departures to return. `-1` = all within duration |
+| `products` | O | all | Bitmask for transport types (bus=16, tram=4, U-Bahn=8) |
+| `direction` | O | — | Filter by direction (station ID of last stop) |
+| `lines` | O | — | Filter by line codes (comma-separated, `!` prefix to negate) |
+| `operators` | O | — | Filter by operator codes (comma-separated) |
+| `rtMode` | O | SERVER_DEFAULT | Realtime mode: `OFF`, `INFOS`, `FULL`, `REALTIME`, `SERVER_DEFAULT` |
+| `format` | O | xml | Response format: `json` or `xml` |
+
+Response root element: `DepartureBoard`. Contains a list of `Departure` objects with times, realtime data, tracks, journey references, and product info.
+
+This project uses: `id`, `date`, `time`, `duration=120`, `maxJourneys=-1`, `format=json`.
+
+#### `GET /location.name` — Location Search by Name (Section 2.3)
+
+Pattern-matching search for stops, stations, addresses, and POIs.
+
+| Parameter | Required | Default | Description |
+|-----------|----------|---------|-------------|
+| `accessId` | M | — | API key |
+| `input` | M | — | Search string |
+| `maxNo` | O | 10 | Max results (1–1000) |
+| `type` | O | ALL | Filter: `S` (stops only), `A` (addresses), `P` (POIs), `ALL`, `SA`, `SP`, `AP` |
+| `format` | O | xml | Response format |
+
+Use `type=S` to search for station/stop IDs when adding new stations.
+
+### JSON response shape (departureBoard, `format=json`)
+
+```ts
+interface DepartureBoardResponse {
+  Departure?: {
+    date: string;          // "YYYY-MM-DD"
+    time: string;          // "HH:mm:ss"
+    rtDate?: string;       // realtime date
+    rtTime?: string;       // realtime time
+    direction: string;     // destination name
+    JourneyStatus: string; // "P" = planned
+    cancelled?: boolean;
+    reachable?: boolean;
+    stop?: string;
+    stopExtId?: string;
+    ProductAtStop: {
+      line: string;        // e.g. "Bus 38"
+      operator: string;
+      catOut: string;      // category e.g. "Bus"
+      num: string;         // journey number
+    };
+  }[];
+}
+```
+
 ## Secrets (set via `wrangler secret put`)
 
 - `RMV_API_KEY` — HAFAS API access key for rmv.de
