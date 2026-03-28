@@ -93,7 +93,7 @@ const todayTotal = todayStats?.total ?? 0;
 			<div class="text-[0.7rem] uppercase tracking-wide text-muted mb-1">{t(lang, "stat.days_tracked")}</div>
 			<div class="text-4xl font-bold tabular-nums">{stats.days.length}</div>
 			<div class="text-sm text-muted mt-1">
-				{stats.days.length > 0 ? <>{t(lang, "stat.since")} <time datetime={stats.days[stats.days.length - 1].date}>{fmtDate(stats.days[stats.days.length - 1].date)}</time></> : ""}
+				{stats.days.length > 0 ? <><time datetime={stats.days[stats.days.length - 1].date}>{`${t(lang, "stat.since")} ${fmtDate(stats.days[stats.days.length - 1].date)}`}</time></> : ""}
 			</div>
 		</div>
 	</div>
