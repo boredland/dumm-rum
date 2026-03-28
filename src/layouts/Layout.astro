@@ -95,6 +95,39 @@ const otherPath = Astro.url.pathname.replace(`/${lang}`, `/${otherLang}`);
 				document.getElementById("scroll-top")?.classList.toggle("hidden", window.scrollY < 400);
 			}, { passive: true });
 			document.addEventListener("astro:page-load", initScrollTop);
+
+			function initDepartureFilters() {
+				for (const wrapper of document.querySelectorAll("[data-departure-filter]")) {
+					const el = wrapper as HTMLElement;
+					if (el.dataset.initialized) continue;
+					el.dataset.initialized = "1";
+					const buttons = el.querySelectorAll<HTMLButtonElement>("[data-filter]");
+					const table = el.querySelector("tbody");
+					if (!buttons.length || !table) continue;
+
+					function apply(filter: string) {
+						for (const btn of buttons) {
+							btn.classList.toggle("bg-surface-hover", btn.dataset.filter === filter);
+							btn.classList.toggle("text-emphasis", btn.dataset.filter === filter);
+							btn.classList.toggle("text-muted", btn.dataset.filter !== filter);
+						}
+						for (const row of table!.querySelectorAll<HTMLElement>("tr[data-status]")) {
+							const s = row.dataset.status;
+							row.style.display =
+								filter === "all" ||
+								(filter === "issues" && (s === "cancelled" || s === "delayed")) ||
+								(filter === "on_time" && s === "ok")
+									? "" : "none";
+						}
+					}
+
+					for (const btn of buttons) {
+						btn.addEventListener("click", () => apply(btn.dataset.filter!));
+					}
+					apply("issues");
+				}
+			}
+			document.addEventListener("astro:page-load", initDepartureFilters);
 		</script>
 	</body>
 </html>

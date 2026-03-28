@@ -11,45 +11,8 @@ const pill =
 	"px-3 py-1 rounded-full text-xs font-medium cursor-pointer transition-colors select-none";
 ---
 
-<div class="flex gap-2 mb-3" data-departure-filter>
+<div data-filter-buttons class="flex gap-2 mb-3">
 	<button class:list={[pill, "bg-surface-hover text-emphasis"]} data-filter="issues">{t(lang, "filter.issues")}</button>
 	<button class:list={[pill, "text-muted"]} data-filter="all">{t(lang, "filter.all")}</button>
 	<button class:list={[pill, "text-muted"]} data-filter="on_time">{t(lang, "filter.on_time")}</button>
 </div>
-
-<script is:inline>
-	(function () {
-		var container = document.currentScript.previousElementSibling;
-		if (!container || !container.hasAttribute("data-departure-filter")) return;
-		var buttons = container.querySelectorAll("[data-filter]");
-		var sibling = container;
-		var table = null;
-		while ((sibling = sibling.nextElementSibling)) {
-			table = sibling.querySelector("tbody");
-			if (table) break;
-		}
-		if (!table) return;
-
-		function apply(filter) {
-			buttons.forEach(function (btn) {
-				btn.classList.toggle("bg-surface-hover", btn.dataset.filter === filter);
-				btn.classList.toggle("text-emphasis", btn.dataset.filter === filter);
-				btn.classList.toggle("text-muted", btn.dataset.filter !== filter);
-			});
-			table.querySelectorAll("tr[data-status]").forEach(function (row) {
-				var status = row.dataset.status;
-				var show =
-					filter === "all" ||
-					(filter === "issues" && (status === "cancelled" || status === "delayed")) ||
-					(filter === "on_time" && status === "ok");
-				row.style.display = show ? "" : "none";
-			});
-		}
-
-		buttons.forEach(function (btn) {
-			btn.addEventListener("click", function () { apply(btn.dataset.filter); });
-		});
-
-		apply("issues");
-	})();
-</script>

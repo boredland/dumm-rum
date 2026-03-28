@@ -68,6 +68,7 @@ const delayedCount = departures.filter(
 	</div>
 
 	<p class="text-xs uppercase tracking-wide text-muted font-semibold mb-3">{t(lang, "section.all_departures")}</p>
+	<div data-departure-filter>
 	<DepartureFilter lang={lang} />
 	<div class="bg-surface border border-border rounded-xl overflow-hidden">
 		<table class="w-full border-collapse">
@@ -128,5 +129,6 @@ const delayedCount = departures.filter(
 				}
 			</tbody>
 		</table>
+	</div>
 	</div>
 </Layout>
