@@ -13,7 +13,7 @@ import {
 import type { Db } from "../db/client";
 import { departures, haikus } from "../db/schema";
 import type { Station } from "./stations";
-import { nowBerlin, todayBerlin } from "./utils";
+import { nowBerlin, timeToMinutes, todayBerlin } from "./utils";
 
 const CORE_HOURS = sql`((${departures.time} >= '06:00:00' AND ${departures.time} < '09:00:00') OR (${departures.time} >= '16:00:00' AND ${departures.time} < '19:00:00'))`;
 
@@ -67,11 +67,6 @@ export interface Stats {
 	avgCancelledPerDay: number;
 	lastChange: string | null;
 	haiku: string | null;
-}
-
-function timeToMinutes(t: string): number {
-	const [h, m] = t.split(":").map(Number);
-	return h * 60 + m;
 }
 
 function freqMinutes(

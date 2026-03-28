@@ -6,7 +6,7 @@ import Layout from "../../layouts/Layout.astro";
 import { langFromParams, t } from "../../lib/i18n";
 import { getOperatorSummaries, getStationSummaries } from "../../lib/queries";
 import { categoryIcons, STATIONS } from "../../lib/stations";
-import { fmtDelay, pct, shortDir } from "../../lib/utils";
+import { fmtDelay, pct, rateBorderColor, shortDir } from "../../lib/utils";
 
 const db = createDb(env.DB);
 const lang = langFromParams(Astro.params);
@@ -38,16 +38,7 @@ const [stationStats, operators] = await Promise.all([
 		{
 			STATIONS.map((s) => {
 				const st = stationStats.get(s.id);
-				const rate =
-					st && st.total > 0
-						? (st.cancelled / st.total) * 100
-						: 0;
-				const borderColor =
-					rate >= 5
-						? "border-danger"
-						: rate >= 1
-							? "border-warning"
-							: "border-success";
+				const borderColor = rateBorderColor(st?.cancelled ?? 0, st?.total ?? 0);
 				return (
 					<a
 						href={`/${lang}/${s.slug}${hoursParam}`}
@@ -83,13 +74,7 @@ const [stationStats, operators] = await Promise.all([
 		<div class="grid grid-cols-[repeat(auto-fit,minmax(220px,1fr))] gap-4 max-sm:grid-cols-1 mt-3">
 			{
 				operators.map((op) => {
-					const rate = op.total > 0 ? (op.cancelled / op.total) * 100 : 0;
-					const borderColor =
-						rate >= 5
-							? "border-danger"
-							: rate >= 1
-								? "border-warning"
-								: "border-success";
+					const borderColor = rateBorderColor(op.cancelled, op.total);
 					return (
 						<a
 							href={`/${lang}/operator/${encodeURIComponent(op.operator)}${hoursParam}`}

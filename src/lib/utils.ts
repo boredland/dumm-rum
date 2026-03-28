@@ -41,3 +41,12 @@ export function timeToMinutes(t: string): number {
 	const [h, m] = t.split(":").map(Number);
 	return h * 60 + m;
 }
+
+export function rateBorderColor(cancelled: number, total: number): string {
+	const rate = total > 0 ? (cancelled / total) * 100 : 0;
+	return rate >= 5
+		? "border-danger"
+		: rate >= 1
+			? "border-warning"
+			: "border-success";
+}

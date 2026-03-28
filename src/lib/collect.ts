@@ -154,17 +154,15 @@ export async function runCollection(
 	ai: Ai,
 	apiKeys: string,
 ): Promise<Record<string, number>> {
-	const results = await Promise.all(
-		STATIONS.flatMap((s) => [
-			collectDepartures(db, pickKey(apiKeys), s),
-			generateDailyHaiku(db, ai, s),
-		]),
+	const counts = await Promise.all(
+		STATIONS.map(async (s) => {
+			const [count] = await Promise.all([
+				collectDepartures(db, pickKey(apiKeys), s),
+				generateDailyHaiku(db, ai, s),
+			]);
+			console.log(`${s.slug}: upserted ${count} departures`);
+			return count;
+		}),
 	);
-	const counts = results.filter((_, i) => i % 2 === 0) as number[];
-	const summary: Record<string, number> = {};
-	for (let i = 0; i < STATIONS.length; i++) {
-		summary[STATIONS[i].slug] = counts[i];
-		console.log(`${STATIONS[i].slug}: upserted ${counts[i]} departures`);
-	}
-	return summary;
+	return Object.fromEntries(STATIONS.map((s, i) => [s.slug, counts[i]]));
 }
