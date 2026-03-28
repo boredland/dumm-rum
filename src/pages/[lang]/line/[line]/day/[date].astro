@@ -15,6 +15,13 @@ const db = createDb(env.DB);
 const departures = await getLineDayDepartures(db, line, date);
 
 const cancelledCount = departures.filter((d) => d.cancelled).length;
+const delayedCount = departures.filter(
+	(d) =>
+		!d.cancelled &&
+		d.rtTime &&
+		d.rtDate &&
+		delayMinutes(d.date, d.time, d.rtDate, d.rtTime) >= 7.5,
+).length;
 ---
 
 <Layout title={`${line} — ${fmtDate(date, lang)}`} lang={lang}>
@@ -40,6 +47,13 @@ const cancelledCount = departures.filter((d) => d.cancelled).length;
 				{cancelledCount}
 			</div>
 			<div class="text-sm text-muted mt-1">{pct(cancelledCount, departures.length)}%</div>
+		</div>
+		<div class="bg-surface border border-border rounded-xl p-5">
+			<div class="text-[0.7rem] uppercase tracking-wide text-muted mb-1">{t(lang, "table.delayed")}</div>
+			<div class:list={["text-4xl font-bold tabular-nums", delayedCount > 0 ? "text-warning" : "text-success"]}>
+				{delayedCount}
+			</div>
+			<div class="text-sm text-muted mt-1">{pct(delayedCount, departures.length)}%</div>
 		</div>
 	</div>
 
