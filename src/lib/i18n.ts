@@ -7,7 +7,7 @@ const translations = {
 		"home.subtitle": "Wissen, ob man dumm rumsteht",
 		"home.methodology_title": "Wie wir messen",
 		"home.methodology":
-			"Alle 5 Minuten fragen wir die RMV-Echtzeitdaten ab und speichern Abfahrten, Ausfälle und Verspätungen. Die Ausfallquote ist der Anteil der ausgefallenen Abfahrten an der Gesamtzahl. Die Durchschnittsverspätung vergleicht die tatsächliche Abfahrtszeit mit der geplanten \u2014 bei Ausfällen wird der geplante Takt als Wartezeit angenommen. Farben: gr\u00fcn unter 1% Ausfallquote, orange ab 1%, rot ab 2%.",
+			"Alle 5 Minuten fragen wir die RMV-Echtzeitdaten ab und speichern Abfahrten, Ausfälle und Verspätungen. Die Ausfallquote ist der Anteil der ausgefallenen Abfahrten an der Gesamtzahl. Die Durchschnittsverspätung vergleicht die tatsächliche Abfahrtszeit mit der geplanten \u2014 bei Ausfällen wird der geplante Takt als Wartezeit angenommen. Als versp\u00e4tet gilt eine Abfahrt, wenn die Versp\u00e4tung \u226550% des geplanten Takts oder \u003e10 Minuten betr\u00e4gt. Farben: gr\u00fcn unter 1% Ausfallquote, orange ab 1%, rot ab 2%.",
 		"home.stations": "Haltestellen",
 		"home.operators": "Betreiber",
 		"home.cancelled": "ausgefallen",
@@ -50,6 +50,9 @@ const translations = {
 		"table.date": "Datum",
 		"table.total": "Gesamt",
 		"table.cancelled": "Ausf\u00e4lle",
+		"table.delayed": "Versp\u00e4tet",
+		"table.delayed_tooltip":
+			"Abfahrten mit \u226550% des geplanten Takts oder \u003e10 Minuten Versp\u00e4tung.",
 		"table.rate": "Quote",
 		"table.avg_delay": "\u00d8 Versp\u00e4tung",
 		"table.freq_deviation": "Taktabweichung",
@@ -74,7 +77,7 @@ const translations = {
 		"home.subtitle": "Know if you\u2019re standing around for nothing",
 		"home.methodology_title": "How we measure",
 		"home.methodology":
-			"Every 5 minutes we poll the RMV realtime feed and store departures, cancellations, and delays. The cancellation rate is the share of cancelled departures out of the total. Average delay compares actual departure time to the scheduled time \u2014 for cancellations, we assume the wait equals the planned frequency. Colors: green below 1% cancellation rate, orange from 1%, red from 2%.",
+			"Every 5 minutes we poll the RMV realtime feed and store departures, cancellations, and delays. The cancellation rate is the share of cancelled departures out of the total. Average delay compares actual departure time to the scheduled time \u2014 for cancellations, we assume the wait equals the planned frequency. A departure counts as delayed if the delay is \u226550% of the planned frequency or \u003e10 minutes. Colors: green below 1% cancellation rate, orange from 1%, red from 2%.",
 		"home.stations": "Stations",
 		"home.operators": "Operators",
 		"home.cancelled": "cancelled",
@@ -117,6 +120,9 @@ const translations = {
 		"table.date": "Date",
 		"table.total": "Total",
 		"table.cancelled": "Cancelled",
+		"table.delayed": "Delayed",
+		"table.delayed_tooltip":
+			"Departures delayed by \u226550% of planned frequency or \u003e10 minutes.",
 		"table.rate": "Rate",
 		"table.avg_delay": "Avg delay",
 		"table.freq_deviation": "Freq deviation",

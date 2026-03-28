@@ -217,6 +217,7 @@ async function getStatsFallback(
 			date,
 			total,
 			cancelled,
+			delayed: 0,
 			avgDelay,
 			plannedFreq,
 			actualFreq,
@@ -478,6 +479,7 @@ export async function getOperatorStats(
 		date: d.date,
 		total: Number(d.total),
 		cancelled: Number(d.cancelled),
+		delayed: "delayed" in d ? Number(d.delayed) : 0,
 		avgDelay: d.avgDelay,
 	}));
 	return { days, lines: lineRows.map((r) => r.line) };
