@@ -112,7 +112,7 @@ const overallDelay =
 							const rate = pct(d.cancelled, d.total);
 							return (
 								<tr class="border-b border-border-dim last:border-b-0 hover:bg-surface-hover">
-									<td class="px-4 py-2.5 text-sm tabular-nums"><time datetime={d.date}>{fmtDate(d.date)}</time></td>
+									<td class="px-4 py-2.5 text-sm tabular-nums"><time datetime={d.date}>{fmtDate(d.date, lang)}</time></td>
 									<td class="px-4 py-2.5 text-sm tabular-nums">{d.total}</td>
 									<td class="px-4 py-2.5 text-sm">
 										{d.cancelled > 0 ? (

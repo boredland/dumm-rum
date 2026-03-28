@@ -56,7 +56,7 @@ const todayTotal = todayStats?.total ?? 0;
 			{
 				stats.lastChange && (
 					<>
-						{` \u2014 ${t(lang, "station.last_updated")} `}<time datetime={stats.lastChange}>{fmtTimestamp(stats.lastChange)}</time>
+						{` \u2014 ${t(lang, "station.last_updated")} `}<time datetime={stats.lastChange}>{fmtTimestamp(stats.lastChange, lang)}</time>
 					</>
 				)
 			}
@@ -93,7 +93,7 @@ const todayTotal = todayStats?.total ?? 0;
 			<div class="text-[0.7rem] uppercase tracking-wide text-muted mb-1">{t(lang, "stat.days_tracked")}</div>
 			<div class="text-4xl font-bold tabular-nums">{stats.days.length}</div>
 			<div class="text-sm text-muted mt-1">
-				{stats.days.length > 0 ? <><time datetime={stats.days[stats.days.length - 1].date}>{`${t(lang, "stat.since")} ${fmtDate(stats.days[stats.days.length - 1].date)}`}</time></> : ""}
+				{stats.days.length > 0 ? <><time datetime={stats.days[stats.days.length - 1].date}>{`${t(lang, "stat.since")} ${fmtDate(stats.days[stats.days.length - 1].date, lang)}`}</time></> : ""}
 			</div>
 		</div>
 	</div>
@@ -125,7 +125,7 @@ const todayTotal = todayStats?.total ?? 0;
 								<tr class="border-b border-border-dim last:border-b-0 hover:bg-surface-hover">
 									<td class="px-4 py-2.5 text-sm tabular-nums">
 										<a href={`/${lang}/${station.slug}/day/${d.date}${Astro.url.search}`} class="text-link no-underline hover:underline">
-											<time datetime={d.date}>{fmtDate(d.date)}{d.date === today ? ` (${t(lang, "table.today")})` : ""}</time>
+											<time datetime={d.date}>{fmtDate(d.date, lang)}{d.date === today ? ` (${t(lang, "table.today")})` : ""}</time>
 										</a>
 									</td>
 									<td class="px-4 py-2.5 text-sm tabular-nums">{d.total}</td>
