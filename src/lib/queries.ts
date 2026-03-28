@@ -303,6 +303,7 @@ export async function getNextDepartures(db: Db, station: Station) {
 export interface OperatorSummary {
 	operator: string;
 	lines: string[];
+	categories: string[];
 	total: number;
 	cancelled: number;
 	delayed: number;
@@ -350,6 +351,7 @@ export async function getOperatorSummaries(
 			.selectDistinct({
 				operator: departures.operator,
 				line: departures.line,
+				category: departures.category,
 			})
 			.from(departures)
 			.where(isNotNull(departures.operator))
@@ -357,15 +359,22 @@ export async function getOperatorSummaries(
 	]);
 
 	const lineMap = new Map<string, string[]>();
+	const catMap = new Map<string, Set<string>>();
 	for (const row of lineRows) {
 		const lines = lineMap.get(row.operator!) ?? [];
 		lines.push(row.line);
 		lineMap.set(row.operator!, lines);
+		if (row.category) {
+			const cats = catMap.get(row.operator!) ?? new Set();
+			cats.add(row.category);
+			catMap.set(row.operator!, cats);
+		}
 	}
 
 	return statsRows.map((r) => ({
 		operator: r.operator!,
 		lines: lineMap.get(r.operator!) ?? [],
+		categories: [...(catMap.get(r.operator!) ?? [])],
 		total: Number(r.total ?? 0),
 		cancelled: Number(r.cancelled ?? 0),
 		delayed: Number(r.delayed ?? 0),

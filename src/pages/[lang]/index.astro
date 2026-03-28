@@ -141,6 +141,9 @@ const [
 								borderColor,
 							]}
 						>
+							<div class="text-[0.7rem] uppercase tracking-wide text-muted mb-1">
+								{categoryIcons(op.categories)}
+							</div>
 							<div class="text-lg font-bold text-emphasis">
 								{op.operator}
 							</div>
@@ -185,8 +188,8 @@ const [
 								borderColor,
 							]}
 						>
-							<div class="text-lg font-bold text-emphasis">{l.line}</div>
-							<div class="text-xs text-muted">{l.category} &middot; {l.operators.join(", ")}</div>
+							<div class="text-lg font-bold text-emphasis">{categoryIcons([l.category])} {l.line}</div>
+							<div class="text-xs text-muted">{l.operators.join(", ")}</div>
 							<div class="text-sm text-muted mt-1">
 								{pct(l.cancelled, l.total)}% {t(lang, "home.cancelled")} &middot; {pct(l.delayed, l.total)}% {t(lang, "home.delayed")}
 							</div>
