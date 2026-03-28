@@ -73,7 +73,7 @@ const todayTotal = todayStats?.total ?? 0;
 
 	<HoursToggle basePath={`/${lang}/${station.slug}`} coreOnly={coreOnly} daysFilter={daysFilter} lang={lang} />
 
-	<div class="grid grid-cols-[repeat(auto-fit,minmax(180px,1fr))] gap-4 mb-8 max-sm:grid-cols-1">
+	<div class="grid grid-cols-[repeat(auto-fit,minmax(160px,1fr))] gap-4 mb-8 max-sm:grid-cols-2">
 		<div class="bg-surface border border-border rounded-xl p-5">
 			<div class="text-[0.7rem] uppercase tracking-wide text-muted mb-1">{t(lang, "stat.today")}</div>
 			<div class:list={["text-4xl font-bold tabular-nums", todayCancelled > 0 ? "text-danger" : "text-success"]}>
@@ -89,6 +89,21 @@ const todayTotal = todayStats?.total ?? 0;
 			<div class="text-sm text-muted mt-1">
 				{t(lang, "stat.cancelled")} ({stats.days.length > 0 ? pct(stats.days.reduce((s, d) => s + d.cancelled, 0), stats.days.reduce((s, d) => s + d.total, 0)) : "0.0"}% {t(lang, "stat.rate")})
 			</div>
+		</div>
+		<div class="bg-surface border border-border rounded-xl p-5">
+			<div class="text-[0.7rem] uppercase tracking-wide text-muted mb-1">{t(lang, "table.delayed")}</div>
+			{(() => {
+				const totalDelayed = stats.days.reduce((s, d) => s + d.delayed, 0);
+				const totalDep = stats.days.reduce((s, d) => s + d.total, 0);
+				return (
+					<>
+						<div class:list={["text-4xl font-bold tabular-nums", totalDelayed > 0 ? "text-warning" : "text-success"]}>
+							{totalDelayed}
+						</div>
+						<div class="text-sm text-muted mt-1">{pct(totalDelayed, totalDep)}%</div>
+					</>
+				);
+			})()}
 		</div>
 		<div class="bg-surface border border-border rounded-xl p-5">
 			<div class="text-[0.7rem] uppercase tracking-wide text-muted mb-1">{t(lang, "stat.days_tracked")}</div>
