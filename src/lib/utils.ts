@@ -37,6 +37,19 @@ export function fmtDate(date: string): string {
 	return dayjs(date).format("DD.MM.YYYY");
 }
 
+export function delayMinutes(
+	date: string,
+	time: string,
+	rtDate: string,
+	rtTime: string,
+): number {
+	return (
+		(new Date(`${rtDate}T${rtTime}`).getTime() -
+			new Date(`${date}T${time}`).getTime()) /
+		60000
+	);
+}
+
 export function rateBorderColor(cancelled: number, total: number): string {
 	const rate = total > 0 ? (cancelled / total) * 100 : 0;
 	return rate >= 2

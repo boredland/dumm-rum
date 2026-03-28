@@ -10,6 +10,7 @@ import {
 } from "../../../../lib/queries";
 import { findStation } from "../../../../lib/stations";
 import {
+	delayMinutes,
 	fmtDate,
 	fmtDelay,
 	nowBerlin,
@@ -93,7 +94,7 @@ let anchorPlaced = false;
 							const time = d.time.slice(0, 5);
 							const rtTime = d.rtTime?.slice(0, 5) ?? null;
 							const delayMin = d.rtTime && d.rtDate
-								? Math.round((new Date(`${d.rtDate}T${d.rtTime}`).getTime() - new Date(`${d.date}T${d.time}`).getTime()) / 60000)
+								? Math.round(delayMinutes(d.date, d.time, d.rtDate, d.rtTime))
 								: null;
 							let id: string | undefined;
 							if (isToday && !anchorPlaced && d.time >= nowTime) {

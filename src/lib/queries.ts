@@ -8,7 +8,7 @@ import {
 	stationDailyStats,
 } from "../db/schema";
 import type { Station } from "./stations";
-import { nowBerlin, todayBerlin } from "./utils";
+import { delayMinutes, nowBerlin, todayBerlin } from "./utils";
 
 const CORE_HOURS = sql`((${departures.time} >= '06:00:00' AND ${departures.time} < '09:00:00') OR (${departures.time} >= '16:00:00' AND ${departures.time} < '19:00:00'))`;
 
@@ -89,11 +89,11 @@ export async function getStats(
 	};
 }
 
-const avgDelaySql = sql<
+export const avgDelaySql = sql<
 	number | null
 >`AVG(CASE WHEN ${departures.cancelled} = 0 AND ${departures.rtTime} IS NOT NULL THEN (strftime('%s', ${departures.rtDate} || ' ' || ${departures.rtTime}) - strftime('%s', ${departures.date} || ' ' || ${departures.time})) / 60.0 END)`;
 
-const delayedSql = sql<number>`SUM(CASE WHEN ${departures.cancelled} = 0 AND ${departures.rtTime} IS NOT NULL AND (strftime('%s', ${departures.rtDate} || ' ' || ${departures.rtTime}) - strftime('%s', ${departures.date} || ' ' || ${departures.time})) / 60.0 >= 7.5 THEN 1 ELSE 0 END)`;
+export const delayedSql = sql<number>`SUM(CASE WHEN ${departures.cancelled} = 0 AND ${departures.rtTime} IS NOT NULL AND (strftime('%s', ${departures.rtDate} || ' ' || ${departures.rtTime}) - strftime('%s', ${departures.date} || ' ' || ${departures.time})) / 60.0 >= 7.5 THEN 1 ELSE 0 END)`;
 
 async function getStatsFallback(
 	db: Db,
@@ -517,9 +517,7 @@ export function dayAvgDelay(departureRows: DepartureRow[]): number | null {
 			totalDelay += DELAY_THRESHOLD_MIN;
 			delayCount++;
 		} else if (d.rtTime && d.rtDate) {
-			const scheduled = new Date(`${d.date}T${d.time}`).getTime();
-			const actual = new Date(`${d.rtDate}T${d.rtTime}`).getTime();
-			totalDelay += (actual - scheduled) / 60000;
+			totalDelay += delayMinutes(d.date, d.time, d.rtDate, d.rtTime);
 			delayCount++;
 		}
 	}

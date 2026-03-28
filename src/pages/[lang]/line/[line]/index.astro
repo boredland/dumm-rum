@@ -25,7 +25,6 @@ const overallDelay =
 		? delayDays.reduce((s, d) => s + d.avgDelay! * d.total, 0) /
 			delayDays.reduce((s, d) => s + d.total, 0)
 		: null;
-const chartDays = days;
 ---
 
 <Layout title={`${t(lang, "table.line")} ${line}`} lang={lang}>
@@ -76,7 +75,7 @@ const chartDays = days;
 	</div>
 
 	<p class="text-xs uppercase tracking-wide text-muted font-semibold mb-3">{t(lang, "section.cancellation_rate")}</p>
-	<CancellationChart days={chartDays} />
+	<CancellationChart days={days} />
 
 	<p class="text-xs uppercase tracking-wide text-muted font-semibold mb-3">{t(lang, "section.daily_breakdown")}</p>
 	<div class="bg-surface border border-border rounded-xl overflow-hidden">

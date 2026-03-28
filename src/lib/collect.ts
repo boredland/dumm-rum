@@ -8,6 +8,7 @@ import {
 } from "../db/schema";
 import { createHafasClient } from "./hafas";
 import type { components } from "./hafas-types";
+import { avgDelaySql, delayedSql } from "./queries";
 import type { Station } from "./stations";
 import { STATIONS } from "./stations";
 import { nowBerlin, todayBerlin } from "./utils";
@@ -145,15 +146,8 @@ async function materializeStationStats(db: Db, date: string): Promise<void> {
 			stationId: departures.stationId,
 			total: count().as("total"),
 			cancelled: sql<number>`SUM(${departures.cancelled})`.as("cancelled"),
-			delayed:
-				sql<number>`SUM(CASE WHEN ${departures.cancelled} = 0 AND ${departures.rtTime} IS NOT NULL AND (strftime('%s', ${departures.rtDate} || ' ' || ${departures.rtTime}) - strftime('%s', ${departures.date} || ' ' || ${departures.time})) / 60.0 >= 7.5 THEN 1 ELSE 0 END)`.as(
-					"delayed",
-				),
-			avgDelay: sql<
-				number | null
-			>`AVG(CASE WHEN ${departures.cancelled} = 0 AND ${departures.rtTime} IS NOT NULL THEN (strftime('%s', ${departures.rtDate} || ' ' || ${departures.rtTime}) - strftime('%s', ${departures.date} || ' ' || ${departures.time})) / 60.0 END)`.as(
-				"avg_delay",
-			),
+			delayed: delayedSql.as("delayed"),
+			avgDelay: avgDelaySql.as("avg_delay"),
 		})
 		.from(departures)
 		.where(eq(departures.date, date))
@@ -188,15 +182,8 @@ async function materializeOperatorStats(db: Db, date: string): Promise<void> {
 			operator: departures.operator,
 			total: count().as("total"),
 			cancelled: sql<number>`SUM(${departures.cancelled})`.as("cancelled"),
-			delayed:
-				sql<number>`SUM(CASE WHEN ${departures.cancelled} = 0 AND ${departures.rtTime} IS NOT NULL AND (strftime('%s', ${departures.rtDate} || ' ' || ${departures.rtTime}) - strftime('%s', ${departures.date} || ' ' || ${departures.time})) / 60.0 >= 7.5 THEN 1 ELSE 0 END)`.as(
-					"delayed",
-				),
-			avgDelay: sql<
-				number | null
-			>`AVG(CASE WHEN ${departures.cancelled} = 0 AND ${departures.rtTime} IS NOT NULL THEN (strftime('%s', ${departures.rtDate} || ' ' || ${departures.rtTime}) - strftime('%s', ${departures.date} || ' ' || ${departures.time})) / 60.0 END)`.as(
-				"avg_delay",
-			),
+			delayed: delayedSql.as("delayed"),
+			avgDelay: avgDelaySql.as("avg_delay"),
 		})
 		.from(departures)
 		.where(and(eq(departures.date, date), isNotNull(departures.operator)))
@@ -249,8 +236,10 @@ export async function runCollection(
 	const today = todayBerlin();
 	const yesterday = nowBerlin().subtract(1, "day").format("YYYY-MM-DD");
 	for (const date of [today, yesterday]) {
-		await materializeStationStats(db, date);
-		await materializeOperatorStats(db, date);
+		await Promise.all([
+			materializeStationStats(db, date),
+			materializeOperatorStats(db, date),
+		]);
 	}
 
 	return summary;
