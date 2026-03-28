@@ -32,6 +32,11 @@ const [stationStats, operators] = await Promise.all([
 		</p>
 	</header>
 
+	<details class="mb-6 text-sm text-muted">
+		<summary class="cursor-pointer select-none font-medium">{t(lang, "home.methodology_title")}</summary>
+		<p class="mt-2">{t(lang, "home.methodology")}</p>
+	</details>
+
 	<HoursToggle basePath={`/${lang}`} coreOnly={coreOnly} daysFilter={daysFilter} lang={lang} />
 
 	<p class="text-xs uppercase tracking-wide text-muted font-semibold mb-3">

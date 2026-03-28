@@ -62,6 +62,13 @@ All tracked stations are defined in `src/lib/stations.ts`. To add a new one:
 | `npm run db:migrate` | Apply migrations to remote D1 |
 | `npm run db:migrate:local` | Apply migrations to local D1 |
 
+## Methodology
+
+Every 5 minutes, the cron fetches the RMV HAFAS realtime feed for each tracked station and stores all departures. From this data:
+
+- **Cancellation rate** = cancelled departures / total departures
+- **Average delay** = mean of (actual departure time - scheduled time) across all departures with realtime data. For cancelled departures, the planned frequency is used as the assumed wait time. The delay calculation uses full datetime comparison to correctly handle cross-midnight departures.
+
 ## How it works
 
 - A Cloudflare cron trigger (`*/5 * * * *`) calls the `scheduled` handler in `src/worker.ts`
