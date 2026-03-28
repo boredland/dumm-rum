@@ -47,7 +47,13 @@ const [stationStats, operators, lines] = await Promise.all([
 		</summary>
 		<div class="grid grid-cols-[repeat(auto-fit,minmax(180px,1fr))] gap-4 max-sm:grid-cols-1 mt-3">
 		{
-			STATIONS.map((s) => {
+			[...STATIONS].sort((a, b) => {
+				const ra = stationStats.get(a.id);
+				const rb = stationStats.get(b.id);
+				const scoreA = ra && ra.total > 0 ? (ra.cancelled + ra.delayed) / ra.total : 0;
+				const scoreB = rb && rb.total > 0 ? (rb.cancelled + rb.delayed) / rb.total : 0;
+				return scoreB - scoreA;
+			}).map((s) => {
 				const st = stationStats.get(s.id);
 				const borderColor = rateBorderColor(st?.cancelled ?? 0, st?.total ?? 0);
 				return (
@@ -82,7 +88,11 @@ const [stationStats, operators, lines] = await Promise.all([
 		</summary>
 		<div class="grid grid-cols-[repeat(auto-fit,minmax(220px,1fr))] gap-4 max-sm:grid-cols-1 mt-3">
 			{
-				operators.map((op) => {
+				[...operators].sort((a, b) => {
+					const scoreA = a.total > 0 ? a.cancelled / a.total : 0;
+					const scoreB = b.total > 0 ? b.cancelled / b.total : 0;
+					return scoreB - scoreA;
+				}).map((op) => {
 					const borderColor = rateBorderColor(op.cancelled, op.total);
 					return (
 						<a
@@ -115,7 +125,11 @@ const [stationStats, operators, lines] = await Promise.all([
 		</summary>
 		<div class="grid grid-cols-[repeat(auto-fit,minmax(140px,1fr))] gap-3 max-sm:grid-cols-2 mt-3">
 			{
-				lines.map((l) => {
+				[...lines].sort((a, b) => {
+					const scoreA = a.total > 0 ? (a.cancelled + a.delayed) / a.total : 0;
+					const scoreB = b.total > 0 ? (b.cancelled + b.delayed) / b.total : 0;
+					return scoreB - scoreA;
+				}).map((l) => {
 					const borderColor = rateBorderColor(l.cancelled, l.total);
 					return (
 						<a
