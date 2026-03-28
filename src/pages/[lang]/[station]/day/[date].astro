@@ -107,7 +107,7 @@ let anchorPlaced = false;
 										{time}
 										{rtTime && rtTime !== time && <span class="text-warning"> &rarr; {rtTime}</span>}
 									</td>
-									<td class="px-4 py-2.5 text-sm">{d.line}</td>
+									<td class="px-4 py-2.5 text-sm"><a href={`/${lang}/line/${encodeURIComponent(d.line)}`} class="text-link no-underline hover:underline">{d.line}</a></td>
 									<td class="px-4 py-2.5 text-sm">{shortDir(d.direction)}</td>
 									<td class="px-4 py-2.5 text-sm">
 										{d.cancelled ? (
