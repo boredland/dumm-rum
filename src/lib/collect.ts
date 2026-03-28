@@ -297,21 +297,17 @@ export async function runCollection(
 	ai: Ai,
 	apiKeys: string,
 ): Promise<Record<string, number>> {
-	const counts = await Promise.all(
-		STATIONS.map(async (s) => {
-			const [count] = await Promise.all([
-				collectDepartures(db, pickKey(apiKeys), s),
-				generateDailyHaiku(db, ai, s),
-			]);
-			console.log(`${s.slug}: upserted ${count} departures`);
-			return count;
-		}),
-	);
-	const today = todayBerlin();
-	await Promise.all([
-		materializeStationStats(db, today),
-		materializeOperatorStats(db, today),
-	]);
+	const summary: Record<string, number> = {};
+	for (const s of STATIONS) {
+		const count = await collectDepartures(db, pickKey(apiKeys), s);
+		await generateDailyHaiku(db, ai, s);
+		summary[s.slug] = count;
+		console.log(`${s.slug}: upserted ${count} departures`);
+	}
 
-	return Object.fromEntries(STATIONS.map((s, i) => [s.slug, counts[i]]));
+	const today = todayBerlin();
+	await materializeStationStats(db, today);
+	await materializeOperatorStats(db, today);
+
+	return summary;
 }
