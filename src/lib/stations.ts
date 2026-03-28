@@ -65,7 +65,7 @@ export function categoryIcons(categories: string[]): string {
 	const icons: string[] = [];
 	if (categories.some((c) => ["ICE", "IC", "EC"].includes(c))) icons.push("🚄");
 	if (categories.some((c) => ["RE", "RB", "R"].includes(c))) icons.push("🚆");
-	if (categories.includes("S-Bahn")) icons.push("🚈");
+	if (categories.some((c) => ["S-Bahn", "S"].includes(c))) icons.push("🚈");
 	if (categories.includes("U-Bahn")) icons.push("🚇");
 	if (categories.includes("Tram")) icons.push("🚋");
 	if (categories.includes("Bus")) icons.push("🚌");
