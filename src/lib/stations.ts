@@ -48,6 +48,30 @@ export const STATIONS: Station[] = [
 		slug: "seckbacher-landstrasse",
 		type: "underground",
 	},
+	{
+		id: "3000510",
+		name: "Frankfurt (Main) Konstablerwache",
+		slug: "konstablerwache",
+		type: "bus",
+	},
+	{
+		id: "3001217",
+		name: "Frankfurt (Main) Rödelheim Bahnhof",
+		slug: "roedelheim-bahnhof",
+		type: "bus",
+	},
+	{
+		id: "3001606",
+		name: "Frankfurt (Main) Buchrainplatz",
+		slug: "buchrainplatz",
+		type: "bus",
+	},
+	{
+		id: "3011073",
+		name: "Frankfurt (Main) Zeilsheim Bahnhof",
+		slug: "zeilsheim-bahnhof",
+		type: "bus",
+	},
 ];
 
 export function findStation(slug: string): Station | undefined {
