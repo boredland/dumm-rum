@@ -99,16 +99,12 @@ async function collectDepartures(
 	return deps.length;
 }
 
-async function generateDailyHaiku(
-	db: Db,
-	ai: Ai,
-	station: Station,
-): Promise<void> {
+async function generateDailyHaiku(db: Db, ai: Ai): Promise<void> {
 	const today = todayBerlin();
 	const existing = await db
 		.select({ date: haikus.date })
 		.from(haikus)
-		.where(and(eq(haikus.date, today), eq(haikus.stationId, station.id)))
+		.where(eq(haikus.date, today))
 		.limit(1);
 	if (existing.length > 0) return;
 
@@ -138,12 +134,9 @@ async function generateDailyHaiku(
 		console.error("Haiku generation returned empty response", response);
 		return;
 	}
-	console.log(`Generated haiku for ${station.slug}: ${haiku}`);
+	console.log(`Generated haiku: ${haiku}`);
 
-	await db
-		.insert(haikus)
-		.values({ date: today, stationId: station.id, haiku })
-		.onConflictDoNothing();
+	await db.insert(haikus).values({ date: today, haiku }).onConflictDoNothing();
 }
 
 async function materializeStationStats(db: Db, date: string): Promise<void> {
@@ -300,10 +293,10 @@ export async function runCollection(
 	const summary: Record<string, number> = {};
 	for (const s of STATIONS) {
 		const count = await collectDepartures(db, pickKey(apiKeys), s);
-		await generateDailyHaiku(db, ai, s);
 		summary[s.slug] = count;
 		console.log(`${s.slug}: upserted ${count} departures`);
 	}
+	await generateDailyHaiku(db, ai);
 
 	const today = todayBerlin();
 	await materializeStationStats(db, today);

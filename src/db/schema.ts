@@ -37,15 +37,10 @@ export const departures = sqliteTable(
 	],
 );
 
-export const haikus = sqliteTable(
-	"haikus",
-	{
-		date: text().notNull(),
-		stationId: text("station_id").notNull(),
-		haiku: text().notNull(),
-	},
-	(t) => [primaryKey({ columns: [t.date, t.stationId] })],
-);
+export const haikus = sqliteTable("haikus", {
+	date: text().primaryKey(),
+	haiku: text().notNull(),
+});
 
 export const stationDailyStats = sqliteTable(
 	"station_daily_stats",

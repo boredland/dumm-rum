@@ -11,7 +11,7 @@ import { nowBerlin, timeToMinutes, todayBerlin } from "./utils";
 
 const CORE_HOURS = sql`((${departures.time} >= '06:00:00' AND ${departures.time} < '09:00:00') OR (${departures.time} >= '16:00:00' AND ${departures.time} < '19:00:00'))`;
 
-function coreFilter(coreOnly: boolean) {
+function _coreFilter(coreOnly: boolean) {
 	return coreOnly ? CORE_HOURS : undefined;
 }
 
@@ -71,9 +71,7 @@ export async function getStats(
 		db
 			.select({ haiku: haikus.haiku })
 			.from(haikus)
-			.where(
-				and(eq(haikus.date, todayBerlin()), eq(haikus.stationId, station.id)),
-			)
+			.where(eq(haikus.date, todayBerlin()))
 			.limit(1),
 	]);
 
@@ -175,9 +173,7 @@ async function getStatsFallback(db: Db, station: Station): Promise<Stats> {
 		db
 			.select({ haiku: haikus.haiku })
 			.from(haikus)
-			.where(
-				and(eq(haikus.date, todayBerlin()), eq(haikus.stationId, station.id)),
-			)
+			.where(eq(haikus.date, todayBerlin()))
 			.limit(1),
 	]);
 
@@ -322,15 +318,11 @@ export async function getStationCategories(
 	return rows.map((r) => r.category!);
 }
 
-export async function getHaiku(
-	db: Db,
-	station: Station,
-	date: string,
-): Promise<string | null> {
+export async function getHaiku(db: Db, date: string): Promise<string | null> {
 	const rows = await db
 		.select({ haiku: haikus.haiku })
 		.from(haikus)
-		.where(and(eq(haikus.date, date), eq(haikus.stationId, station.id)))
+		.where(eq(haikus.date, date))
 		.limit(1);
 	return rows[0]?.haiku ?? null;
 }

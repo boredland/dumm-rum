@@ -26,7 +26,7 @@ const db = createDb(env.DB);
 const date = Astro.params.date!;
 const [departures, haiku] = await Promise.all([
 	getDayDepartures(db, station, date),
-	getHaiku(db, station, date),
+	getHaiku(db, date),
 ]);
 
 const isToday = date === todayBerlin();

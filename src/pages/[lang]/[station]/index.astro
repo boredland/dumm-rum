@@ -52,7 +52,7 @@ const hoursParam = coreOnly ? "?hours=core" : "";
 			{
 				stats.lastChange && (
 					<>
-						{" "}&mdash; {t(lang, "station.last_updated")} {fmtTimestamp(stats.lastChange)}
+						{` \u2014 ${t(lang, "station.last_updated")} ${fmtTimestamp(stats.lastChange)}`}
 					</>
 				)
 			}
