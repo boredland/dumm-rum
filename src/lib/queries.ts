@@ -25,7 +25,9 @@ export interface DayStats {
 }
 
 export interface DepartureRow {
+	date: string;
 	time: string;
+	rt_date: string | null;
 	rt_time: string | null;
 	line: string;
 	direction: string;
@@ -96,7 +98,7 @@ export async function getStats(
 
 const avgDelaySql = sql<
 	number | null
->`AVG(CASE WHEN ${departures.cancelled} = 0 AND ${departures.rtTime} IS NOT NULL AND ABS((strftime('%s', ${departures.rtTime}) - strftime('%s', ${departures.time})) / 60.0) <= 30 THEN (strftime('%s', ${departures.rtTime}) - strftime('%s', ${departures.time})) / 60.0 END)`;
+>`AVG(CASE WHEN ${departures.cancelled} = 0 AND ${departures.rtTime} IS NOT NULL THEN (strftime('%s', ${departures.rtDate} || ' ' || ${departures.rtTime}) - strftime('%s', ${departures.date} || ' ' || ${departures.time})) / 60.0 END)`;
 const rtCountSql = sql<number>`SUM(CASE WHEN ${departures.cancelled} = 0 AND ${departures.rtTime} IS NOT NULL THEN 1 ELSE 0 END)`;
 
 interface DirRow {
@@ -293,7 +295,9 @@ export async function getDayDepartures(
 ): Promise<DepartureRow[]> {
 	return db
 		.select({
+			date: departures.date,
 			time: departures.time,
+			rt_date: departures.rtDate,
 			rt_time: departures.rtTime,
 			line: departures.line,
 			direction: departures.direction,
@@ -479,8 +483,10 @@ export function dayAvgDelay(departureRows: DepartureRow[]): number | null {
 			if (d.cancelled && freq !== null) {
 				totalDelay += freq;
 				delayCount++;
-			} else if (!d.cancelled && d.rt_time) {
-				totalDelay += timeToMinutes(d.rt_time) - timeToMinutes(d.time);
+			} else if (!d.cancelled && d.rt_time && d.rt_date) {
+				const scheduled = new Date(`${d.date}T${d.time}`).getTime();
+				const actual = new Date(`${d.rt_date}T${d.rt_time}`).getTime();
+				totalDelay += (actual - scheduled) / 60000;
 				delayCount++;
 			}
 		}

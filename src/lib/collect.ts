@@ -148,7 +148,7 @@ async function materializeStationStats(db: Db, date: string): Promise<void> {
 			cancelled: sql<number>`SUM(${departures.cancelled})`.as("cancelled"),
 			avgDelay: sql<
 				number | null
-			>`AVG(CASE WHEN ${departures.cancelled} = 0 AND ${departures.rtTime} IS NOT NULL AND ABS((strftime('%s', ${departures.rtTime}) - strftime('%s', ${departures.time})) / 60.0) <= 30 THEN (strftime('%s', ${departures.rtTime}) - strftime('%s', ${departures.time})) / 60.0 END)`.as(
+			>`AVG(CASE WHEN ${departures.cancelled} = 0 AND ${departures.rtTime} IS NOT NULL THEN (strftime('%s', ${departures.rtDate} || ' ' || ${departures.rtTime}) - strftime('%s', ${departures.date} || ' ' || ${departures.time})) / 60.0 END)`.as(
 				"avg_delay",
 			),
 			rtCount:
@@ -248,7 +248,7 @@ async function materializeOperatorStats(db: Db, date: string): Promise<void> {
 			cancelled: sql<number>`SUM(${departures.cancelled})`.as("cancelled"),
 			avgDelay: sql<
 				number | null
-			>`AVG(CASE WHEN ${departures.cancelled} = 0 AND ${departures.rtTime} IS NOT NULL AND ABS((strftime('%s', ${departures.rtTime}) - strftime('%s', ${departures.time})) / 60.0) <= 30 THEN (strftime('%s', ${departures.rtTime}) - strftime('%s', ${departures.time})) / 60.0 END)`.as(
+			>`AVG(CASE WHEN ${departures.cancelled} = 0 AND ${departures.rtTime} IS NOT NULL THEN (strftime('%s', ${departures.rtDate} || ' ' || ${departures.rtTime}) - strftime('%s', ${departures.date} || ' ' || ${departures.time})) / 60.0 END)`.as(
 				"avg_delay",
 			),
 		})
