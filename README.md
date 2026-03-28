@@ -35,7 +35,7 @@ npm run db:migrate:local
 
 All tracked stations are defined in `src/lib/stations.ts`. To add a new one:
 
-1. **Find the station ID** on the [RMV departure board](https://www.rmv.de/). Search for your stop, open the departure board, and extract the `id` parameter from the URL (e.g. `3001586`).
+1. **Find the station ID** — query the RMV HAFAS location search API or find it on the [RMV departure board](https://www.rmv.de/).
 
 2. **Add an entry** to the `STATIONS` array in `src/lib/stations.ts`:
 
@@ -64,21 +64,25 @@ All tracked stations are defined in `src/lib/stations.ts`. To add a new one:
 
 ## Methodology
 
-Every 5 minutes, the cron fetches the RMV HAFAS realtime feed for each tracked station and stores all departures. From this data:
+Every 5 minutes, the cron fetches the RMV HAFAS realtime feed for each tracked station and stores all departures including disruption messages/notes. From this data:
 
 - **Cancellation rate** = cancelled departures / total departures
-- **Average delay** = mean of (actual departure time - scheduled time) across all departures with realtime data. For cancelled departures, the planned frequency is used as the assumed wait time. The delay calculation uses full datetime comparison to correctly handle cross-midnight departures.
+- **Delayed departures** = departures with delay ≥7.5 minutes (50% of assumed average 15-minute trip time within Frankfurt)
+- **Average delay** = mean of (actual departure time - scheduled time) across all departures with realtime data. For cancelled departures, the planned frequency is used as the assumed wait time. Uses full datetime comparison to correctly handle cross-midnight departures.
+- **Reliability score** (0–100) = 100 - cancellation rate × 4 - delayed departure rate × 2
+- **Trend arrows** compare this week's cancellation rate vs the previous week
 
 ## How it works
 
 - A Cloudflare cron trigger (`*/5 * * * *`) calls the `scheduled` handler in `src/worker.ts`
-- The handler fetches departures from the RMV HAFAS API for each station and upserts them into D1
+- The handler fetches departures from the RMV HAFAS API for each station sequentially and upserts them into D1
 - After collection, daily statistics are materialized into `station_daily_stats` and `operator_daily_stats` tables for fast page loads
-- It also generates one haiku per station per day using Cloudflare Workers AI
-- Astro SSR pages read from materialized stats tables
+- It also generates one haiku per day using Cloudflare Workers AI
+- Astro SSR pages read from materialized stats tables with edge caching (`s-maxage=300, stale-while-revalidate=300`)
 - The "next departures" section loads as a server island for instant page shells
-- Edge caching (`s-maxage=300`) matches the cron interval
+- Client-side navigation via Astro View Transitions for smooth page transitions
 - Routes are prefixed with `/de/` or `/en/` — auto-detected from `Accept-Language`
 - Light/dark theme follows system preference via CSS `light-dark()`
-- Per-operator stats pages show cancellation rates and average delays
+- Installable as a PWA via web app manifest
+- Per-station, per-operator, and per-line detail pages with daily breakdowns, weekday patterns, and cancellation charts
 - A JSON API is available at `/{lang}/{station}/api/stats` for each station
