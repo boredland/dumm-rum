@@ -41,9 +41,9 @@ const [stationStats, operators, lines] = await Promise.all([
 
 	<HoursToggle basePath={`/${lang}`} coreOnly={coreOnly} daysFilter={daysFilter} lang={lang} />
 
-	<details class="mb-8" open>
+	<details class="group mb-8" open>
 		<summary class="text-xs uppercase tracking-wide text-muted font-semibold mb-3 cursor-pointer select-none list-none flex items-center gap-1.5">
-			<svg class="w-3 h-3 transition-transform [[open]>&]:rotate-90" viewBox="0 0 12 12" fill="currentColor">
+			<svg class="w-3 h-3 transition-transform group-open:rotate-90" viewBox="0 0 12 12" fill="currentColor">
 				<path d="M4.5 2l5 4-5 4V2z" />
 			</svg>
 			{t(lang, "home.stations")}
@@ -79,9 +79,9 @@ const [stationStats, operators, lines] = await Promise.all([
 	</div>
 	</details>
 
-	<details class="mb-8">
+	<details class="group mb-8">
 		<summary class="text-xs uppercase tracking-wide text-muted font-semibold mb-3 cursor-pointer select-none list-none flex items-center gap-1.5">
-			<svg class="w-3 h-3 transition-transform [[open]>&]:rotate-90" viewBox="0 0 12 12" fill="currentColor">
+			<svg class="w-3 h-3 transition-transform group-open:rotate-90" viewBox="0 0 12 12" fill="currentColor">
 				<path d="M4.5 2l5 4-5 4V2z" />
 			</svg>
 			{t(lang, "home.operators")}
@@ -115,9 +115,9 @@ const [stationStats, operators, lines] = await Promise.all([
 		</div>
 	</details>
 
-	<details class="mb-8">
+	<details class="group mb-8">
 		<summary class="text-xs uppercase tracking-wide text-muted font-semibold mb-3 cursor-pointer select-none list-none flex items-center gap-1.5">
-			<svg class="w-3 h-3 transition-transform [[open]>&]:rotate-90" viewBox="0 0 12 12" fill="currentColor">
+			<svg class="w-3 h-3 transition-transform group-open:rotate-90" viewBox="0 0 12 12" fill="currentColor">
 				<path d="M4.5 2l5 4-5 4V2z" />
 			</svg>
 			{t(lang, "home.lines")}
