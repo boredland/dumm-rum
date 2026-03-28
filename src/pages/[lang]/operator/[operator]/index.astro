@@ -58,7 +58,7 @@ const overallDelay =
 		</div>
 		<div class="bg-surface border border-border rounded-xl p-5">
 			<div class="text-[0.7rem] uppercase tracking-wide text-muted mb-1">
-				{t(lang, "table.cancelled")}
+				{t(lang, "stat.avg_per_day")}
 			</div>
 			<div
 				class:list={[
@@ -66,10 +66,10 @@ const overallDelay =
 					totalCancelled > 0 ? "text-danger" : "text-success",
 				]}
 			>
-				{totalCancelled}
+				{days.length > 0 ? (totalCancelled / days.length).toFixed(1) : "0"}
 			</div>
 			<div class="text-sm text-muted mt-1">
-				{pct(totalCancelled, totalDepartures)}% {t(lang, "stat.rate")}
+				{t(lang, "stat.cancelled")} ({pct(totalCancelled, totalDepartures)}% {t(lang, "stat.rate")})
 			</div>
 		</div>
 		<div class="bg-surface border border-border rounded-xl p-5">

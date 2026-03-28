@@ -56,18 +56,18 @@ const overallDelay =
 			<div class="text-4xl font-bold tabular-nums">{totalDepartures}</div>
 		</div>
 		<div class="bg-surface border border-border rounded-xl p-5">
-			<div class="text-[0.7rem] uppercase tracking-wide text-muted mb-1">{t(lang, "table.cancelled")}</div>
+			<div class="text-[0.7rem] uppercase tracking-wide text-muted mb-1">{t(lang, "stat.avg_per_day")}</div>
 			<div class:list={["text-4xl font-bold tabular-nums", totalCancelled > 0 ? "text-danger" : "text-success"]}>
-				{totalCancelled}
+				{days.length > 0 ? (totalCancelled / days.length).toFixed(1) : "0"}
 			</div>
-			<div class="text-sm text-muted mt-1">{pct(totalCancelled, totalDepartures)}% {t(lang, "stat.rate")}</div>
+			<div class="text-sm text-muted mt-1">{t(lang, "stat.cancelled")} ({pct(totalCancelled, totalDepartures)}% {t(lang, "stat.rate")})</div>
 		</div>
 		<div class="bg-surface border border-border rounded-xl p-5">
-			<div class="text-[0.7rem] uppercase tracking-wide text-muted mb-1">{t(lang, "table.delayed")}</div>
+			<div class="text-[0.7rem] uppercase tracking-wide text-muted mb-1">{t(lang, "table.delayed")} {t(lang, "stat.avg_per_day").toLowerCase()}</div>
 			<div class:list={["text-4xl font-bold tabular-nums", totalDelayed > 0 ? "text-warning" : "text-success"]}>
-				{totalDelayed}
+				{days.length > 0 ? (totalDelayed / days.length).toFixed(1) : "0"}
 			</div>
-			<div class="text-sm text-muted mt-1">{pct(totalDelayed, totalDepartures)}%</div>
+			<div class="text-sm text-muted mt-1">{pct(totalDelayed, totalDepartures)}% {t(lang, "stat.rate")}</div>
 		</div>
 		<div class="bg-surface border border-border rounded-xl p-5">
 			<div class="text-[0.7rem] uppercase tracking-wide text-muted mb-1">{t(lang, "stat.avg_delay")}</div>
