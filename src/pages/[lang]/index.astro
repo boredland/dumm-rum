@@ -78,14 +78,14 @@ const [
 			[...STATIONS].sort((a, b) => {
 				const ra = stationStats.get(a.id);
 				const rb = stationStats.get(b.id);
-				const scoreA = ra ? reliabilityScore(ra.cancelled, ra.delayed, ra.total, ra.avgDelay) : 100;
-				const scoreB = rb ? reliabilityScore(rb.cancelled, rb.delayed, rb.total, rb.avgDelay) : 100;
+				const scoreA = ra ? reliabilityScore(ra.cancelled, ra.delayed, ra.total) : 100;
+				const scoreB = rb ? reliabilityScore(rb.cancelled, rb.delayed, rb.total) : 100;
 				return scoreA - scoreB;
 			}).map((s) => {
 				const st = stationStats.get(s.id);
 				const tr = stationTrends.get(s.id);
 				const arrow = tr ? trendArrow(tr, { cancelled: tr.prevCancelled, total: tr.prevTotal }) : "";
-				const score = st ? reliabilityScore(st.cancelled, st.delayed, st.total, st.avgDelay) : 100;
+				const score = st ? reliabilityScore(st.cancelled, st.delayed, st.total) : 100;
 				const borderColor = scoreBorderColor(score);
 				return (
 					<a
@@ -107,7 +107,7 @@ const [
 									{pct(st.cancelled, st.total)}% {t(lang, "home.cancelled")} &middot; {pct(st.delayed, st.total)}% {t(lang, "home.delayed")}
 								</div>
 								<div class="text-xs text-muted mt-1">
-									{t(lang, "stat.reliability")}: {reliabilityScore(st.cancelled, st.delayed, st.total, st.avgDelay)}/100
+									{t(lang, "stat.reliability")}: {reliabilityScore(st.cancelled, st.delayed, st.total)}/100
 									{arrow && <span class={trendColor(arrow)}> {arrow}</span>}
 								</div>
 							</>
@@ -126,13 +126,13 @@ const [
 		<div class="grid grid-cols-[repeat(auto-fit,minmax(220px,1fr))] gap-4 max-sm:grid-cols-1 mt-3">
 			{
 				[...operators].sort((a, b) => {
-					const scoreA = reliabilityScore(a.cancelled, a.delayed, a.total, a.avgDelay);
-					const scoreB = reliabilityScore(b.cancelled, b.delayed, b.total, b.avgDelay);
+					const scoreA = reliabilityScore(a.cancelled, a.delayed, a.total);
+					const scoreB = reliabilityScore(b.cancelled, b.delayed, b.total);
 					return scoreA - scoreB;
 				}).map((op) => {
 					const tr = operatorTrends.get(op.operator);
 					const arrow = tr ? trendArrow(tr, { cancelled: tr.prevCancelled, total: tr.prevTotal }) : "";
-					const borderColor = scoreBorderColor(reliabilityScore(op.cancelled, op.delayed, op.total, op.avgDelay));
+					const borderColor = scoreBorderColor(reliabilityScore(op.cancelled, op.delayed, op.total));
 					return (
 						<a
 							href={`/${lang}/operator/${encodeURIComponent(op.operator)}${Astro.url.search}`}
@@ -155,7 +155,7 @@ const [
 							</div>
 							{op.total > 0 && (
 								<div class="text-xs text-muted mt-1">
-									{t(lang, "stat.reliability")}: {reliabilityScore(op.cancelled, op.delayed, op.total, op.avgDelay)}/100
+									{t(lang, "stat.reliability")}: {reliabilityScore(op.cancelled, op.delayed, op.total)}/100
 									{arrow && <span class={trendColor(arrow)}> {arrow}</span>}
 								</div>
 							)}
@@ -173,13 +173,13 @@ const [
 		<div class="grid grid-cols-[repeat(auto-fit,minmax(140px,1fr))] gap-3 max-sm:grid-cols-2 mt-3">
 			{
 				[...lines].sort((a, b) => {
-					const scoreA = reliabilityScore(a.cancelled, a.delayed, a.total, a.avgDelay);
-					const scoreB = reliabilityScore(b.cancelled, b.delayed, b.total, b.avgDelay);
+					const scoreA = reliabilityScore(a.cancelled, a.delayed, a.total);
+					const scoreB = reliabilityScore(b.cancelled, b.delayed, b.total);
 					return scoreA - scoreB;
 				}).map((l) => {
 					const tr = lineTrends.get(l.line);
 					const arrow = tr ? trendArrow(tr, { cancelled: tr.prevCancelled, total: tr.prevTotal }) : "";
-					const borderColor = scoreBorderColor(reliabilityScore(l.cancelled, l.delayed, l.total, l.avgDelay));
+					const borderColor = scoreBorderColor(reliabilityScore(l.cancelled, l.delayed, l.total));
 					return (
 						<a
 							href={`/${lang}/line/${encodeURIComponent(l.line)}${Astro.url.search}`}
@@ -195,7 +195,7 @@ const [
 							</div>
 							{l.total > 0 && (
 								<div class="text-xs text-muted mt-1">
-									{t(lang, "stat.reliability")}: {reliabilityScore(l.cancelled, l.delayed, l.total, l.avgDelay)}/100
+									{t(lang, "stat.reliability")}: {reliabilityScore(l.cancelled, l.delayed, l.total)}/100
 									{arrow && <span class={trendColor(arrow)}> {arrow}</span>}
 								</div>
 							)}

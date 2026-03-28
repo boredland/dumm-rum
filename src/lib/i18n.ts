@@ -15,7 +15,7 @@ const translations = {
 		"home.methodology_delayed":
 			"Als verspätet gilt eine Abfahrt, wenn die Verspätung \u226550% des geplanten Takts oder \u22657,5 Minuten beträgt (50% der angenommenen durchschnittlichen Fahrtzeit von 15 Minuten innerhalb Frankfurts).",
 		"home.methodology_reliability":
-			"Die Zuverlässigkeit (0\u2013100) kombiniert: Ausfallquote (Gewicht \u00d74), Verspätungsquote (Gewicht \u00d72) und durchschnittliche Verspätung (Gewicht \u00d72,5, gedeckelt). 100 = perfekter Betrieb.",
+			"Die Zuverlässigkeit (0\u2013100) kombiniert: Ausfallquote (Gewicht \u00d74) und Verspätungsquote (Gewicht \u00d72). 100 = perfekter Betrieb.",
 		"home.methodology_colors":
 			"Farben: grün ab 94 Punkten, orange 86\u201393, rot unter 86.",
 		"home.stations": "Haltestellen",
@@ -98,7 +98,7 @@ const translations = {
 		"home.methodology_delayed":
 			"A departure counts as delayed if the delay is \u226550% of the planned frequency or \u22657.5 minutes (50% of the assumed average 15-minute trip time within Frankfurt).",
 		"home.methodology_reliability":
-			"The reliability score (0\u2013100) combines: cancellation rate (weight \u00d74), delayed departure rate (weight \u00d72), and average delay penalty (weight \u00d72.5, capped). 100 = perfect service.",
+			"The reliability score (0\u2013100) combines: cancellation rate (weight \u00d74) and delayed departure rate (weight \u00d72). 100 = perfect service.",
 		"home.methodology_colors":
 			"Colors: green from 94 points, orange 86\u201393, red below 86.",
 		"home.stations": "Stations",

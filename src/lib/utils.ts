@@ -65,18 +65,13 @@ export function reliabilityScore(
 	cancelled: number,
 	delayed: number,
 	total: number,
-	avgDelay: number | null,
 ): number {
 	if (total === 0) return 100;
 	const cancelRate = (cancelled / total) * 100;
 	const delayedRate = (delayed / total) * 100;
-	const delayPenalty = Math.min((avgDelay ?? 0) / 10, 10);
 	return Math.max(
 		0,
-		Math.min(
-			100,
-			Math.round(100 - cancelRate * 4 - delayedRate * 2 - delayPenalty * 2.5),
-		),
+		Math.min(100, Math.round(100 - cancelRate * 4 - delayedRate * 2)),
 	);
 }
 
