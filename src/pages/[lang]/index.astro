@@ -6,21 +6,42 @@ import Layout from "../../layouts/Layout.astro";
 import { langFromParams, t } from "../../lib/i18n";
 import {
 	getLineSummaries,
+	getLineTrends,
 	getOperatorSummaries,
+	getOperatorTrends,
 	getStationSummaries,
+	getStationTrends,
 	parseFilter,
 } from "../../lib/queries";
 import { categoryIcons, STATIONS } from "../../lib/stations";
-import { fmtDelay, pct, rateBorderColor, shortDir } from "../../lib/utils";
+import {
+	fmtDelay,
+	pct,
+	rateBorderColor,
+	reliabilityScore,
+	shortDir,
+	trendArrow,
+	trendColor,
+} from "../../lib/utils";
 
 const db = createDb(env.DB);
 const lang = langFromParams(Astro.params);
 const filter = parseFilter(Astro.url);
 const { coreOnly, days: daysFilter } = filter;
-const [stationStats, operators, lines] = await Promise.all([
+const [
+	stationStats,
+	operators,
+	lines,
+	stationTrends,
+	operatorTrends,
+	lineTrends,
+] = await Promise.all([
 	getStationSummaries(db, STATIONS, filter),
 	getOperatorSummaries(db, filter),
 	getLineSummaries(db, filter),
+	getStationTrends(db),
+	getOperatorTrends(db),
+	getLineTrends(db),
 ]);
 ---
 
@@ -56,11 +77,13 @@ const [stationStats, operators, lines] = await Promise.all([
 			[...STATIONS].sort((a, b) => {
 				const ra = stationStats.get(a.id);
 				const rb = stationStats.get(b.id);
-				const scoreA = ra && ra.total > 0 ? (ra.cancelled + ra.delayed) / ra.total : 0;
-				const scoreB = rb && rb.total > 0 ? (rb.cancelled + rb.delayed) / rb.total : 0;
-				return scoreB - scoreA;
+				const scoreA = ra ? reliabilityScore(ra.cancelled, ra.delayed, ra.total, ra.avgDelay) : 100;
+				const scoreB = rb ? reliabilityScore(rb.cancelled, rb.delayed, rb.total, rb.avgDelay) : 100;
+				return scoreA - scoreB;
 			}).map((s) => {
 				const st = stationStats.get(s.id);
+				const tr = stationTrends.get(s.id);
+				const arrow = tr ? trendArrow(tr, { cancelled: tr.prevCancelled, total: tr.prevTotal }) : "";
 				const borderColor = rateBorderColor(st?.cancelled ?? 0, st?.total ?? 0);
 				return (
 					<a
@@ -76,10 +99,16 @@ const [stationStats, operators, lines] = await Promise.all([
 						<div class="text-lg font-bold text-emphasis">
 							{shortDir(s.name)}
 						</div>
-						{st && (
-							<div class="text-sm text-muted mt-1">
-								{pct(st.cancelled, st.total)}% {t(lang, "home.cancelled")} &middot; {pct(st.delayed, st.total)}% {t(lang, "home.delayed")}
-							</div>
+						{st && st.total > 0 && (
+							<>
+								<div class="text-sm text-muted mt-1">
+									{pct(st.cancelled, st.total)}% {t(lang, "home.cancelled")} &middot; {pct(st.delayed, st.total)}% {t(lang, "home.delayed")}
+								</div>
+								<div class="text-xs text-muted mt-1">
+									{t(lang, "stat.reliability")}: {reliabilityScore(st.cancelled, st.delayed, st.total, st.avgDelay)}/100
+									{arrow && <span class={trendColor(arrow)}> {arrow}</span>}
+								</div>
+							</>
 						)}
 					</a>
 				);
@@ -95,10 +124,12 @@ const [stationStats, operators, lines] = await Promise.all([
 		<div class="grid grid-cols-[repeat(auto-fit,minmax(220px,1fr))] gap-4 max-sm:grid-cols-1 mt-3">
 			{
 				[...operators].sort((a, b) => {
-					const scoreA = a.total > 0 ? a.cancelled / a.total : 0;
-					const scoreB = b.total > 0 ? b.cancelled / b.total : 0;
-					return scoreB - scoreA;
+					const scoreA = reliabilityScore(a.cancelled, a.delayed, a.total, a.avgDelay);
+					const scoreB = reliabilityScore(b.cancelled, b.delayed, b.total, b.avgDelay);
+					return scoreA - scoreB;
 				}).map((op) => {
+					const tr = operatorTrends.get(op.operator);
+					const arrow = tr ? trendArrow(tr, { cancelled: tr.prevCancelled, total: tr.prevTotal }) : "";
 					const borderColor = rateBorderColor(op.cancelled, op.total);
 					return (
 						<a
@@ -115,9 +146,14 @@ const [stationStats, operators, lines] = await Promise.all([
 								{op.lines.join(", ")}
 							</div>
 							<div class="text-sm text-muted mt-1">
-								{pct(op.cancelled, op.total)}% {t(lang, "home.cancelled")}
-								{op.avgDelay !== null && <> &middot; {fmtDelay(op.avgDelay)}</>}
+								{pct(op.cancelled, op.total)}% {t(lang, "home.cancelled")} &middot; {pct(op.delayed, op.total)}% {t(lang, "home.delayed")}
 							</div>
+							{op.total > 0 && (
+								<div class="text-xs text-muted mt-1">
+									{t(lang, "stat.reliability")}: {reliabilityScore(op.cancelled, op.delayed, op.total, op.avgDelay)}/100
+									{arrow && <span class={trendColor(arrow)}> {arrow}</span>}
+								</div>
+							)}
 						</a>
 					);
 				})
@@ -132,10 +168,12 @@ const [stationStats, operators, lines] = await Promise.all([
 		<div class="grid grid-cols-[repeat(auto-fit,minmax(140px,1fr))] gap-3 max-sm:grid-cols-2 mt-3">
 			{
 				[...lines].sort((a, b) => {
-					const scoreA = a.total > 0 ? (a.cancelled + a.delayed) / a.total : 0;
-					const scoreB = b.total > 0 ? (b.cancelled + b.delayed) / b.total : 0;
-					return scoreB - scoreA;
+					const scoreA = reliabilityScore(a.cancelled, a.delayed, a.total, a.avgDelay);
+					const scoreB = reliabilityScore(b.cancelled, b.delayed, b.total, b.avgDelay);
+					return scoreA - scoreB;
 				}).map((l) => {
+					const tr = lineTrends.get(l.line);
+					const arrow = tr ? trendArrow(tr, { cancelled: tr.prevCancelled, total: tr.prevTotal }) : "";
 					const borderColor = rateBorderColor(l.cancelled, l.total);
 					return (
 						<a
@@ -148,11 +186,14 @@ const [stationStats, operators, lines] = await Promise.all([
 							<div class="text-lg font-bold text-emphasis">{l.line}</div>
 							<div class="text-xs text-muted">{l.category} &middot; {l.operators.join(", ")}</div>
 							<div class="text-sm text-muted mt-1">
-								{pct(l.cancelled, l.total)}% {t(lang, "home.cancelled")}
+								{pct(l.cancelled, l.total)}% {t(lang, "home.cancelled")} &middot; {pct(l.delayed, l.total)}% {t(lang, "home.delayed")}
 							</div>
-							<div class="text-sm text-muted">
-								{pct(l.delayed, l.total)}% {t(lang, "home.delayed")}
-							</div>
+							{l.total > 0 && (
+								<div class="text-xs text-muted mt-1">
+									{t(lang, "stat.reliability")}: {reliabilityScore(l.cancelled, l.delayed, l.total, l.avgDelay)}/100
+									{arrow && <span class={trendColor(arrow)}> {arrow}</span>}
+								</div>
+							)}
 						</a>
 					);
 				})

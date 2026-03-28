@@ -43,7 +43,7 @@ const translations = {
 
 		"stat.today": "Heute",
 		"stat.no_data": "noch keine Daten",
-		"stat.of_departures": "von {total} Abfahrten ({pct}%)",
+		"stat.of_departures": "von {total} Abfahrten ({pct}%) ausgefallen",
 		"stat.avg_per_day": "\u00d8 / Tag",
 		"stat.cancelled": "ausgefallen",
 		"stat.rate": "Quote",
@@ -52,8 +52,10 @@ const translations = {
 		"stat.departures": "Abfahrten",
 		"stat.avg_delay": "\u00d8 Versp\u00e4tung",
 		"stat.cancelled_eq_freq": "Ausfall = geplanter Takt",
+		"stat.reliability": "Zuverlässigkeit",
 		"stat.cancellation_rate": "Ausfallquote",
 
+		"section.weekday_pattern": "Wochentag-Muster",
 		"section.next_departures": "N\u00e4chste Abfahrten",
 		"section.cancellation_rate": "Ausfallquote",
 		"section.daily_breakdown": "Tages\u00fcbersicht",
@@ -122,7 +124,7 @@ const translations = {
 
 		"stat.today": "Today",
 		"stat.no_data": "no data yet",
-		"stat.of_departures": "of {total} departures ({pct}%)",
+		"stat.of_departures": "of {total} departures ({pct}%) cancelled",
 		"stat.avg_per_day": "Avg / day",
 		"stat.cancelled": "cancelled",
 		"stat.rate": "rate",
@@ -131,8 +133,10 @@ const translations = {
 		"stat.departures": "Departures",
 		"stat.avg_delay": "Avg delay",
 		"stat.cancelled_eq_freq": "cancelled = planned freq",
+		"stat.reliability": "Reliability",
 		"stat.cancellation_rate": "cancellation rate",
 
+		"section.weekday_pattern": "Day-of-week pattern",
 		"section.next_departures": "Next departures",
 		"section.cancellation_rate": "Cancellation rate",
 		"section.daily_breakdown": "Daily breakdown",

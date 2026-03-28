@@ -61,6 +61,43 @@ export function delayMinutes(
 	);
 }
 
+export function reliabilityScore(
+	cancelled: number,
+	delayed: number,
+	total: number,
+	avgDelay: number | null,
+): number {
+	if (total === 0) return 100;
+	const cancelRate = (cancelled / total) * 100;
+	const delayedRate = (delayed / total) * 100;
+	const delayPenalty = Math.min((avgDelay ?? 0) / 10, 10);
+	return Math.max(
+		0,
+		Math.min(
+			100,
+			Math.round(100 - cancelRate * 4 - delayedRate * 3.5 - delayPenalty * 2.5),
+		),
+	);
+}
+
+export function trendArrow(
+	current: { cancelled: number; total: number },
+	prev: { cancelled: number; total: number },
+): string {
+	if (prev.total === 0 || current.total === 0) return "";
+	const currentRate = current.cancelled / current.total;
+	const prevRate = prev.cancelled / prev.total;
+	const diff = currentRate - prevRate;
+	if (Math.abs(diff) < 0.005) return "";
+	return diff > 0 ? "\u2191" : "\u2193";
+}
+
+export function trendColor(arrow: string): string {
+	if (arrow === "\u2191") return "text-danger";
+	if (arrow === "\u2193") return "text-success";
+	return "";
+}
+
 export function rateBorderColor(cancelled: number, total: number): string {
 	const rate = total > 0 ? (cancelled / total) * 100 : 0;
 	return rate >= 2

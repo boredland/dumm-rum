@@ -1,0 +1,53 @@
+---
+import type { Lang } from "../lib/i18n";
+import { pct } from "../lib/utils";
+
+interface Props {
+	days: { date: string; cancelled: number; total: number }[];
+	lang: Lang;
+}
+
+const { days, lang } = Astro.props;
+
+const weekdayNames =
+	lang === "de"
+		? ["So", "Mo", "Di", "Mi", "Do", "Fr", "Sa"]
+		: ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+
+const buckets = Array.from({ length: 7 }, () => ({ cancelled: 0, total: 0 }));
+for (const d of days) {
+	const dow = new Date(`${d.date}T00:00:00`).getDay();
+	buckets[dow].cancelled += d.cancelled;
+	buckets[dow].total += d.total;
+}
+
+const maxRate = Math.max(
+	...buckets.map((b) => (b.total > 0 ? b.cancelled / b.total : 0)),
+	0.01,
+);
+const ordered = [1, 2, 3, 4, 5, 6, 0];
+---
+
+<div class="flex items-end gap-2 h-24 mb-8">
+	{ordered.map((dow) => {
+		const b = buckets[dow];
+		const rate = b.total > 0 ? b.cancelled / b.total : 0;
+		const height = Math.max((rate / maxRate) * 100, 2);
+		const rateStr = pct(b.cancelled, b.total);
+		return (
+			<div class="flex-1 flex flex-col items-center gap-1">
+				<div class="text-[0.6rem] text-muted tabular-nums">{rateStr}%</div>
+				<div class="w-full flex items-end" style="height:72px">
+					<div
+						class:list={[
+							"w-full rounded-t",
+							rate >= 0.02 ? "bg-danger" : rate >= 0.01 ? "bg-warning" : "bg-success",
+						]}
+						style={`height:${height}%`}
+					/>
+				</div>
+				<div class="text-[0.65rem] text-muted font-medium">{weekdayNames[dow]}</div>
+			</div>
+		);
+	})}
+</div>

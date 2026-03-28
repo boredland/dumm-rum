@@ -1,5 +1,15 @@
 import type { InferSelectModel } from "drizzle-orm";
-import { and, count, desc, eq, gte, isNotNull, sql, sum } from "drizzle-orm";
+import {
+	and,
+	count,
+	desc,
+	eq,
+	gte,
+	isNotNull,
+	lt,
+	sql,
+	sum,
+} from "drizzle-orm";
 import type { Db } from "../db/client";
 import {
 	departures,
@@ -146,6 +156,7 @@ export interface StationSummary {
 	cancelled: number;
 	delayed: number;
 	total: number;
+	avgDelay: number | null;
 	categories: string[];
 }
 
@@ -165,6 +176,7 @@ export async function getStationSummaries(
 						cancelled: sum(departures.cancelled).as("cancelled"),
 						delayed: sql<number>`0`.as("delayed"),
 						total: count().as("total"),
+						avgDelay: avgDelaySql.as("avg_delay"),
 					})
 					.from(departures)
 					.where(and(CORE_HOURS, depDaysCond))
@@ -175,6 +187,11 @@ export async function getStationSummaries(
 						cancelled: sum(stationDailyStats.cancelled).as("cancelled"),
 						delayed: sum(stationDailyStats.delayed).as("delayed"),
 						total: sum(stationDailyStats.total).as("total"),
+						avgDelay: sql<
+							number | null
+						>`SUM(${stationDailyStats.avgDelay} * ${stationDailyStats.total}) / NULLIF(SUM(CASE WHEN ${stationDailyStats.avgDelay} IS NOT NULL THEN ${stationDailyStats.total} END), 0)`.as(
+							"avg_delay",
+						),
 					})
 					.from(stationDailyStats)
 					.where(statsDaysCond)
@@ -195,6 +212,7 @@ export async function getStationSummaries(
 				cancelled: Number(r.cancelled ?? 0),
 				delayed: Number(r.delayed ?? 0),
 				total: Number(r.total ?? 0),
+				avgDelay: r.avgDelay,
 			},
 		]),
 	);
@@ -213,6 +231,7 @@ export async function getStationSummaries(
 				cancelled: statsMap.get(s.id)?.cancelled ?? 0,
 				delayed: statsMap.get(s.id)?.delayed ?? 0,
 				total: statsMap.get(s.id)?.total ?? 0,
+				avgDelay: statsMap.get(s.id)?.avgDelay ?? null,
 				categories: catMap.get(s.id) ?? [],
 			},
 		]),
@@ -286,6 +305,7 @@ export interface OperatorSummary {
 	lines: string[];
 	total: number;
 	cancelled: number;
+	delayed: number;
 	avgDelay: number | null;
 }
 
@@ -305,6 +325,7 @@ export async function getOperatorSummaries(
 						cancelled: sql<number>`SUM(${departures.cancelled})`.as(
 							"cancelled",
 						),
+						delayed: delayedSql.as("delayed"),
 						avgDelay: avgDelaySql.as("avg_delay"),
 					})
 					.from(departures)
@@ -315,6 +336,7 @@ export async function getOperatorSummaries(
 						operator: operatorDailyStats.operator,
 						total: sum(operatorDailyStats.total).as("total"),
 						cancelled: sum(operatorDailyStats.cancelled).as("cancelled"),
+						delayed: sum(operatorDailyStats.delayed).as("delayed"),
 						avgDelay: sql<
 							number | null
 						>`SUM(${operatorDailyStats.avgDelay} * ${operatorDailyStats.total}) / NULLIF(SUM(CASE WHEN ${operatorDailyStats.avgDelay} IS NOT NULL THEN ${operatorDailyStats.total} END), 0)`.as(
@@ -346,6 +368,7 @@ export async function getOperatorSummaries(
 		lines: lineMap.get(r.operator!) ?? [],
 		total: Number(r.total ?? 0),
 		cancelled: Number(r.cancelled ?? 0),
+		delayed: Number(r.delayed ?? 0),
 		avgDelay: r.avgDelay,
 	}));
 }
@@ -357,6 +380,7 @@ export interface LineSummary {
 	total: number;
 	cancelled: number;
 	delayed: number;
+	avgDelay: number | null;
 }
 
 export async function getLineSummaries(
@@ -378,6 +402,7 @@ export async function getLineSummaries(
 			total: count().as("total"),
 			cancelled: sql<number>`SUM(${departures.cancelled})`.as("cancelled"),
 			delayed: delayedSql.as("delayed"),
+			avgDelay: avgDelaySql.as("avg_delay"),
 		})
 		.from(departures)
 		.where(and(...conditions))
@@ -391,6 +416,7 @@ export async function getLineSummaries(
 		total: r.total,
 		cancelled: r.cancelled,
 		delayed: r.delayed,
+		avgDelay: r.avgDelay,
 	}));
 }
 
@@ -532,6 +558,169 @@ export async function getOperatorDayDepartures(
 		.from(departures)
 		.where(and(eq(departures.operator, operator), eq(departures.date, date)))
 		.orderBy(departures.time, departures.line, departures.direction);
+}
+
+export interface TrendData {
+	cancelled: number;
+	delayed: number;
+	total: number;
+	avgDelay: number | null;
+	prevCancelled: number;
+	prevDelayed: number;
+	prevTotal: number;
+	prevAvgDelay: number | null;
+}
+
+export async function getStationTrends(
+	db: Db,
+): Promise<Map<string, TrendData>> {
+	const today = todayBerlin();
+	const rows = await db
+		.select({
+			stationId: stationDailyStats.stationId,
+			cancelled: sum(stationDailyStats.cancelled).as("cancelled"),
+			delayed: sum(stationDailyStats.delayed).as("delayed"),
+			total: sum(stationDailyStats.total).as("total"),
+			avgDelay: sql<
+				number | null
+			>`SUM(${stationDailyStats.avgDelay} * ${stationDailyStats.total}) / NULLIF(SUM(CASE WHEN ${stationDailyStats.avgDelay} IS NOT NULL THEN ${stationDailyStats.total} END), 0)`.as(
+				"avg_delay",
+			),
+			week: sql<number>`CASE WHEN ${stationDailyStats.date} >= date(${today}, '-6 days') THEN 1 ELSE 0 END`.as(
+				"week",
+			),
+		})
+		.from(stationDailyStats)
+		.where(gte(stationDailyStats.date, sql`date(${today}, '-13 days')`))
+		.groupBy(stationDailyStats.stationId, sql`week`);
+
+	const map = new Map<string, TrendData>();
+	for (const r of rows) {
+		const entry = map.get(r.stationId) ?? {
+			cancelled: 0,
+			delayed: 0,
+			total: 0,
+			avgDelay: null,
+			prevCancelled: 0,
+			prevDelayed: 0,
+			prevTotal: 0,
+			prevAvgDelay: null,
+		};
+		if (r.week === 1) {
+			entry.cancelled = Number(r.cancelled ?? 0);
+			entry.delayed = Number(r.delayed ?? 0);
+			entry.total = Number(r.total ?? 0);
+			entry.avgDelay = r.avgDelay;
+		} else {
+			entry.prevCancelled = Number(r.cancelled ?? 0);
+			entry.prevDelayed = Number(r.delayed ?? 0);
+			entry.prevTotal = Number(r.total ?? 0);
+			entry.prevAvgDelay = r.avgDelay;
+		}
+		map.set(r.stationId, entry);
+	}
+	return map;
+}
+
+export async function getOperatorTrends(
+	db: Db,
+): Promise<Map<string, TrendData>> {
+	const today = todayBerlin();
+	const rows = await db
+		.select({
+			operator: operatorDailyStats.operator,
+			cancelled: sum(operatorDailyStats.cancelled).as("cancelled"),
+			delayed: sum(operatorDailyStats.delayed).as("delayed"),
+			total: sum(operatorDailyStats.total).as("total"),
+			avgDelay: sql<
+				number | null
+			>`SUM(${operatorDailyStats.avgDelay} * ${operatorDailyStats.total}) / NULLIF(SUM(CASE WHEN ${operatorDailyStats.avgDelay} IS NOT NULL THEN ${operatorDailyStats.total} END), 0)`.as(
+				"avg_delay",
+			),
+			week: sql<number>`CASE WHEN ${operatorDailyStats.date} >= date(${today}, '-6 days') THEN 1 ELSE 0 END`.as(
+				"week",
+			),
+		})
+		.from(operatorDailyStats)
+		.where(gte(operatorDailyStats.date, sql`date(${today}, '-13 days')`))
+		.groupBy(operatorDailyStats.operator, sql`week`);
+
+	const map = new Map<string, TrendData>();
+	for (const r of rows) {
+		const entry = map.get(r.operator) ?? {
+			cancelled: 0,
+			delayed: 0,
+			total: 0,
+			avgDelay: null,
+			prevCancelled: 0,
+			prevDelayed: 0,
+			prevTotal: 0,
+			prevAvgDelay: null,
+		};
+		if (r.week === 1) {
+			entry.cancelled = Number(r.cancelled ?? 0);
+			entry.delayed = Number(r.delayed ?? 0);
+			entry.total = Number(r.total ?? 0);
+			entry.avgDelay = r.avgDelay;
+		} else {
+			entry.prevCancelled = Number(r.cancelled ?? 0);
+			entry.prevDelayed = Number(r.delayed ?? 0);
+			entry.prevTotal = Number(r.total ?? 0);
+			entry.prevAvgDelay = r.avgDelay;
+		}
+		map.set(r.operator, entry);
+	}
+	return map;
+}
+
+export async function getLineTrends(db: Db): Promise<Map<string, TrendData>> {
+	const today = todayBerlin();
+	const rows = await db
+		.select({
+			line: departures.line,
+			cancelled: sql<number>`SUM(${departures.cancelled})`.as("cancelled"),
+			delayed: delayedSql.as("delayed"),
+			total: count().as("total"),
+			avgDelay: avgDelaySql.as("avg_delay"),
+			week: sql<number>`CASE WHEN ${departures.date} >= date(${today}, '-6 days') THEN 1 ELSE 0 END`.as(
+				"week",
+			),
+		})
+		.from(departures)
+		.where(
+			and(
+				isNotNull(departures.operator),
+				gte(departures.date, sql`date(${today}, '-13 days')`),
+			),
+		)
+		.groupBy(departures.line, sql`week`);
+
+	const map = new Map<string, TrendData>();
+	for (const r of rows) {
+		const entry = map.get(r.line) ?? {
+			cancelled: 0,
+			delayed: 0,
+			total: 0,
+			avgDelay: null,
+			prevCancelled: 0,
+			prevDelayed: 0,
+			prevTotal: 0,
+			prevAvgDelay: null,
+		};
+		if (r.week === 1) {
+			entry.cancelled = r.cancelled;
+			entry.delayed = r.delayed;
+			entry.total = r.total;
+			entry.avgDelay = r.avgDelay;
+		} else {
+			entry.prevCancelled = r.cancelled;
+			entry.prevDelayed = r.delayed;
+			entry.prevTotal = r.total;
+			entry.prevAvgDelay = r.avgDelay;
+		}
+		map.set(r.line, entry);
+	}
+	return map;
 }
 
 const DELAY_THRESHOLD_MIN = 7.5;

@@ -6,9 +6,19 @@ import { t } from "../lib/i18n";
 interface Props {
 	title: string;
 	lang: Lang;
+	description?: string;
 }
 
-const { title, lang } = Astro.props;
+const { title, lang, description } = Astro.props;
+const desc =
+	description ??
+	(lang === "de"
+		? "Ausfall- & Verspätungstracker für den Frankfurter ÖPNV"
+		: "Cancellation & delay tracker for Frankfurt public transport");
+const canonicalUrl = new URL(
+	Astro.url.pathname,
+	Astro.site ?? "https://dummrum.jonas-strassel.de",
+);
 const otherLang = lang === "de" ? "en" : "de";
 const otherPath = Astro.url.pathname.replace(`/${lang}`, `/${otherLang}`);
 ---
@@ -20,6 +30,18 @@ const otherPath = Astro.url.pathname.replace(`/${lang}`, `/${otherLang}`);
 		<meta name="viewport" content="width=device-width, initial-scale=1" />
 		<meta http-equiv="refresh" content="300" />
 		<title>{title}</title>
+		<meta name="description" content={desc} />
+		<meta property="og:title" content={title} />
+		<meta property="og:description" content={desc} />
+		<meta property="og:type" content="website" />
+		<meta property="og:url" content={canonicalUrl.href} />
+		<meta property="og:locale" content={lang === "de" ? "de_DE" : "en_US"} />
+		<meta name="twitter:card" content="summary" />
+		<meta name="twitter:title" content={title} />
+		<meta name="twitter:description" content={desc} />
+		<link rel="canonical" href={canonicalUrl.href} />
+		<link rel="manifest" href="/manifest.json" />
+		<meta name="theme-color" content="#0f1117" />
 		<ClientRouter />
 		<link
 			rel="icon"

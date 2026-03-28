@@ -10,7 +10,7 @@ export const onRequest = defineMiddleware(async (_context, next) => {
 	) {
 		response.headers.set(
 			"Cache-Control",
-			"public, s-maxage=300, stale-while-revalidate=60",
+			"public, s-maxage=300, stale-while-revalidate=300",
 		);
 	}
 

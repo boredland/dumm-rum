@@ -2,6 +2,7 @@
 import { env } from "cloudflare:workers";
 import CancellationChart from "../../../../components/CancellationChart.astro";
 import HoursToggle from "../../../../components/HoursToggle.astro";
+import WeekdayChart from "../../../../components/WeekdayChart.astro";
 import { createDb } from "../../../../db/client";
 import Layout from "../../../../layouts/Layout.astro";
 import { langFromParams, t } from "../../../../lib/i18n";
@@ -73,6 +74,9 @@ const overallDelay =
 			<div class="text-2xl font-bold tabular-nums">{fmtDelay(overallDelay)}</div>
 		</div>
 	</div>
+
+	<p class="text-xs uppercase tracking-wide text-muted font-semibold mb-3">{t(lang, "section.weekday_pattern")}</p>
+	<WeekdayChart days={days} lang={lang} />
 
 	<p class="text-xs uppercase tracking-wide text-muted font-semibold mb-3">{t(lang, "section.cancellation_rate")}</p>
 	<CancellationChart days={days} />
