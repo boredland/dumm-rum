@@ -1,3 +1,4 @@
+import type { InferSelectModel } from "drizzle-orm";
 import { and, count, desc, eq, gte, isNotNull, sql, sum } from "drizzle-orm";
 import type { Db } from "../db/client";
 import {
@@ -11,36 +12,7 @@ import { nowBerlin, timeToMinutes, todayBerlin } from "./utils";
 
 const CORE_HOURS = sql`((${departures.time} >= '06:00:00' AND ${departures.time} < '09:00:00') OR (${departures.time} >= '16:00:00' AND ${departures.time} < '19:00:00'))`;
 
-function _coreFilter(coreOnly: boolean) {
-	return coreOnly ? CORE_HOURS : undefined;
-}
-
-export interface DayStats {
-	date: string;
-	total: number;
-	cancelled: number;
-	avgDelay: number | null;
-	plannedFreq: number | null;
-	actualFreq: number | null;
-}
-
-export interface DepartureRow {
-	date: string;
-	time: string;
-	rt_date: string | null;
-	rt_time: string | null;
-	line: string;
-	direction: string;
-	cancelled: number;
-	fetched_at: string;
-}
-
-export interface NextDeparture {
-	time: string;
-	rt_time: string | null;
-	direction: string;
-	line: string;
-}
+export type DayStats = InferSelectModel<typeof stationDailyStats>;
 
 export interface Stats {
 	days: DayStats[];
@@ -77,20 +49,12 @@ export async function getStats(
 			.limit(1),
 	]);
 
-	const days: DayStats[] = dayRows.map((r) => ({
-		date: r.date,
-		total: r.total,
-		cancelled: r.cancelled,
-		avgDelay: r.avgDelay,
-		plannedFreq: r.plannedFreq,
-		actualFreq: r.actualFreq,
-	}));
-
-	const totalCancelled = days.reduce((s, d) => s + d.cancelled, 0);
+	const totalCancelled = dayRows.reduce((s, d) => s + d.cancelled, 0);
 
 	return {
-		days,
-		avgCancelledPerDay: days.length > 0 ? totalCancelled / days.length : 0,
+		days: dayRows,
+		avgCancelledPerDay:
+			dayRows.length > 0 ? totalCancelled / dayRows.length : 0,
 		lastChange: lastChangeRows[0]?.fetchedAt ?? null,
 		haiku: haikuRows[0]?.haiku ?? null,
 	};
@@ -197,6 +161,7 @@ async function getStatsFallback(db: Db, station: Station): Promise<Stats> {
 	}
 
 	const days: DayStats[] = [...dayMap.entries()].map(([date, { dirs }]) => {
+		const stationId = "";
 		const total = dirs.reduce((s, d) => s + d.total, 0);
 		const cancelled = dirs.reduce((s, d) => s + d.cancelled, 0);
 		const avgDelay = weightedAvg(
@@ -210,7 +175,15 @@ async function getStatsFallback(db: Db, station: Station): Promise<Stats> {
 				freqMinutes(d.total - d.cancelled, d.first_time, d.last_time),
 			),
 		);
-		return { date, total, cancelled, avgDelay, plannedFreq, actualFreq };
+		return {
+			stationId,
+			date,
+			total,
+			cancelled,
+			avgDelay,
+			plannedFreq,
+			actualFreq,
+		};
 	});
 
 	const totalCancelled = days.reduce((s, d) => s + d.cancelled, 0);
@@ -288,26 +261,24 @@ export async function getStationSummaries(
 	);
 }
 
-export async function getDayDepartures(
-	db: Db,
-	station: Station,
-	date: string,
-): Promise<DepartureRow[]> {
+export async function getDayDepartures(db: Db, station: Station, date: string) {
 	return db
 		.select({
 			date: departures.date,
 			time: departures.time,
-			rt_date: departures.rtDate,
-			rt_time: departures.rtTime,
+			rtDate: departures.rtDate,
+			rtTime: departures.rtTime,
 			line: departures.line,
 			direction: departures.direction,
 			cancelled: departures.cancelled,
-			fetched_at: departures.fetchedAt,
+			fetchedAt: departures.fetchedAt,
 		})
 		.from(departures)
 		.where(and(eq(departures.stationId, station.id), eq(departures.date, date)))
 		.orderBy(departures.time, departures.direction);
 }
+
+export type DepartureRow = Awaited<ReturnType<typeof getDayDepartures>>[number];
 
 export async function getStationCategories(
 	db: Db,
@@ -331,14 +302,11 @@ export async function getHaiku(db: Db, date: string): Promise<string | null> {
 	return rows[0]?.haiku ?? null;
 }
 
-export async function getNextDepartures(
-	db: Db,
-	station: Station,
-): Promise<NextDeparture[]> {
+export async function getNextDepartures(db: Db, station: Station) {
 	return db
 		.select({
 			time: sql<string>`MIN(${departures.time})`.as("time"),
-			rt_time: departures.rtTime,
+			rtTime: departures.rtTime,
 			direction: departures.direction,
 			line: departures.line,
 		})
@@ -420,12 +388,7 @@ export async function getOperatorSummaries(
 	}));
 }
 
-export interface OperatorDayStats {
-	date: string;
-	total: number;
-	cancelled: number;
-	avgDelay: number | null;
-}
+export type OperatorDayStats = InferSelectModel<typeof operatorDailyStats>;
 
 export async function getOperatorStats(
 	db: Db,
@@ -436,6 +399,7 @@ export async function getOperatorStats(
 		coreOnly
 			? db
 					.select({
+						operator: departures.operator,
 						date: departures.date,
 						total: count().as("total"),
 						cancelled: sql<number>`SUM(${departures.cancelled})`.as(
@@ -460,6 +424,7 @@ export async function getOperatorStats(
 	]);
 
 	const days = dayRows.map((d) => ({
+		operator: d.operator!,
 		date: d.date,
 		total: Number(d.total),
 		cancelled: Number(d.cancelled),
@@ -483,9 +448,9 @@ export function dayAvgDelay(departureRows: DepartureRow[]): number | null {
 			if (d.cancelled && freq !== null) {
 				totalDelay += freq;
 				delayCount++;
-			} else if (!d.cancelled && d.rt_time && d.rt_date) {
+			} else if (!d.cancelled && d.rtTime && d.rtDate) {
 				const scheduled = new Date(`${d.date}T${d.time}`).getTime();
-				const actual = new Date(`${d.rt_date}T${d.rt_time}`).getTime();
+				const actual = new Date(`${d.rtDate}T${d.rtTime}`).getTime();
 				totalDelay += (actual - scheduled) / 60000;
 				delayCount++;
 			}

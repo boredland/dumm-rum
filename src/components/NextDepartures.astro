@@ -29,7 +29,7 @@ const nextDeps = await getNextDepartures(db, station);
 			<div class="grid grid-cols-[repeat(auto-fit,minmax(180px,1fr))] gap-4 mb-8 max-sm:grid-cols-1">
 				{nextDeps.map((d) => {
 					const time = d.time.slice(0, 5);
-					const rt = d.rt_time?.slice(0, 5);
+					const rt = d.rtTime?.slice(0, 5);
 					return (
 						<div class="bg-surface border border-border rounded-xl p-5">
 							<div class="text-[0.7rem] uppercase tracking-wide text-muted mb-1">

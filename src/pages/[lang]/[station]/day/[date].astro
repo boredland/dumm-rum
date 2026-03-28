@@ -91,9 +91,9 @@ let anchorPlaced = false;
 					departures.length > 0 ? (
 						departures.map((d) => {
 							const time = d.time.slice(0, 5);
-							const rtTime = d.rt_time?.slice(0, 5) ?? null;
-							const delayMin = d.rt_time && d.rt_date
-								? Math.round((new Date(`${d.rt_date}T${d.rt_time}`).getTime() - new Date(`${d.date}T${d.time}`).getTime()) / 60000)
+							const rtTime = d.rtTime?.slice(0, 5) ?? null;
+							const delayMin = d.rtTime && d.rtDate
+								? Math.round((new Date(`${d.rtDate}T${d.rtTime}`).getTime() - new Date(`${d.date}T${d.time}`).getTime()) / 60000)
 								: null;
 							let id: string | undefined;
 							if (isToday && !anchorPlaced && d.time >= nowTime) {
@@ -126,7 +126,7 @@ let anchorPlaced = false;
 											<span class="text-muted">{t(lang, "status.on_time")}</span>
 										)}
 									</td>
-									<td class="px-4 py-2.5 text-sm text-muted">{d.fetched_at.slice(0, 16).replace("T", " ")}</td>
+									<td class="px-4 py-2.5 text-sm text-muted">{d.fetchedAt.slice(0, 16).replace("T", " ")}</td>
 								</tr>
 							);
 						})
