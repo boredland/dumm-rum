@@ -15,6 +15,22 @@ import { nowBerlin, todayBerlin } from "./utils";
 
 type Departure = components["schemas"]["Departure"];
 
+function extractMessages(dep: Departure): string | null {
+	const msgs: string[] = [];
+	if (dep.Messages?.Message) {
+		for (const m of dep.Messages.Message) {
+			const text = m.head || m.text || m.lead;
+			if (text) msgs.push(text);
+		}
+	}
+	if (dep.Notes?.Note) {
+		for (const n of dep.Notes.Note) {
+			if (n.value && n.type !== "A") msgs.push(n.value);
+		}
+	}
+	return msgs.length > 0 ? JSON.stringify(msgs) : null;
+}
+
 async function collectDepartures(
 	db: Db,
 	apiKey: string,
@@ -73,6 +89,7 @@ async function collectDepartures(
 						reachable: dep.reachable ? 1 : 0,
 						stop: dep.stop ?? null,
 						stopExtId: dep.stopExtId ?? null,
+						messages: extractMessages(dep),
 						fetchedAt: now,
 					};
 				}),
@@ -92,6 +109,7 @@ async function collectDepartures(
 					journeyStatus: sql`excluded.journey_status`,
 					cancelled: sql`MAX(${departures.cancelled}, excluded.cancelled)`,
 					reachable: sql`CASE WHEN excluded.cancelled THEN 0 ELSE excluded.reachable END`,
+					messages: sql`COALESCE(excluded.messages, ${departures.messages})`,
 					fetchedAt: sql`excluded.fetched_at`,
 				},
 			});

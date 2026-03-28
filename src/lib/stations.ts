@@ -6,6 +6,11 @@ export interface Station {
 
 export const STATIONS: Station[] = [
 	{
+		id: "3000001",
+		name: "Frankfurt (Main) Hauptwache",
+		slug: "hauptwache",
+	},
+	{
 		id: "3000129",
 		name: "Frankfurt (Main) Leonardo-Da-Vinci-Allee",
 		slug: "leonardo-da-vinci-allee",

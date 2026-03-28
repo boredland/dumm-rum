@@ -27,6 +27,7 @@ export const departures = sqliteTable(
 		reachable: integer(),
 		stop: text(),
 		stopExtId: text("stop_ext_id"),
+		messages: text(),
 		fetchedAt: text("fetched_at").notNull(),
 	},
 	(t) => [

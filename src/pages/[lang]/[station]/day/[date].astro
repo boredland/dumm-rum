@@ -110,6 +110,7 @@ let anchorPlaced = false;
 							const delayMin = d.rtTime && d.rtDate
 								? Math.round(delayMinutes(d.date, d.time, d.rtDate, d.rtTime))
 								: null;
+							const msgs: string[] = d.messages ? JSON.parse(d.messages) : [];
 							let id: string | undefined;
 							if (isToday && !anchorPlaced && d.time >= nowTime) {
 								id = "now";
@@ -128,6 +129,9 @@ let anchorPlaced = false;
 											<span class="inline-block px-2 py-0.5 rounded-full text-xs font-semibold bg-danger/15 text-danger">{t(lang, "status.cancelled")}</span>
 										) : (
 											<span class="inline-block px-2 py-0.5 rounded-full text-xs font-semibold bg-success/10 text-success">{t(lang, "status.ok")}</span>
+										)}
+										{msgs.length > 0 && (
+											<div class="text-xs text-muted mt-0.5 max-w-[200px] truncate" title={msgs.join(" | ")}>{msgs[0]}</div>
 										)}
 									</td>
 									<td class="px-4 py-2.5 text-sm tabular-nums">
