@@ -69,6 +69,29 @@ const [
 
 	<HoursToggle basePath={`/${lang}`} coreOnly={coreOnly} daysFilter={daysFilter} lang={lang} />
 
+	{(() => {
+		let totalAll = 0, cancelledAll = 0, delayedAll = 0;
+		for (const [, st] of stationStats) {
+			totalAll += st.total;
+			cancelledAll += st.cancelled;
+			delayedAll += st.delayed;
+		}
+		const score = reliabilityScore(cancelledAll, delayedAll, totalAll);
+		const color = score <= 85 ? "text-danger" : score <= 93 ? "text-warning" : "text-success";
+		return totalAll > 0 ? (
+			<div class="mb-8 bg-surface border border-border rounded-xl p-5 flex items-center gap-6">
+				<div>
+					<div class="text-[0.7rem] uppercase tracking-wide text-muted mb-1">{t(lang, "home.overall_score")}</div>
+					<div class:list={["text-5xl font-bold tabular-nums", color]}>{score}<span class="text-lg text-muted">/100</span></div>
+				</div>
+				<div class="text-sm text-muted">
+					<div>{pct(cancelledAll, totalAll)}% {t(lang, "home.cancelled")} &middot; {pct(delayedAll, totalAll)}% {t(lang, "home.delayed")}</div>
+					<div>{totalAll.toLocaleString(lang)} {t(lang, "stat.departures").toLowerCase()}</div>
+				</div>
+			</div>
+		) : null;
+	})()}
+
 	<details class="group mb-8" open>
 		<summary class="text-xs uppercase tracking-wide text-muted font-semibold mb-3 cursor-pointer select-none">
 			{t(lang, "home.stations")}
