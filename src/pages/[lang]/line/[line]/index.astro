@@ -7,7 +7,7 @@ import { createDb } from "../../../../db/client";
 import Layout from "../../../../layouts/Layout.astro";
 import { langFromParams, t } from "../../../../lib/i18n";
 import { getLineStats, parseFilter } from "../../../../lib/queries";
-import { fmtDate, pct, todayBerlin } from "../../../../lib/utils";
+import { fmtDate, fmtDelay, pct, todayBerlin } from "../../../../lib/utils";
 
 const db = createDb(env.DB);
 const lang = langFromParams(Astro.params);
