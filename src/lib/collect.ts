@@ -174,7 +174,7 @@ async function materializeStationStats(db: Db, date: string): Promise<void> {
 						FROM ${departures} d2
 						WHERE d2.station_id = d.station_id AND d2.date = d.date AND d2.direction = d.direction
 					)
-					OR (strftime('%s', d.rt_date || ' ' || d.rt_time) - strftime('%s', d.date || ' ' || d.time)) / 60.0 > 10
+					OR (strftime('%s', d.rt_date || ' ' || d.rt_time) - strftime('%s', d.date || ' ' || d.time)) / 60.0 >= 7.5
 				)
 			GROUP BY d.station_id
 		`),
@@ -292,7 +292,7 @@ async function materializeOperatorStats(db: Db, date: string): Promise<void> {
 						FROM ${departures} d2
 						WHERE d2.station_id = d.station_id AND d2.date = d.date AND d2.direction = d.direction
 					)
-					OR (strftime('%s', d.rt_date || ' ' || d.rt_time) - strftime('%s', d.date || ' ' || d.time)) / 60.0 > 10
+					OR (strftime('%s', d.rt_date || ' ' || d.rt_time) - strftime('%s', d.date || ' ' || d.time)) / 60.0 >= 7.5
 				)
 			GROUP BY d.operator
 		`),
