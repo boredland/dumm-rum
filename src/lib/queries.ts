@@ -96,7 +96,7 @@ export async function getStats(
 
 const avgDelaySql = sql<
 	number | null
->`AVG(CASE WHEN ${departures.cancelled} = 0 AND ${departures.rtTime} IS NOT NULL THEN (strftime('%s', ${departures.rtTime}) - strftime('%s', ${departures.time})) / 60.0 END)`;
+>`AVG(CASE WHEN ${departures.cancelled} = 0 AND ${departures.rtTime} IS NOT NULL AND ABS((strftime('%s', ${departures.rtTime}) - strftime('%s', ${departures.time})) / 60.0) <= 30 THEN (strftime('%s', ${departures.rtTime}) - strftime('%s', ${departures.time})) / 60.0 END)`;
 const rtCountSql = sql<number>`SUM(CASE WHEN ${departures.cancelled} = 0 AND ${departures.rtTime} IS NOT NULL THEN 1 ELSE 0 END)`;
 
 interface DirRow {
