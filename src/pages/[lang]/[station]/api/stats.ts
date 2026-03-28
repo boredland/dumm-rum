@@ -1,7 +1,7 @@
 import { env } from "cloudflare:workers";
 import type { APIRoute } from "astro";
-import { getStats } from "../../../lib/queries";
-import { findStation } from "../../../lib/stations";
+import { getStats } from "../../../../lib/queries";
+import { findStation } from "../../../../lib/stations";
 
 export const GET: APIRoute = async ({ params, url }) => {
 	const station = findStation(params.station!);

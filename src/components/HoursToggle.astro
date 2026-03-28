@@ -1,10 +1,14 @@
 ---
+import type { Lang } from "../lib/i18n";
+import { t } from "../lib/i18n";
+
 interface Props {
 	basePath: string;
 	coreOnly: boolean;
+	lang: Lang;
 }
 
-const { basePath, coreOnly } = Astro.props;
+const { basePath, coreOnly, lang } = Astro.props;
 ---
 
 <div class="flex gap-2 mb-6 items-center">
@@ -17,7 +21,7 @@ const { basePath, coreOnly } = Astro.props;
 				: "bg-success/10 text-success opacity-50",
 		]}
 	>
-		All hours
+		{t(lang, "hours.all")}
 	</a>
 	<a
 		href={`${basePath}?hours=core`}
@@ -28,7 +32,7 @@ const { basePath, coreOnly } = Astro.props;
 				: "bg-success/10 text-success opacity-50",
 		]}
 	>
-		Core hours
+		{t(lang, "hours.core")}
 	</a>
-	{coreOnly && <span class="text-muted text-sm">6–9 & 16–19 (HVZ)</span>}
+	{coreOnly && <span class="text-muted text-sm">{t(lang, "hours.core_range")}</span>}
 </div>
