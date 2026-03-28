@@ -37,6 +37,10 @@ export function fmtTimestamp(iso: string | null): string {
 	return dayjs(iso).tz(TZ).format("DD.MM.YYYY, HH:mm");
 }
 
+export function fmtDate(date: string): string {
+	return dayjs(date).format("DD.MM.YYYY");
+}
+
 export function timeToMinutes(t: string): number {
 	const [h, m] = t.split(":").map(Number);
 	return h * 60 + m;

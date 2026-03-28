@@ -6,7 +6,7 @@ import { createDb } from "../../../db/client";
 import Layout from "../../../layouts/Layout.astro";
 import { langFromParams, t } from "../../../lib/i18n";
 import { getOperatorStats } from "../../../lib/queries";
-import { fmtDelay, pct } from "../../../lib/utils";
+import { fmtDate, fmtDelay, pct } from "../../../lib/utils";
 
 const db = createDb(env.DB);
 const lang = langFromParams(Astro.params);
@@ -115,7 +115,7 @@ const chartDays = days.map((d) => ({
 							const rate = pct(d.cancelled, d.total);
 							return (
 								<tr class="border-b border-border-dim last:border-b-0 hover:bg-surface-hover">
-									<td class="px-4 py-2.5 text-sm tabular-nums">{d.date}</td>
+									<td class="px-4 py-2.5 text-sm tabular-nums">{fmtDate(d.date)}</td>
 									<td class="px-4 py-2.5 text-sm tabular-nums">{d.total}</td>
 									<td class="px-4 py-2.5 text-sm">
 										{d.cancelled > 0 ? (
