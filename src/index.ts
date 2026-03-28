@@ -75,8 +75,12 @@ const STATIONS: Station[] = [
 	},
 ];
 
-function dataFilter(station: Station): string {
-	return `(date > '${station.collectionStart}' OR (date = '${station.collectionStart}' AND time >= '${station.collectionStartTime}'))`;
+const CORE_HOURS =
+	"((time >= '06:00:00' AND time < '09:00:00') OR (time >= '16:00:00' AND time < '19:00:00'))";
+
+function dataFilter(station: Station, coreOnly = false): string {
+	const base = `(date > '${station.collectionStart}' OR (date = '${station.collectionStart}' AND time >= '${station.collectionStartTime}'))`;
+	return coreOnly ? `${base} AND ${CORE_HOURS}` : base;
 }
 
 const UPSERT_SQL = `
@@ -311,8 +315,12 @@ function avgNonNull(nums: (number | null)[]): number | null {
 		: null;
 }
 
-async function getStats(db: D1Database, station: Station): Promise<Stats> {
-	const filter = dataFilter(station);
+async function getStats(
+	db: D1Database,
+	station: Station,
+	coreOnly = false,
+): Promise<Stats> {
+	const filter = dataFilter(station, coreOnly);
 	const [statsResult, lastChangeResult, haikuResult] = await db.batch([
 		db
 			.prepare(
@@ -591,13 +599,15 @@ function renderChart(days: DayStats[]): string {
 
 function renderStationList(
 	stationStats: Map<string, { cancelled: number; total: number }>,
+	coreOnly: boolean,
 ): string {
+	const hoursParam = coreOnly ? "?hours=core" : "";
 	const cards = STATIONS.map((s) => {
 		const st = stationStats.get(s.id);
 		const rate = st && st.total > 0 ? (st.cancelled / st.total) * 100 : 0;
 		const borderColor =
 			rate >= 5 ? "#f85149" : rate >= 1 ? "#d29922" : "#3fb950";
-		return `<a href="/${s.slug}" class="card" style="text-decoration:none;border-color:${borderColor}">
+		return `<a href="/${s.slug}${hoursParam}" class="card" style="text-decoration:none;border-color:${borderColor}">
       <div class="label">${s.type}</div>
       <div class="value" style="font-size:1.2rem;color:#fff">${esc(shortDir(s.name))}</div>
       ${st ? `<div class="detail">${pct(st.cancelled, st.total)}% cancelled</div>` : ""}
@@ -611,16 +621,26 @@ function renderStationList(
     <h1>🚌🚋🚇 DummRum</h1>
     <p class="subtitle">Public transport cancellation and delay tracker</p>
   </header>
+  ${hoursToggle("/", coreOnly)}
   <div class="section-title">Stations</div>
   <div class="cards">${cards}</div>
 </div>
 </body></html>`;
 }
 
+function hoursToggle(basePath: string, coreOnly: boolean): string {
+	return `<div style="display:flex;gap:0.5rem;margin-bottom:1.5rem;align-items:center">
+    <a href="${basePath}" class="badge${!coreOnly ? " ok" : ""}" style="text-decoration:none;padding:0.3rem 0.8rem;${!coreOnly ? "" : "opacity:0.5"}">All hours</a>
+    <a href="${basePath}?hours=core" class="badge${coreOnly ? " ok" : ""}" style="text-decoration:none;padding:0.3rem 0.8rem;${coreOnly ? "" : "opacity:0.5"}">Core hours</a>
+    ${coreOnly ? '<span class="muted" style="line-height:1.8">6\u20139 &amp; 16\u201319 (HVZ)</span>' : ""}
+  </div>`;
+}
+
 function renderOverview(
 	station: Station,
 	stats: Stats,
 	nextDeps: NextDeparture[],
+	coreOnly: boolean,
 ): string {
 	const today = todayBerlin();
 	const todayStats = stats.days.find((d) => d.date === today);
@@ -668,6 +688,7 @@ function renderOverview(
     <p class="subtitle">Cancellation &amp; delay tracker &mdash; collecting since ${station.collectionStart}${stats.lastChange ? ` &mdash; last updated ${fmtTimestamp(stats.lastChange)}` : ""}</p>
     ${stats.haiku ? `<blockquote style="margin-top:0.75rem;padding-left:1rem;border-left:3px solid #30363d;font-style:italic;color:#8b949e;white-space:pre-line">${esc(stats.haiku)}</blockquote>` : ""}
   </header>
+  ${hoursToggle(`/${station.slug}`, coreOnly)}
   <div class="cards">
     <div class="card">
       <div class="label">Today</div>
@@ -802,10 +823,12 @@ export default {
 			});
 
 		if (pathname === "/") {
+			const { searchParams } = new URL(request.url);
+			const coreOnly = searchParams.get("hours") === "core";
 			const results = await env.DB.batch(
 				STATIONS.map((s) =>
 					env.DB.prepare(
-						`SELECT SUM(cancelled) as cancelled, COUNT(*) as total FROM departures WHERE station_id = ? AND ${dataFilter(s)}`,
+						`SELECT SUM(cancelled) as cancelled, COUNT(*) as total FROM departures WHERE station_id = ? AND ${dataFilter(s, coreOnly)}`,
 					).bind(s.id),
 				),
 			);
@@ -820,21 +843,23 @@ export default {
 					] as const;
 				}),
 			);
-			return html(renderStationList(stationStats));
+			return html(renderStationList(stationStats, coreOnly));
 		}
 
 		const stationMatch = pathname.match(/^\/([^/]+)$/);
 		if (stationMatch) {
 			const station = STATIONS.find((s) => s.slug === stationMatch[1]);
 			if (!station) return new Response("Not found", { status: 404 });
+			const { searchParams } = new URL(request.url);
+			const coreOnly = searchParams.get("hours") === "core";
 			if (pathname === `/${station.slug}/api/stats`) {
-				return Response.json(await getStats(env.DB, station));
+				return Response.json(await getStats(env.DB, station, coreOnly));
 			}
 			const [stats, nextDeps] = await Promise.all([
-				getStats(env.DB, station),
+				getStats(env.DB, station, coreOnly),
 				getNextDepartures(env.DB, station),
 			]);
-			return html(renderOverview(station, stats, nextDeps));
+			return html(renderOverview(station, stats, nextDeps, coreOnly));
 		}
 
 		const dayMatch = pathname.match(/^\/([^/]+)\/day\/(\d{4}-\d{2}-\d{2})$/);
