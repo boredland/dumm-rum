@@ -1,0 +1,138 @@
+---
+import { env } from "cloudflare:workers";
+import CancellationChart from "../../../../components/CancellationChart.astro";
+import HoursToggle from "../../../../components/HoursToggle.astro";
+import { createDb } from "../../../../db/client";
+import Layout from "../../../../layouts/Layout.astro";
+import { langFromParams, t } from "../../../../lib/i18n";
+import { getLineStats, parseFilter } from "../../../../lib/queries";
+import { fmtDate, fmtDelay, pct } from "../../../../lib/utils";
+
+const db = createDb(env.DB);
+const lang = langFromParams(Astro.params);
+const line = decodeURIComponent(Astro.params.line!);
+const filter = parseFilter(Astro.url);
+const { coreOnly, days: daysFilter } = filter;
+
+const { days, operators } = await getLineStats(db, line, filter);
+
+const totalDepartures = days.reduce((s, d) => s + d.total, 0);
+const totalCancelled = days.reduce((s, d) => s + d.cancelled, 0);
+const totalDelayed = days.reduce((s, d) => s + d.delayed, 0);
+const delayDays = days.filter((d) => d.avgDelay !== null);
+const overallDelay =
+	delayDays.length > 0
+		? delayDays.reduce((s, d) => s + d.avgDelay! * d.total, 0) /
+			delayDays.reduce((s, d) => s + d.total, 0)
+		: null;
+const chartDays = days;
+---
+
+<Layout title={`${t(lang, "table.line")} ${line}`} lang={lang}>
+	<a
+		href={`/${lang}`}
+		class="inline-flex items-center gap-1 text-muted text-sm mb-6 hover:text-link no-underline"
+	>
+		&larr; {t(lang, "nav.all_stations")}
+	</a>
+
+	<header class="mb-6">
+		<h1 class="text-2xl font-bold text-emphasis">{line}</h1>
+		<p class="text-muted text-sm mt-1">
+			{operators.join(", ")}
+		</p>
+	</header>
+
+	<HoursToggle
+		basePath={`/${lang}/line/${encodeURIComponent(line)}`}
+		coreOnly={coreOnly}
+		daysFilter={daysFilter}
+		lang={lang}
+	/>
+
+	<div class="grid grid-cols-[repeat(auto-fit,minmax(160px,1fr))] gap-4 mb-8 max-sm:grid-cols-2">
+		<div class="bg-surface border border-border rounded-xl p-5">
+			<div class="text-[0.7rem] uppercase tracking-wide text-muted mb-1">{t(lang, "stat.departures")}</div>
+			<div class="text-4xl font-bold tabular-nums">{totalDepartures}</div>
+		</div>
+		<div class="bg-surface border border-border rounded-xl p-5">
+			<div class="text-[0.7rem] uppercase tracking-wide text-muted mb-1">{t(lang, "table.cancelled")}</div>
+			<div class:list={["text-4xl font-bold tabular-nums", totalCancelled > 0 ? "text-danger" : "text-success"]}>
+				{totalCancelled}
+			</div>
+			<div class="text-sm text-muted mt-1">{pct(totalCancelled, totalDepartures)}% {t(lang, "stat.rate")}</div>
+		</div>
+		<div class="bg-surface border border-border rounded-xl p-5">
+			<div class="text-[0.7rem] uppercase tracking-wide text-muted mb-1">{t(lang, "table.delayed")}</div>
+			<div class:list={["text-4xl font-bold tabular-nums", totalDelayed > 0 ? "text-warning" : "text-success"]}>
+				{totalDelayed}
+			</div>
+			<div class="text-sm text-muted mt-1">{pct(totalDelayed, totalDepartures)}%</div>
+		</div>
+		<div class="bg-surface border border-border rounded-xl p-5">
+			<div class="text-[0.7rem] uppercase tracking-wide text-muted mb-1">{t(lang, "stat.avg_delay")}</div>
+			<div class="text-2xl font-bold tabular-nums">{fmtDelay(overallDelay)}</div>
+		</div>
+	</div>
+
+	<p class="text-xs uppercase tracking-wide text-muted font-semibold mb-3">{t(lang, "section.cancellation_rate")}</p>
+	<CancellationChart days={chartDays} />
+
+	<p class="text-xs uppercase tracking-wide text-muted font-semibold mb-3">{t(lang, "section.daily_breakdown")}</p>
+	<div class="bg-surface border border-border rounded-xl overflow-hidden">
+		<table class="w-full border-collapse">
+			<thead>
+				<tr class="bg-surface-hover border-b border-border">
+					{[t(lang, "table.date"), t(lang, "table.total"), t(lang, "table.cancelled"), t(lang, "table.rate")].map((h) => (
+						<th class="text-left px-4 py-3 text-[0.7rem] uppercase tracking-wide text-muted font-semibold">{h}</th>
+					))}
+					<th class="w-[120px] px-4 py-3 max-sm:hidden text-[0.7rem] uppercase tracking-wide text-muted font-semibold"></th>
+					<th class="text-left px-4 py-3 text-[0.7rem] uppercase tracking-wide text-muted font-semibold" title={t(lang, "table.delayed_tooltip")}>{t(lang, "table.delayed")} <span class="cursor-help">&#9432;</span></th>
+					<th class="text-left px-4 py-3 text-[0.7rem] uppercase tracking-wide text-muted font-semibold">{t(lang, "table.avg_delay")}</th>
+				</tr>
+			</thead>
+			<tbody>
+				{
+					days.length > 0 ? (
+						days.map((d) => {
+							const rate = pct(d.cancelled, d.total);
+							return (
+								<tr class="border-b border-border-dim last:border-b-0 hover:bg-surface-hover">
+									<td class="px-4 py-2.5 text-sm tabular-nums">
+										<a href={`/${lang}/line/${encodeURIComponent(line)}/day/${d.date}${Astro.url.search}`} class="text-link no-underline hover:underline">
+											{fmtDate(d.date)}
+										</a>
+									</td>
+									<td class="px-4 py-2.5 text-sm tabular-nums">{d.total}</td>
+									<td class="px-4 py-2.5 text-sm">
+										{d.cancelled > 0 ? (
+											<span class="inline-block px-2 py-0.5 rounded-full text-xs font-semibold bg-danger/15 text-danger">{d.cancelled}</span>
+										) : (
+											<span class="inline-block px-2 py-0.5 rounded-full text-xs font-semibold bg-success/10 text-success">0</span>
+										)}
+									</td>
+									<td class="px-4 py-2.5 text-sm tabular-nums">{rate}%</td>
+									<td class="w-[120px] px-4 py-2.5 max-sm:hidden">
+										<div class="bg-border-dim rounded h-1.5 overflow-hidden">
+											<div class="h-full rounded bg-danger" style={`width:${Math.min(parseFloat(rate) * 2, 100)}%`} />
+										</div>
+									</td>
+									<td class="px-4 py-2.5 text-sm">
+										{d.delayed > 0 ? (
+											<span class="inline-block px-2 py-0.5 rounded-full text-xs font-semibold bg-warning/15 text-warning">{d.delayed}</span>
+										) : (
+											<span class="inline-block px-2 py-0.5 rounded-full text-xs font-semibold bg-success/10 text-success">0</span>
+										)}
+									</td>
+									<td class="px-4 py-2.5 text-sm tabular-nums">{fmtDelay(d.avgDelay)}</td>
+								</tr>
+							);
+						})
+					) : (
+						<tr><td colspan="7" class="text-center text-dimmed py-8">{t(lang, "table.no_data")}</td></tr>
+					)
+				}
+			</tbody>
+		</table>
+	</div>
+</Layout>

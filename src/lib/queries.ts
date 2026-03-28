@@ -389,6 +389,73 @@ export async function getLineSummaries(
 	}));
 }
 
+export interface LineDayStats {
+	date: string;
+	total: number;
+	cancelled: number;
+	delayed: number;
+	avgDelay: number | null;
+}
+
+export async function getLineStats(
+	db: Db,
+	line: string,
+	filter: QueryFilter = {},
+): Promise<{ days: LineDayStats[]; operators: string[] }> {
+	const daysCond = daysCondition(departures.date, filter.days);
+	const conditions = [eq(departures.line, line)];
+	if (filter.coreOnly) conditions.push(CORE_HOURS);
+	if (daysCond) conditions.push(daysCond);
+
+	const [dayRows, opRows] = await Promise.all([
+		db
+			.select({
+				date: departures.date,
+				total: count().as("total"),
+				cancelled: sql<number>`SUM(${departures.cancelled})`.as("cancelled"),
+				delayed: delayedSql.as("delayed"),
+				avgDelay: avgDelaySql.as("avg_delay"),
+			})
+			.from(departures)
+			.where(and(...conditions))
+			.groupBy(departures.date)
+			.orderBy(desc(departures.date)),
+		db
+			.selectDistinct({ operator: departures.operator })
+			.from(departures)
+			.where(and(eq(departures.line, line), isNotNull(departures.operator))),
+	]);
+
+	return {
+		days: dayRows.map((d) => ({
+			date: d.date,
+			total: d.total,
+			cancelled: d.cancelled,
+			delayed: d.delayed,
+			avgDelay: d.avgDelay,
+		})),
+		operators: opRows.map((r) => r.operator!),
+	};
+}
+
+export async function getLineDayDepartures(db: Db, line: string, date: string) {
+	return db
+		.select({
+			date: departures.date,
+			time: departures.time,
+			rtDate: departures.rtDate,
+			rtTime: departures.rtTime,
+			direction: departures.direction,
+			cancelled: departures.cancelled,
+			operator: departures.operator,
+			stop: departures.stop,
+			fetchedAt: departures.fetchedAt,
+		})
+		.from(departures)
+		.where(and(eq(departures.line, line), eq(departures.date, date)))
+		.orderBy(departures.time, departures.direction);
+}
+
 export type OperatorDayStats = InferSelectModel<typeof operatorDailyStats>;
 
 export async function getOperatorStats(

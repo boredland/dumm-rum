@@ -24,6 +24,7 @@ const translations = {
 
 		"nav.all_stations": "Alle Haltestellen",
 		"nav.back": "Zur\u00fcck zur \u00dcbersicht",
+		"nav.back_to_line": "Zur\u00fcck zur Linie",
 		"nav.github": "Quellcode auf GitHub",
 
 		"station.subtitle": "Ausfall- & Versp\u00e4tungstracker",
@@ -93,6 +94,7 @@ const translations = {
 
 		"nav.all_stations": "All stations",
 		"nav.back": "Back to overview",
+		"nav.back_to_line": "Back to line",
 		"nav.github": "View source on GitHub",
 
 		"station.subtitle": "Cancellation & delay tracker",

@@ -123,9 +123,10 @@ const [stationStats, operators, lines] = await Promise.all([
 				lines.map((l) => {
 					const borderColor = rateBorderColor(l.cancelled, l.total);
 					return (
-						<div
+						<a
+							href={`/${lang}/line/${encodeURIComponent(l.line)}${Astro.url.search}`}
 							class:list={[
-								"bg-surface border rounded-xl p-4",
+								"bg-surface border rounded-xl p-4 no-underline hover:bg-surface-hover transition-colors",
 								borderColor,
 							]}
 						>
@@ -137,7 +138,7 @@ const [stationStats, operators, lines] = await Promise.all([
 							<div class="text-sm text-muted">
 								{pct(l.delayed, l.total)}% {t(lang, "home.delayed")}
 							</div>
-						</div>
+						</a>
 					);
 				})
 			}
