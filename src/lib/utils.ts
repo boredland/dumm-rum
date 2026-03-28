@@ -98,11 +98,10 @@ export function trendColor(arrow: string): string {
 	return "";
 }
 
-export function rateBorderColor(cancelled: number, total: number): string {
-	const rate = total > 0 ? (cancelled / total) * 100 : 0;
-	return rate >= 2
+export function scoreBorderColor(score: number): string {
+	return score <= 85
 		? "border-danger"
-		: rate >= 1
+		: score <= 93
 			? "border-warning"
 			: "border-success";
 }

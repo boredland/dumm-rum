@@ -17,7 +17,7 @@ const translations = {
 		"home.methodology_reliability":
 			"Die Zuverlässigkeit (0\u2013100) kombiniert: Ausfallquote (Gewicht \u00d74), Verspätungsquote (Gewicht \u00d73,5) und durchschnittliche Verspätung (Gewicht \u00d72,5, gedeckelt). 100 = perfekter Betrieb.",
 		"home.methodology_colors":
-			"Farben: grün unter 1% Ausfallquote, orange ab 1%, rot ab 2%.",
+			"Farben: grün ab 94 Punkten, orange 86\u201393, rot unter 86.",
 		"home.stations": "Haltestellen",
 		"home.operators": "Betreiber",
 		"home.lines": "Linien",
@@ -100,7 +100,7 @@ const translations = {
 		"home.methodology_reliability":
 			"The reliability score (0\u2013100) combines: cancellation rate (weight \u00d74), delayed departure rate (weight \u00d73.5), and average delay penalty (weight \u00d72.5, capped). 100 = perfect service.",
 		"home.methodology_colors":
-			"Colors: green below 1% cancellation rate, orange from 1%, red from 2%.",
+			"Colors: green from 94 points, orange 86\u201393, red below 86.",
 		"home.stations": "Stations",
 		"home.operators": "Operators",
 		"home.lines": "Lines",

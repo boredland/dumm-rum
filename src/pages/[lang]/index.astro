@@ -17,8 +17,8 @@ import { categoryIcons, STATIONS } from "../../lib/stations";
 import {
 	fmtDelay,
 	pct,
-	rateBorderColor,
 	reliabilityScore,
+	scoreBorderColor,
 	shortDir,
 	trendArrow,
 	trendColor,
@@ -85,7 +85,8 @@ const [
 				const st = stationStats.get(s.id);
 				const tr = stationTrends.get(s.id);
 				const arrow = tr ? trendArrow(tr, { cancelled: tr.prevCancelled, total: tr.prevTotal }) : "";
-				const borderColor = rateBorderColor(st?.cancelled ?? 0, st?.total ?? 0);
+				const score = st ? reliabilityScore(st.cancelled, st.delayed, st.total, st.avgDelay) : 100;
+				const borderColor = scoreBorderColor(score);
 				return (
 					<a
 						href={`/${lang}/${s.slug}${Astro.url.search}`}
@@ -131,7 +132,7 @@ const [
 				}).map((op) => {
 					const tr = operatorTrends.get(op.operator);
 					const arrow = tr ? trendArrow(tr, { cancelled: tr.prevCancelled, total: tr.prevTotal }) : "";
-					const borderColor = rateBorderColor(op.cancelled, op.total);
+					const borderColor = scoreBorderColor(reliabilityScore(op.cancelled, op.delayed, op.total, op.avgDelay));
 					return (
 						<a
 							href={`/${lang}/operator/${encodeURIComponent(op.operator)}${Astro.url.search}`}
@@ -175,7 +176,7 @@ const [
 				}).map((l) => {
 					const tr = lineTrends.get(l.line);
 					const arrow = tr ? trendArrow(tr, { cancelled: tr.prevCancelled, total: tr.prevTotal }) : "";
-					const borderColor = rateBorderColor(l.cancelled, l.total);
+					const borderColor = scoreBorderColor(reliabilityScore(l.cancelled, l.delayed, l.total, l.avgDelay));
 					return (
 						<a
 							href={`/${lang}/line/${encodeURIComponent(l.line)}${Astro.url.search}`}
