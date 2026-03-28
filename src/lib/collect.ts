@@ -15,6 +15,8 @@ import { nowBerlin, todayBerlin } from "./utils";
 
 type Departure = components["schemas"]["Departure"];
 
+const TEXT_NOTE_TYPES = new Set(["H", "M", "D", "Q", "L"]);
+
 function extractMessages(dep: Departure): string | null {
 	const msgs: string[] = [];
 	if (dep.Messages?.Message) {
@@ -25,7 +27,7 @@ function extractMessages(dep: Departure): string | null {
 	}
 	if (dep.Notes?.Note) {
 		for (const n of dep.Notes.Note) {
-			if (n.value && n.type !== "A") msgs.push(n.value);
+			if (n.value && n.type && TEXT_NOTE_TYPES.has(n.type)) msgs.push(n.value);
 		}
 	}
 	return msgs.length > 0 ? JSON.stringify(msgs) : null;
