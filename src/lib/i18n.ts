@@ -10,6 +10,7 @@ const translations = {
 			"Alle 5 Minuten fragen wir die RMV-Echtzeitdaten ab und speichern Abfahrten, Ausfälle und Verspätungen. Die Ausfallquote ist der Anteil der ausgefallenen Abfahrten an der Gesamtzahl. Die Durchschnittsverspätung vergleicht die tatsächliche Abfahrtszeit mit der geplanten \u2014 bei Ausfällen wird der geplante Takt als Wartezeit angenommen. Als versp\u00e4tet gilt eine Abfahrt, wenn die Versp\u00e4tung \u226550% des geplanten Takts oder \u22657,5 Minuten betr\u00e4gt (50% der angenommenen durchschnittlichen Fahrtzeit von 15 Minuten innerhalb Frankfurts). Farben: gr\u00fcn unter 1% Ausfallquote, orange ab 1%, rot ab 2%.",
 		"home.stations": "Haltestellen",
 		"home.operators": "Betreiber",
+		"home.lines": "Linien",
 		"home.cancelled": "ausgefallen",
 		"home.delayed": "versp\u00e4tet",
 
@@ -78,6 +79,7 @@ const translations = {
 			"Every 5 minutes we poll the RMV realtime feed and store departures, cancellations, and delays. The cancellation rate is the share of cancelled departures out of the total. Average delay compares actual departure time to the scheduled time \u2014 for cancellations, we assume the wait equals the planned frequency. A departure counts as delayed if the delay is \u226550% of the planned frequency or \u22657.5 minutes (50% of the assumed average 15-minute trip time within Frankfurt). Colors: green below 1% cancellation rate, orange from 1%, red from 2%.",
 		"home.stations": "Stations",
 		"home.operators": "Operators",
+		"home.lines": "Lines",
 		"home.cancelled": "cancelled",
 		"home.delayed": "delayed",
 

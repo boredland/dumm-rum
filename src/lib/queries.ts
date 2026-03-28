@@ -350,6 +350,45 @@ export async function getOperatorSummaries(
 	}));
 }
 
+export interface LineSummary {
+	line: string;
+	category: string;
+	total: number;
+	cancelled: number;
+	delayed: number;
+}
+
+export async function getLineSummaries(
+	db: Db,
+	filter: QueryFilter = {},
+): Promise<LineSummary[]> {
+	const daysCond = daysCondition(departures.date, filter.days);
+	const conditions = [isNotNull(departures.operator)];
+	if (filter.coreOnly) conditions.push(CORE_HOURS);
+	if (daysCond) conditions.push(daysCond);
+
+	const rows = await db
+		.select({
+			line: departures.line,
+			category: departures.category,
+			total: count().as("total"),
+			cancelled: sql<number>`SUM(${departures.cancelled})`.as("cancelled"),
+			delayed: delayedSql.as("delayed"),
+		})
+		.from(departures)
+		.where(and(...conditions))
+		.groupBy(departures.line, departures.category)
+		.orderBy(departures.category, departures.line);
+
+	return rows.map((r) => ({
+		line: r.line,
+		category: r.category ?? "Bus",
+		total: r.total,
+		cancelled: r.cancelled,
+		delayed: r.delayed,
+	}));
+}
+
 export type OperatorDayStats = InferSelectModel<typeof operatorDailyStats>;
 
 export async function getOperatorStats(
