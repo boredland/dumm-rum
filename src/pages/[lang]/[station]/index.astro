@@ -2,16 +2,16 @@
 import { env } from "cloudflare:workers";
 import CancellationChart from "../../../components/CancellationChart.astro";
 import HoursToggle from "../../../components/HoursToggle.astro";
+import NextDepartures from "../../../components/NextDepartures.astro";
 import Layout from "../../../layouts/Layout.astro";
 import { langFromParams, t } from "../../../lib/i18n";
-import { getNextDepartures, getStats } from "../../../lib/queries";
+import { getStats } from "../../../lib/queries";
 import { findStation, stationIcon } from "../../../lib/stations";
 import {
 	fmtDelay,
 	fmtFreq,
 	fmtTimestamp,
 	pct,
-	shortDir,
 	todayBerlin,
 } from "../../../lib/utils";
 
@@ -20,10 +20,7 @@ const station = findStation(Astro.params.station!);
 if (!station) return new Response("Not found", { status: 404 });
 
 const coreOnly = Astro.url.searchParams.get("hours") === "core";
-const [stats, nextDeps] = await Promise.all([
-	getStats(env.DB, station, coreOnly),
-	getNextDepartures(env.DB, station),
-]);
+const stats = await getStats(env.DB, station, coreOnly);
 
 const today = todayBerlin();
 const todayStats = stats.days.find((d) => d.date === today);
@@ -92,29 +89,7 @@ const hoursParam = coreOnly ? "?hours=core" : "";
 		</div>
 	</div>
 
-	{
-		nextDeps.length > 0 && (
-			<>
-				<p class="text-xs uppercase tracking-wide text-muted font-semibold mb-3">{t(lang, "section.next_departures")}</p>
-				<div class="grid grid-cols-[repeat(auto-fit,minmax(180px,1fr))] gap-4 mb-8 max-sm:grid-cols-1">
-					{nextDeps.map((d) => {
-						const time = d.time.slice(0, 5);
-						const rt = d.rt_time?.slice(0, 5);
-						return (
-							<div class="bg-surface border border-border rounded-xl p-5">
-								<div class="text-[0.7rem] uppercase tracking-wide text-muted mb-1">{shortDir(d.direction)}</div>
-								<div class="text-2xl font-bold tabular-nums">
-									{time}
-									{rt && rt !== time && <span class="text-warning"> &rarr; {rt}</span>}
-								</div>
-								<div class="text-sm text-muted">{d.line}</div>
-							</div>
-						);
-					})}
-				</div>
-			</>
-		)
-	}
+	<NextDepartures server:defer stationSlug={station.slug} lang={lang} />
 
 	<p class="text-xs uppercase tracking-wide text-muted font-semibold mb-3">{t(lang, "section.cancellation_rate")}</p>
 	<CancellationChart days={stats.days} />

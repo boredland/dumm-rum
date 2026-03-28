@@ -1,16 +1,17 @@
 ---
-import { env } from "cloudflare:workers";
+export const prerender = true;
+
 import HoursToggle from "../../components/HoursToggle.astro";
+import StationCards from "../../components/StationCards.astro";
 import Layout from "../../layouts/Layout.astro";
-import { langFromParams, t } from "../../lib/i18n";
-import { getStationSummaries } from "../../lib/queries";
-import { STATIONS, stationIcon } from "../../lib/stations";
-import { pct, shortDir } from "../../lib/utils";
+import { langFromParams, languages, t } from "../../lib/i18n";
+
+export function getStaticPaths() {
+	return languages.map((lang) => ({ params: { lang } }));
+}
 
 const lang = langFromParams(Astro.params);
 const coreOnly = Astro.url.searchParams.get("hours") === "core";
-const hoursParam = coreOnly ? "?hours=core" : "";
-const stationStats = await getStationSummaries(env.DB, STATIONS, coreOnly);
 ---
 
 <Layout title={t(lang, "home.title")} lang={lang}>
@@ -29,42 +30,15 @@ const stationStats = await getStationSummaries(env.DB, STATIONS, coreOnly);
 		{t(lang, "home.stations")}
 	</p>
 
-	<div class="grid grid-cols-[repeat(auto-fit,minmax(180px,1fr))] gap-4 mb-8 max-sm:grid-cols-1">
-		{
-			STATIONS.map((s) => {
-				const st = stationStats.get(s.id);
-				const rate =
-					st && st.total > 0
-						? (st.cancelled / st.total) * 100
-						: 0;
-				const borderColor =
-					rate >= 5
-						? "border-danger"
-						: rate >= 1
-							? "border-warning"
-							: "border-success";
-				return (
-					<a
-						href={`/${lang}/${s.slug}${hoursParam}`}
-						class:list={[
-							"bg-surface border rounded-xl p-5 no-underline hover:bg-surface-hover transition-colors",
-							borderColor,
-						]}
-					>
-						<div class="text-[0.7rem] uppercase tracking-wide text-muted mb-1">
-							{stationIcon(s.type)} {t(lang, `type.${s.type}`)}
-						</div>
-						<div class="text-lg font-bold text-emphasis">
-							{shortDir(s.name)}
-						</div>
-						{st && (
-							<div class="text-sm text-muted mt-1">
-								{pct(st.cancelled, st.total)}% {t(lang, "home.cancelled")}
-							</div>
-						)}
-					</a>
-				);
-			})
-		}
-	</div>
+	<StationCards server:defer lang={lang} coreOnly={coreOnly}>
+		<div slot="fallback" class="grid grid-cols-[repeat(auto-fit,minmax(180px,1fr))] gap-4 mb-8 max-sm:grid-cols-1">
+			{Array.from({ length: 7 }).map(() => (
+				<div class="bg-surface border border-border rounded-xl p-5 animate-pulse">
+					<div class="h-3 w-12 bg-border-dim rounded mb-2"></div>
+					<div class="h-5 w-32 bg-border-dim rounded mb-2"></div>
+					<div class="h-3 w-20 bg-border-dim rounded"></div>
+				</div>
+			))}
+		</div>
+	</StationCards>
 </Layout>

@@ -1,0 +1,54 @@
+---
+import { env } from "cloudflare:workers";
+import type { Lang } from "../lib/i18n";
+import { t } from "../lib/i18n";
+import { getStationSummaries } from "../lib/queries";
+import { STATIONS, stationIcon } from "../lib/stations";
+import { pct, shortDir } from "../lib/utils";
+
+interface Props {
+	lang: Lang;
+	coreOnly: boolean;
+}
+
+const { lang, coreOnly } = Astro.props;
+const hoursParam = coreOnly ? "?hours=core" : "";
+const stationStats = await getStationSummaries(env.DB, STATIONS, coreOnly);
+---
+
+<div class="grid grid-cols-[repeat(auto-fit,minmax(180px,1fr))] gap-4 mb-8 max-sm:grid-cols-1">
+	{
+		STATIONS.map((s) => {
+			const st = stationStats.get(s.id);
+			const rate =
+				st && st.total > 0 ? (st.cancelled / st.total) * 100 : 0;
+			const borderColor =
+				rate >= 5
+					? "border-danger"
+					: rate >= 1
+						? "border-warning"
+						: "border-success";
+			return (
+				<a
+					href={`/${lang}/${s.slug}${hoursParam}`}
+					class:list={[
+						"bg-surface border rounded-xl p-5 no-underline hover:bg-surface-hover transition-colors",
+						borderColor,
+					]}
+				>
+					<div class="text-[0.7rem] uppercase tracking-wide text-muted mb-1">
+						{stationIcon(s.type)} {t(lang, `type.${s.type}`)}
+					</div>
+					<div class="text-lg font-bold text-emphasis">
+						{shortDir(s.name)}
+					</div>
+					{st && (
+						<div class="text-sm text-muted mt-1">
+							{pct(st.cancelled, st.total)}% {t(lang, "home.cancelled")}
+						</div>
+					)}
+				</a>
+			);
+		})
+	}
+</div>
