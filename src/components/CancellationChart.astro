@@ -71,14 +71,14 @@ const barData = sorted.map((d, i) => {
 							x2={W}
 							y1={g.y}
 							y2={g.y}
-							stroke="#21262d"
+							stroke="var(--color-border-dim)"
 						/>
 						<text
 							x={L - 4}
 							y={g.y + 3}
 							text-anchor="end"
 							font-size="8"
-							fill="#484f58"
+							fill="var(--color-dimmed)"
 							font-family="-apple-system, system-ui, sans-serif"
 						>
 							{g.v}%
@@ -93,7 +93,7 @@ const barData = sorted.map((d, i) => {
 							width={bw}
 							height={b.barH}
 							rx="3"
-							fill={b.rate > 0 ? "#f85149" : "#21262d"}
+							fill={b.rate > 0 ? "var(--color-danger)" : "var(--color-border-dim)"}
 							opacity={b.rate > 0 ? 0.85 : 0.4}
 						>
 							<title>
@@ -106,7 +106,7 @@ const barData = sorted.map((d, i) => {
 								y={b.y - 3}
 								text-anchor="middle"
 								font-size="8"
-								fill="#7d8590"
+								fill="var(--color-muted)"
 								font-family="-apple-system, system-ui, sans-serif"
 							>
 								{b.rate.toFixed(0)}%
@@ -118,7 +118,7 @@ const barData = sorted.map((d, i) => {
 								y={top + H + 12}
 								text-anchor="middle"
 								font-size="8"
-								fill="#484f58"
+								fill="var(--color-dimmed)"
 								font-family="-apple-system, system-ui, sans-serif"
 								transform={`rotate(45 ${b.x + bw / 2} ${top + H + 12})`}
 							>
