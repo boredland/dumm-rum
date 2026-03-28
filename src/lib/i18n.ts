@@ -46,7 +46,7 @@ const translations = {
 
 		"stat.today": "Heute",
 		"stat.no_data": "noch keine Daten",
-		"stat.of_departures": "von {total} Abfahrten ({pct}%) ausgefallen",
+		"stat.of_departures": "von {total} Abfahrten",
 		"stat.avg_per_day": "\u00d8 / Tag",
 		"stat.cancelled": "ausgefallen",
 		"stat.rate": "Quote",
@@ -130,7 +130,7 @@ const translations = {
 
 		"stat.today": "Today",
 		"stat.no_data": "no data yet",
-		"stat.of_departures": "of {total} departures ({pct}%) cancelled",
+		"stat.of_departures": "of {total} departures",
 		"stat.avg_per_day": "Avg / day",
 		"stat.cancelled": "cancelled",
 		"stat.rate": "rate",

@@ -75,7 +75,7 @@ const totalDelayed = days.reduce((s, d) => s + d.delayed, 0);
 							<span class:list={[todayStats.cancelled > 0 ? "text-danger" : "text-success"]}>{todayStats.cancelled} {t(lang, "stat.cancelled")}</span>
 							{" / "}
 							<span class:list={[todayStats.delayed > 0 ? "text-warning" : "text-success"]}>{todayStats.delayed} {t(lang, "table.delayed").toLowerCase()}</span>
-							<div class="text-muted mt-1">{t(lang, "stat.of_departures", { total: todayStats.total, pct: pct(todayStats.cancelled, todayStats.total) })}</div>
+							<div class="text-muted mt-1">{t(lang, "stat.of_departures", { total: todayStats.total })}</div>
 						</div>
 					) : (
 						<div class="text-2xl font-bold tabular-nums text-muted">&mdash;</div>
