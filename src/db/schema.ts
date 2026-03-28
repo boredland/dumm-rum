@@ -2,6 +2,7 @@ import {
 	index,
 	integer,
 	primaryKey,
+	real,
 	sqliteTable,
 	text,
 	unique,
@@ -44,4 +45,30 @@ export const haikus = sqliteTable(
 		haiku: text().notNull(),
 	},
 	(t) => [primaryKey({ columns: [t.date, t.stationId] })],
+);
+
+export const stationDailyStats = sqliteTable(
+	"station_daily_stats",
+	{
+		stationId: text("station_id").notNull(),
+		date: text().notNull(),
+		total: integer().notNull().default(0),
+		cancelled: integer().notNull().default(0),
+		avgDelay: real("avg_delay"),
+		plannedFreq: real("planned_freq"),
+		actualFreq: real("actual_freq"),
+	},
+	(t) => [primaryKey({ columns: [t.stationId, t.date] })],
+);
+
+export const operatorDailyStats = sqliteTable(
+	"operator_daily_stats",
+	{
+		operator: text().notNull(),
+		date: text().notNull(),
+		total: integer().notNull().default(0),
+		cancelled: integer().notNull().default(0),
+		avgDelay: real("avg_delay"),
+	},
+	(t) => [primaryKey({ columns: [t.operator, t.date] })],
 );

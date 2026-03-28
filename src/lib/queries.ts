@@ -1,17 +1,11 @@
-import {
-	and,
-	count,
-	desc,
-	eq,
-	gte,
-	isNotNull,
-	max,
-	min,
-	sql,
-	sum,
-} from "drizzle-orm";
+import { and, count, desc, eq, gte, isNotNull, sql, sum } from "drizzle-orm";
 import type { Db } from "../db/client";
-import { departures, haikus } from "../db/schema";
+import {
+	departures,
+	haikus,
+	operatorDailyStats,
+	stationDailyStats,
+} from "../db/schema";
 import type { Station } from "./stations";
 import { nowBerlin, timeToMinutes, todayBerlin } from "./utils";
 
@@ -19,22 +13,6 @@ const CORE_HOURS = sql`((${departures.time} >= '06:00:00' AND ${departures.time}
 
 function coreFilter(coreOnly: boolean) {
 	return coreOnly ? CORE_HOURS : undefined;
-}
-
-const avgDelaySql = sql<
-	number | null
->`AVG(CASE WHEN ${departures.cancelled} = 0 AND ${departures.rtTime} IS NOT NULL THEN (strftime('%s', ${departures.rtTime}) - strftime('%s', ${departures.time})) / 60.0 END)`;
-const rtCountSql = sql<number>`SUM(CASE WHEN ${departures.cancelled} = 0 AND ${departures.rtTime} IS NOT NULL THEN 1 ELSE 0 END)`;
-
-interface DirRow {
-	date: string;
-	direction: string;
-	total: number;
-	cancelled: number;
-	avg_delay: number | null;
-	rt_count: number;
-	first_time: string;
-	last_time: string;
 }
 
 export interface DayStats {
@@ -67,6 +45,71 @@ export interface Stats {
 	avgCancelledPerDay: number;
 	lastChange: string | null;
 	haiku: string | null;
+}
+
+export async function getStats(
+	db: Db,
+	station: Station,
+	coreOnly = false,
+): Promise<Stats> {
+	if (coreOnly) {
+		return getStatsFallback(db, station);
+	}
+
+	const [dayRows, lastChangeRows, haikuRows] = await Promise.all([
+		db
+			.select()
+			.from(stationDailyStats)
+			.where(eq(stationDailyStats.stationId, station.id))
+			.orderBy(desc(stationDailyStats.date)),
+		db
+			.select({ fetchedAt: departures.fetchedAt })
+			.from(departures)
+			.where(eq(departures.stationId, station.id))
+			.orderBy(desc(departures.fetchedAt))
+			.limit(1),
+		db
+			.select({ haiku: haikus.haiku })
+			.from(haikus)
+			.where(
+				and(eq(haikus.date, todayBerlin()), eq(haikus.stationId, station.id)),
+			)
+			.limit(1),
+	]);
+
+	const days: DayStats[] = dayRows.map((r) => ({
+		date: r.date,
+		total: r.total,
+		cancelled: r.cancelled,
+		avgDelay: r.avgDelay,
+		plannedFreq: r.plannedFreq,
+		actualFreq: r.actualFreq,
+	}));
+
+	const totalCancelled = days.reduce((s, d) => s + d.cancelled, 0);
+
+	return {
+		days,
+		avgCancelledPerDay: days.length > 0 ? totalCancelled / days.length : 0,
+		lastChange: lastChangeRows[0]?.fetchedAt ?? null,
+		haiku: haikuRows[0]?.haiku ?? null,
+	};
+}
+
+const avgDelaySql = sql<
+	number | null
+>`AVG(CASE WHEN ${departures.cancelled} = 0 AND ${departures.rtTime} IS NOT NULL THEN (strftime('%s', ${departures.rtTime}) - strftime('%s', ${departures.time})) / 60.0 END)`;
+const rtCountSql = sql<number>`SUM(CASE WHEN ${departures.cancelled} = 0 AND ${departures.rtTime} IS NOT NULL THEN 1 ELSE 0 END)`;
+
+interface DirRow {
+	date: string;
+	direction: string;
+	total: number;
+	cancelled: number;
+	avg_delay: number | null;
+	rt_count: number;
+	first_time: string;
+	last_time: string;
 }
 
 function freqMinutes(
@@ -106,15 +149,7 @@ function avgNonNull(nums: (number | null)[]): number | null {
 		: null;
 }
 
-export async function getStats(
-	db: Db,
-	station: Station,
-	coreOnly = false,
-): Promise<Stats> {
-	const core = coreFilter(coreOnly);
-	const conditions = [eq(departures.stationId, station.id)];
-	if (core) conditions.push(core);
-
+async function getStatsFallback(db: Db, station: Station): Promise<Stats> {
 	const [statsRows, lastChangeRows, haikuRows] = await Promise.all([
 		db
 			.select({
@@ -124,11 +159,11 @@ export async function getStats(
 				cancelled: sql<number>`SUM(${departures.cancelled})`.as("cancelled"),
 				avg_delay: avgDelaySql.as("avg_delay"),
 				rt_count: rtCountSql.as("rt_count"),
-				first_time: min(departures.time).as("first_time"),
-				last_time: max(departures.time).as("last_time"),
+				first_time: sql<string>`MIN(${departures.time})`.as("first_time"),
+				last_time: sql<string>`MAX(${departures.time})`.as("last_time"),
 			})
 			.from(departures)
-			.where(and(...conditions))
+			.where(and(eq(departures.stationId, station.id), CORE_HOURS))
 			.groupBy(departures.date, departures.direction)
 			.orderBy(desc(departures.date), departures.direction),
 		db
@@ -155,8 +190,8 @@ export async function getStats(
 			cancelled: row.cancelled,
 			avg_delay: row.avg_delay,
 			rt_count: row.rt_count,
-			first_time: row.first_time!,
-			last_time: row.last_time!,
+			first_time: row.first_time,
+			last_time: row.last_time,
 		};
 		const entry = dayMap.get(row.date) ?? { dirs: [] };
 		entry.dirs.push(dirRow);
@@ -201,21 +236,25 @@ export async function getStationSummaries(
 	stations: Station[],
 	coreOnly = false,
 ): Promise<Map<string, StationSummary>> {
-	const core = coreFilter(coreOnly);
-	const [statsResults, catRows] = await Promise.all([
-		Promise.all(
-			stations.map((s) => {
-				const conditions = [eq(departures.stationId, s.id)];
-				if (core) conditions.push(core);
-				return db
+	const [statsRows, catRows] = await Promise.all([
+		coreOnly
+			? db
 					.select({
-						cancelled: sum(departures.cancelled),
-						total: count(),
+						stationId: departures.stationId,
+						cancelled: sum(departures.cancelled).as("cancelled"),
+						total: count().as("total"),
 					})
 					.from(departures)
-					.where(and(...conditions));
-			}),
-		),
+					.where(CORE_HOURS)
+					.groupBy(departures.stationId)
+			: db
+					.select({
+						stationId: stationDailyStats.stationId,
+						cancelled: sum(stationDailyStats.cancelled).as("cancelled"),
+						total: sum(stationDailyStats.total).as("total"),
+					})
+					.from(stationDailyStats)
+					.groupBy(stationDailyStats.stationId),
 		db
 			.selectDistinct({
 				stationId: departures.stationId,
@@ -225,6 +264,13 @@ export async function getStationSummaries(
 			.where(isNotNull(departures.category)),
 	]);
 
+	const statsMap = new Map(
+		statsRows.map((r) => [
+			r.stationId,
+			{ cancelled: Number(r.cancelled ?? 0), total: Number(r.total ?? 0) },
+		]),
+	);
+
 	const catMap = new Map<string, string[]>();
 	for (const row of catRows) {
 		const cats = catMap.get(row.stationId) ?? [];
@@ -233,31 +279,15 @@ export async function getStationSummaries(
 	}
 
 	return new Map(
-		stations.map((s, i) => {
-			const row = statsResults[i][0];
-			return [
-				s.id,
-				{
-					cancelled: Number(row?.cancelled ?? 0),
-					total: Number(row?.total ?? 0),
-					categories: catMap.get(s.id) ?? [],
-				},
-			] as const;
-		}),
+		stations.map((s) => [
+			s.id,
+			{
+				cancelled: statsMap.get(s.id)?.cancelled ?? 0,
+				total: statsMap.get(s.id)?.total ?? 0,
+				categories: catMap.get(s.id) ?? [],
+			},
+		]),
 	);
-}
-
-export async function getStationCategories(
-	db: Db,
-	station: Station,
-): Promise<string[]> {
-	const rows = await db
-		.selectDistinct({ category: departures.category })
-		.from(departures)
-		.where(
-			and(eq(departures.stationId, station.id), isNotNull(departures.category)),
-		);
-	return rows.map((r) => r.category!);
 }
 
 export async function getDayDepartures(
@@ -277,6 +307,19 @@ export async function getDayDepartures(
 		.from(departures)
 		.where(and(eq(departures.stationId, station.id), eq(departures.date, date)))
 		.orderBy(departures.time, departures.direction);
+}
+
+export async function getStationCategories(
+	db: Db,
+	station: Station,
+): Promise<string[]> {
+	const rows = await db
+		.selectDistinct({ category: departures.category })
+		.from(departures)
+		.where(
+			and(eq(departures.stationId, station.id), isNotNull(departures.category)),
+		);
+	return rows.map((r) => r.category!);
 }
 
 export async function getHaiku(
@@ -328,53 +371,56 @@ export async function getOperatorSummaries(
 	db: Db,
 	coreOnly = false,
 ): Promise<OperatorSummary[]> {
-	const core = coreFilter(coreOnly);
-	const conditions = [isNotNull(departures.operator)];
-	if (core) conditions.push(core);
+	const [statsRows, lineRows] = await Promise.all([
+		coreOnly
+			? db
+					.select({
+						operator: departures.operator,
+						total: count().as("total"),
+						cancelled: sql<number>`SUM(${departures.cancelled})`.as(
+							"cancelled",
+						),
+						avgDelay: avgDelaySql.as("avg_delay"),
+					})
+					.from(departures)
+					.where(and(isNotNull(departures.operator), CORE_HOURS))
+					.groupBy(departures.operator)
+			: db
+					.select({
+						operator: operatorDailyStats.operator,
+						total: sum(operatorDailyStats.total).as("total"),
+						cancelled: sum(operatorDailyStats.cancelled).as("cancelled"),
+						avgDelay: sql<
+							number | null
+						>`SUM(${operatorDailyStats.avgDelay} * ${operatorDailyStats.total}) / NULLIF(SUM(CASE WHEN ${operatorDailyStats.avgDelay} IS NOT NULL THEN ${operatorDailyStats.total} END), 0)`.as(
+							"avg_delay",
+						),
+					})
+					.from(operatorDailyStats)
+					.groupBy(operatorDailyStats.operator),
+		db
+			.selectDistinct({
+				operator: departures.operator,
+				line: departures.line,
+			})
+			.from(departures)
+			.where(isNotNull(departures.operator))
+			.orderBy(departures.operator, departures.line),
+	]);
 
-	const rows = await db
-		.select({
-			operator: departures.operator,
-			line: departures.line,
-			total: count().as("total"),
-			cancelled: sql<number>`SUM(${departures.cancelled})`.as("cancelled"),
-			avg_delay: avgDelaySql.as("avg_delay"),
-		})
-		.from(departures)
-		.where(and(...conditions))
-		.groupBy(departures.operator, departures.line)
-		.orderBy(departures.operator, departures.line);
-
-	const map = new Map<
-		string,
-		OperatorSummary & { rtWeightSum: number; rtWeightCount: number }
-	>();
-	for (const row of rows) {
-		const op = row.operator!;
-		const existing = map.get(op);
-		if (existing) {
-			existing.lines.push(row.line);
-			existing.total += row.total;
-			existing.cancelled += row.cancelled;
-			if (row.avg_delay !== null) {
-				existing.rtWeightSum += row.avg_delay * row.total;
-				existing.rtWeightCount += row.total;
-			}
-		} else {
-			map.set(op, {
-				operator: op,
-				lines: [row.line],
-				total: row.total,
-				cancelled: row.cancelled,
-				avgDelay: row.avg_delay,
-				rtWeightSum: row.avg_delay !== null ? row.avg_delay * row.total : 0,
-				rtWeightCount: row.avg_delay !== null ? row.total : 0,
-			});
-		}
+	const lineMap = new Map<string, string[]>();
+	for (const row of lineRows) {
+		const lines = lineMap.get(row.operator!) ?? [];
+		lines.push(row.line);
+		lineMap.set(row.operator!, lines);
 	}
-	return [...map.values()].map(({ rtWeightSum, rtWeightCount, ...op }) => ({
-		...op,
-		avgDelay: rtWeightCount > 0 ? rtWeightSum / rtWeightCount : null,
+
+	return statsRows.map((r) => ({
+		operator: r.operator!,
+		lines: lineMap.get(r.operator!) ?? [],
+		total: Number(r.total ?? 0),
+		cancelled: Number(r.cancelled ?? 0),
+		avgDelay: r.avgDelay,
 	}));
 }
 
@@ -390,22 +436,26 @@ export async function getOperatorStats(
 	operator: string,
 	coreOnly = false,
 ): Promise<{ days: OperatorDayStats[]; lines: string[] }> {
-	const core = coreFilter(coreOnly);
-	const conditions = [eq(departures.operator, operator)];
-	if (core) conditions.push(core);
-
-	const [rawDays, lineRows] = await Promise.all([
-		db
-			.select({
-				date: departures.date,
-				total: count().as("total"),
-				cancelled: sql<number>`SUM(${departures.cancelled})`.as("cancelled"),
-				avg_delay: avgDelaySql.as("avg_delay"),
-			})
-			.from(departures)
-			.where(and(...conditions))
-			.groupBy(departures.date)
-			.orderBy(desc(departures.date)),
+	const [dayRows, lineRows] = await Promise.all([
+		coreOnly
+			? db
+					.select({
+						date: departures.date,
+						total: count().as("total"),
+						cancelled: sql<number>`SUM(${departures.cancelled})`.as(
+							"cancelled",
+						),
+						avgDelay: avgDelaySql.as("avg_delay"),
+					})
+					.from(departures)
+					.where(and(eq(departures.operator, operator), CORE_HOURS))
+					.groupBy(departures.date)
+					.orderBy(desc(departures.date))
+			: db
+					.select()
+					.from(operatorDailyStats)
+					.where(eq(operatorDailyStats.operator, operator))
+					.orderBy(desc(operatorDailyStats.date)),
 		db
 			.selectDistinct({ line: departures.line })
 			.from(departures)
@@ -413,11 +463,11 @@ export async function getOperatorStats(
 			.orderBy(departures.line),
 	]);
 
-	const days = rawDays.map((d) => ({
+	const days = dayRows.map((d) => ({
 		date: d.date,
-		total: d.total,
-		cancelled: d.cancelled,
-		avgDelay: d.avg_delay,
+		total: Number(d.total),
+		cancelled: Number(d.cancelled),
+		avgDelay: d.avgDelay,
 	}));
 	return { days, lines: lineRows.map((r) => r.line) };
 }
