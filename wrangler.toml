@@ -1,10 +1,13 @@
 name = "dummrum"
-main = "dist/_worker.js/index.js"
+main = "./src/worker.ts"
 compatibility_date = "2026-03-17"
 compatibility_flags = ["nodejs_compat"]
 
 [observability.logs]
 enabled = true
+
+[triggers]
+crons = ["*/5 * * * *"]
 
 [assets]
 binding = "ASSETS"

@@ -4,11 +4,8 @@ import { defineConfig } from "astro/config";
 
 export default defineConfig({
 	output: "server",
-	adapter: cloudflare({
-		platformProxy: { enabled: true },
-	}),
+	adapter: cloudflare(),
 	vite: {
-		// @ts-expect-error vite version mismatch between @tailwindcss/vite and astro's bundled vite
 		plugins: [tailwindcss()],
 	},
 });
