@@ -83,6 +83,11 @@ const overallDelay =
 				{t(lang, "stat.days_tracked")}
 			</div>
 			<div class="text-4xl font-bold tabular-nums">{days.length}</div>
+			{days.length > 0 && (
+				<div class="text-sm text-muted mt-1">
+					<time datetime={days[days.length - 1].date}>{`${t(lang, "stat.since")} ${fmtDate(days[days.length - 1].date, lang)}`}</time>
+				</div>
+			)}
 		</div>
 	</div>
 
