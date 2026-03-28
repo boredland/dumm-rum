@@ -16,6 +16,16 @@ export const STATIONS: Station[] = [
 		slug: "leonardo-da-vinci-allee",
 	},
 	{
+		id: "3000912",
+		name: "Frankfurt (Main) Südbahnhof",
+		slug: "suedbahnhof",
+	},
+	{
+		id: "3000933",
+		name: "Frankfurt (Main) Stresemannallee Bahnhof",
+		slug: "stresemannallee-bahnhof",
+	},
+	{
 		id: "3000502",
 		name: "Frankfurt (Main) Höhenstraße",
 		slug: "hoehenstrasse",
