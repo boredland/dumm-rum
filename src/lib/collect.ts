@@ -10,7 +10,7 @@ import { createHafasClient } from "./hafas";
 import type { components } from "./hafas-types";
 import type { Station } from "./stations";
 import { STATIONS } from "./stations";
-import { nowBerlin, timeToMinutes, todayBerlin } from "./utils";
+import { nowBerlin, todayBerlin } from "./utils";
 
 type Departure = components["schemas"]["Departure"];
 
@@ -140,168 +140,69 @@ async function generateDailyHaiku(db: Db, ai: Ai): Promise<void> {
 }
 
 async function materializeStationStats(db: Db, date: string): Promise<void> {
-	const [rows, delayedRows] = await Promise.all([
-		db
-			.select({
-				stationId: departures.stationId,
-				direction: departures.direction,
-				total: count().as("total"),
-				cancelled: sql<number>`SUM(${departures.cancelled})`.as("cancelled"),
-				avgDelay: sql<
-					number | null
-				>`AVG(CASE WHEN ${departures.cancelled} = 0 AND ${departures.rtTime} IS NOT NULL THEN (strftime('%s', ${departures.rtDate} || ' ' || ${departures.rtTime}) - strftime('%s', ${departures.date} || ' ' || ${departures.time})) / 60.0 END)`.as(
-					"avg_delay",
+	const rows = await db
+		.select({
+			stationId: departures.stationId,
+			total: count().as("total"),
+			cancelled: sql<number>`SUM(${departures.cancelled})`.as("cancelled"),
+			delayed:
+				sql<number>`SUM(CASE WHEN ${departures.cancelled} = 0 AND ${departures.rtTime} IS NOT NULL AND (strftime('%s', ${departures.rtDate} || ' ' || ${departures.rtTime}) - strftime('%s', ${departures.date} || ' ' || ${departures.time})) / 60.0 >= 7.5 THEN 1 ELSE 0 END)`.as(
+					"delayed",
 				),
-				rtCount:
-					sql<number>`SUM(CASE WHEN ${departures.cancelled} = 0 AND ${departures.rtTime} IS NOT NULL THEN 1 ELSE 0 END)`.as(
-						"rt_count",
-					),
-				firstTime: sql<string>`MIN(${departures.time})`.as("first_time"),
-				lastTime: sql<string>`MAX(${departures.time})`.as("last_time"),
-			})
-			.from(departures)
-			.where(eq(departures.date, date))
-			.groupBy(departures.stationId, departures.direction),
-		db.all<{ station_id: string; delayed: number }>(sql`
-			SELECT d.station_id, COUNT(*) as delayed
-			FROM ${departures} d
-			WHERE d.date = ${date}
-				AND d.cancelled = 0
-				AND d.rt_time IS NOT NULL
-				AND (
-					(strftime('%s', d.rt_date || ' ' || d.rt_time) - strftime('%s', d.date || ' ' || d.time)) / 60.0 >= 0.5 * (
-						SELECT (strftime('%s', MAX(d2.time)) - strftime('%s', MIN(d2.time))) / 60.0 / MAX(COUNT(*) - 1, 1)
-						FROM ${departures} d2
-						WHERE d2.station_id = d.station_id AND d2.date = d.date AND d2.direction = d.direction
-					)
-					OR (strftime('%s', d.rt_date || ' ' || d.rt_time) - strftime('%s', d.date || ' ' || d.time)) / 60.0 >= 7.5
-				)
-			GROUP BY d.station_id
-		`),
-	]);
+			avgDelay: sql<
+				number | null
+			>`AVG(CASE WHEN ${departures.cancelled} = 0 AND ${departures.rtTime} IS NOT NULL THEN (strftime('%s', ${departures.rtDate} || ' ' || ${departures.rtTime}) - strftime('%s', ${departures.date} || ' ' || ${departures.time})) / 60.0 END)`.as(
+				"avg_delay",
+			),
+		})
+		.from(departures)
+		.where(eq(departures.date, date))
+		.groupBy(departures.stationId);
 
-	const delayedMap = new Map(delayedRows.map((r) => [r.station_id, r.delayed]));
-
-	const stationMap = new Map<
-		string,
-		{
-			total: number;
-			cancelled: number;
-			delaySum: number;
-			delayCount: number;
-			freqs: number[];
-			actualFreqs: number[];
-		}
-	>();
 	for (const row of rows) {
-		const entry = stationMap.get(row.stationId) ?? {
-			total: 0,
-			cancelled: 0,
-			delaySum: 0,
-			delayCount: 0,
-			freqs: [],
-			actualFreqs: [],
-		};
-		entry.total += row.total;
-		entry.cancelled += row.cancelled;
-
-		const span = timeToMinutes(row.lastTime) - timeToMinutes(row.firstTime);
-		if (span > 0 && row.total > 1) {
-			const freq = span / (row.total - 1);
-			entry.freqs.push(freq);
-			const uncancelled = row.total - row.cancelled;
-			if (uncancelled > 1) entry.actualFreqs.push(span / (uncancelled - 1));
-
-			if (row.rtCount > 0 || row.cancelled > 0) {
-				const rtDelay = (row.avgDelay ?? 0) * row.rtCount;
-				const cancelDelay = row.cancelled * freq;
-				const totalWithData = row.rtCount + row.cancelled;
-				if (totalWithData > 0) {
-					entry.delaySum +=
-						((rtDelay + cancelDelay) / totalWithData) * row.total;
-					entry.delayCount += row.total;
-				}
-			}
-		}
-		stationMap.set(row.stationId, entry);
-	}
-
-	for (const [stationId, s] of stationMap) {
-		const avgDelay = s.delayCount > 0 ? s.delaySum / s.delayCount : null;
-		const plannedFreq =
-			s.freqs.length > 0
-				? s.freqs.reduce((a, b) => a + b, 0) / s.freqs.length
-				: null;
-		const actualFreq =
-			s.actualFreqs.length > 0
-				? s.actualFreqs.reduce((a, b) => a + b, 0) / s.actualFreqs.length
-				: null;
-		const delayed = delayedMap.get(stationId) ?? 0;
 		await db
 			.insert(stationDailyStats)
 			.values({
-				stationId,
+				stationId: row.stationId,
 				date,
-				total: s.total,
-				cancelled: s.cancelled,
-				delayed,
-				avgDelay,
-				plannedFreq,
-				actualFreq,
+				total: row.total,
+				cancelled: row.cancelled,
+				delayed: row.delayed,
+				avgDelay: row.avgDelay,
 			})
 			.onConflictDoUpdate({
 				target: [stationDailyStats.stationId, stationDailyStats.date],
 				set: {
-					total: s.total,
-					cancelled: s.cancelled,
-					delayed,
-					avgDelay,
-					plannedFreq,
-					actualFreq,
+					total: row.total,
+					cancelled: row.cancelled,
+					delayed: row.delayed,
+					avgDelay: row.avgDelay,
 				},
 			});
 	}
 }
 
 async function materializeOperatorStats(db: Db, date: string): Promise<void> {
-	const [rows, delayedRows] = await Promise.all([
-		db
-			.select({
-				operator: departures.operator,
-				total: count().as("total"),
-				cancelled: sql<number>`SUM(${departures.cancelled})`.as("cancelled"),
-				avgDelay: sql<
-					number | null
-				>`AVG(CASE WHEN ${departures.cancelled} = 0 AND ${departures.rtTime} IS NOT NULL THEN (strftime('%s', ${departures.rtDate} || ' ' || ${departures.rtTime}) - strftime('%s', ${departures.date} || ' ' || ${departures.time})) / 60.0 END)`.as(
-					"avg_delay",
+	const rows = await db
+		.select({
+			operator: departures.operator,
+			total: count().as("total"),
+			cancelled: sql<number>`SUM(${departures.cancelled})`.as("cancelled"),
+			delayed:
+				sql<number>`SUM(CASE WHEN ${departures.cancelled} = 0 AND ${departures.rtTime} IS NOT NULL AND (strftime('%s', ${departures.rtDate} || ' ' || ${departures.rtTime}) - strftime('%s', ${departures.date} || ' ' || ${departures.time})) / 60.0 >= 7.5 THEN 1 ELSE 0 END)`.as(
+					"delayed",
 				),
-			})
-			.from(departures)
-			.where(and(eq(departures.date, date), isNotNull(departures.operator)))
-			.groupBy(departures.operator),
-		db.all<{ operator: string; delayed: number }>(sql`
-			SELECT d.operator, COUNT(*) as delayed
-			FROM ${departures} d
-			WHERE d.date = ${date}
-				AND d.operator IS NOT NULL
-				AND d.cancelled = 0
-				AND d.rt_time IS NOT NULL
-				AND (
-					(strftime('%s', d.rt_date || ' ' || d.rt_time) - strftime('%s', d.date || ' ' || d.time)) / 60.0 >= 0.5 * (
-						SELECT (strftime('%s', MAX(d2.time)) - strftime('%s', MIN(d2.time))) / 60.0 / MAX(COUNT(*) - 1, 1)
-						FROM ${departures} d2
-						WHERE d2.station_id = d.station_id AND d2.date = d.date AND d2.direction = d.direction
-					)
-					OR (strftime('%s', d.rt_date || ' ' || d.rt_time) - strftime('%s', d.date || ' ' || d.time)) / 60.0 >= 7.5
-				)
-			GROUP BY d.operator
-		`),
-	]);
-
-	const delayedMap = new Map(delayedRows.map((r) => [r.operator, r.delayed]));
+			avgDelay: sql<
+				number | null
+			>`AVG(CASE WHEN ${departures.cancelled} = 0 AND ${departures.rtTime} IS NOT NULL THEN (strftime('%s', ${departures.rtDate} || ' ' || ${departures.rtTime}) - strftime('%s', ${departures.date} || ' ' || ${departures.time})) / 60.0 END)`.as(
+				"avg_delay",
+			),
+		})
+		.from(departures)
+		.where(and(eq(departures.date, date), isNotNull(departures.operator)))
+		.groupBy(departures.operator);
 
 	for (const row of rows) {
-		const delayed = delayedMap.get(row.operator!) ?? 0;
 		await db
 			.insert(operatorDailyStats)
 			.values({
@@ -309,7 +210,7 @@ async function materializeOperatorStats(db: Db, date: string): Promise<void> {
 				date,
 				total: row.total,
 				cancelled: row.cancelled,
-				delayed,
+				delayed: row.delayed,
 				avgDelay: row.avgDelay,
 			})
 			.onConflictDoUpdate({
@@ -317,7 +218,7 @@ async function materializeOperatorStats(db: Db, date: string): Promise<void> {
 				set: {
 					total: row.total,
 					cancelled: row.cancelled,
-					delayed,
+					delayed: row.delayed,
 					avgDelay: row.avgDelay,
 				},
 			});

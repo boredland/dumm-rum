@@ -114,7 +114,6 @@ const todayTotal = todayStats?.total ?? 0;
 					<th class="w-[120px] px-4 py-3 max-sm:hidden text-[0.7rem] uppercase tracking-wide text-muted font-semibold"></th>
 					<th class="text-left px-4 py-3 text-[0.7rem] uppercase tracking-wide text-muted font-semibold" title={t(lang, "table.delayed_tooltip")}>{t(lang, "table.delayed")} <span class="cursor-help">&#9432;</span></th>
 					<th class="text-left px-4 py-3 text-[0.7rem] uppercase tracking-wide text-muted font-semibold">{t(lang, "table.avg_delay")}</th>
-					<th class="text-left px-4 py-3 text-[0.7rem] uppercase tracking-wide text-muted font-semibold max-sm:hidden" title={t(lang, "table.freq_deviation_tooltip")}>{t(lang, "table.freq_deviation")} <span class="cursor-help">&#9432;</span></th>
 				</tr>
 			</thead>
 			<tbody>
@@ -151,11 +150,6 @@ const todayTotal = todayStats?.total ?? 0;
 										)}
 									</td>
 									<td class="px-4 py-2.5 text-sm tabular-nums">{fmtDelay(d.avgDelay)}</td>
-									<td class="px-4 py-2.5 text-sm tabular-nums max-sm:hidden">
-										{d.plannedFreq !== null && d.actualFreq !== null
-											? `${(d.actualFreq - d.plannedFreq) >= 0 ? "+" : ""}${(d.actualFreq - d.plannedFreq).toFixed(1)} min`
-											: "\u2014"}
-									</td>
 								</tr>
 							);
 						})

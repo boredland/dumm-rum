@@ -56,9 +56,6 @@ const translations = {
 			"Abfahrten mit \u226550% des geplanten Takts oder \u22657,5 Minuten Versp\u00e4tung (50% der angenommenen durchschnittlichen Fahrtzeit innerhalb Frankfurts von 15 Min.).",
 		"table.rate": "Quote",
 		"table.avg_delay": "\u00d8 Versp\u00e4tung",
-		"table.freq_deviation": "Taktabweichung",
-		"table.freq_deviation_tooltip":
-			"Abweichung zwischen Ist- und Soll-Takt in Minuten. Positiv = seltener als geplant, negativ = h\u00e4ufiger. Berechnung: Ist-Takt \u2212 Soll-Takt.",
 		"table.time": "Zeit",
 		"table.line": "Linie",
 		"table.direction": "Richtung",
@@ -127,9 +124,6 @@ const translations = {
 			"Departures delayed by \u226550% of planned frequency or \u22657.5 minutes (50% of assumed average 15 min trip time within Frankfurt).",
 		"table.rate": "Rate",
 		"table.avg_delay": "Avg delay",
-		"table.freq_deviation": "Freq deviation",
-		"table.freq_deviation_tooltip":
-			"Difference between actual and planned frequency in minutes. Positive = less frequent than planned, negative = more frequent. Calculation: actual freq \u2212 planned freq.",
 		"table.time": "Time",
 		"table.line": "Line",
 		"table.direction": "Direction",

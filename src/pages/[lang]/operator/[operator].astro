@@ -24,11 +24,7 @@ const overallDelay =
 		? delayDays.reduce((s, d) => s + d.avgDelay! * d.total, 0) /
 			delayDays.reduce((s, d) => s + d.total, 0)
 		: null;
-const chartDays = days.map((d) => ({
-	...d,
-	plannedFreq: null,
-	actualFreq: null,
-}));
+const chartDays = days;
 ---
 
 <Layout title={operator} lang={lang}>

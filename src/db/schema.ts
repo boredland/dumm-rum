@@ -51,8 +51,6 @@ export const stationDailyStats = sqliteTable(
 		cancelled: integer().notNull().default(0),
 		delayed: integer().notNull().default(0),
 		avgDelay: real("avg_delay"),
-		plannedFreq: real("planned_freq"),
-		actualFreq: real("actual_freq"),
 	},
 	(t) => [primaryKey({ columns: [t.stationId, t.date] })],
 );

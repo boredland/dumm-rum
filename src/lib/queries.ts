@@ -8,7 +8,7 @@ import {
 	stationDailyStats,
 } from "../db/schema";
 import type { Station } from "./stations";
-import { nowBerlin, timeToMinutes, todayBerlin } from "./utils";
+import { nowBerlin, todayBerlin } from "./utils";
 
 const CORE_HOURS = sql`((${departures.time} >= '06:00:00' AND ${departures.time} < '09:00:00') OR (${departures.time} >= '16:00:00' AND ${departures.time} < '19:00:00'))`;
 
@@ -92,55 +92,8 @@ export async function getStats(
 const avgDelaySql = sql<
 	number | null
 >`AVG(CASE WHEN ${departures.cancelled} = 0 AND ${departures.rtTime} IS NOT NULL THEN (strftime('%s', ${departures.rtDate} || ' ' || ${departures.rtTime}) - strftime('%s', ${departures.date} || ' ' || ${departures.time})) / 60.0 END)`;
-const rtCountSql = sql<number>`SUM(CASE WHEN ${departures.cancelled} = 0 AND ${departures.rtTime} IS NOT NULL THEN 1 ELSE 0 END)`;
 
-interface DirRow {
-	date: string;
-	direction: string;
-	total: number;
-	cancelled: number;
-	avg_delay: number | null;
-	rt_count: number;
-	first_time: string;
-	last_time: string;
-}
-
-function freqMinutes(
-	cnt: number,
-	firstTime: string,
-	lastTime: string,
-): number | null {
-	const span = timeToMinutes(lastTime) - timeToMinutes(firstTime);
-	return span > 0 && cnt > 1 ? span / (cnt - 1) : null;
-}
-
-function blendedDelay(row: DirRow): number | null {
-	if (row.rt_count === 0 && row.cancelled === 0) return null;
-	const rtSum = (row.avg_delay ?? 0) * row.rt_count;
-	const freq = freqMinutes(row.total, row.first_time, row.last_time);
-	const cancelledDelay = freq !== null ? row.cancelled * freq : 0;
-	const total = row.rt_count + row.cancelled;
-	return total > 0 ? (rtSum + cancelledDelay) / total : null;
-}
-
-function weightedAvg(
-	items: { value: number | null; weight: number }[],
-): number | null {
-	const valid = items.filter(
-		(i): i is { value: number; weight: number } => i.value !== null,
-	);
-	const totalWeight = valid.reduce((s, i) => s + i.weight, 0);
-	return totalWeight > 0
-		? valid.reduce((s, i) => s + i.value * i.weight, 0) / totalWeight
-		: null;
-}
-
-function avgNonNull(nums: (number | null)[]): number | null {
-	const valid = nums.filter((n): n is number => n !== null);
-	return valid.length > 0
-		? valid.reduce((a, b) => a + b, 0) / valid.length
-		: null;
-}
+const delayedSql = sql<number>`SUM(CASE WHEN ${departures.cancelled} = 0 AND ${departures.rtTime} IS NOT NULL AND (strftime('%s', ${departures.rtDate} || ' ' || ${departures.rtTime}) - strftime('%s', ${departures.date} || ' ' || ${departures.time})) / 60.0 >= 7.5 THEN 1 ELSE 0 END)`;
 
 async function getStatsFallback(
 	db: Db,
@@ -151,22 +104,20 @@ async function getStatsFallback(
 	const conditions = [eq(departures.stationId, station.id), CORE_HOURS];
 	if (daysCond) conditions.push(daysCond);
 
-	const [statsRows, lastChangeRows, haikuRows] = await Promise.all([
+	const [dayRows, lastChangeRows, haikuRows] = await Promise.all([
 		db
 			.select({
+				stationId: departures.stationId,
 				date: departures.date,
-				direction: departures.direction,
 				total: count().as("total"),
 				cancelled: sql<number>`SUM(${departures.cancelled})`.as("cancelled"),
-				avg_delay: avgDelaySql.as("avg_delay"),
-				rt_count: rtCountSql.as("rt_count"),
-				first_time: sql<string>`MIN(${departures.time})`.as("first_time"),
-				last_time: sql<string>`MAX(${departures.time})`.as("last_time"),
+				delayed: delayedSql.as("delayed"),
+				avgDelay: avgDelaySql.as("avg_delay"),
 			})
 			.from(departures)
 			.where(and(...conditions))
-			.groupBy(departures.date, departures.direction)
-			.orderBy(desc(departures.date), departures.direction),
+			.groupBy(departures.date)
+			.orderBy(desc(departures.date)),
 		db
 			.select({ fetchedAt: departures.fetchedAt })
 			.from(departures)
@@ -180,55 +131,12 @@ async function getStatsFallback(
 			.limit(1),
 	]);
 
-	const dayMap = new Map<string, { dirs: DirRow[] }>();
-	for (const row of statsRows) {
-		const dirRow: DirRow = {
-			date: row.date,
-			direction: row.direction,
-			total: row.total,
-			cancelled: row.cancelled,
-			avg_delay: row.avg_delay,
-			rt_count: row.rt_count,
-			first_time: row.first_time,
-			last_time: row.last_time,
-		};
-		const entry = dayMap.get(row.date) ?? { dirs: [] };
-		entry.dirs.push(dirRow);
-		dayMap.set(row.date, entry);
-	}
-
-	const days: DayStats[] = [...dayMap.entries()].map(([date, { dirs }]) => {
-		const stationId = "";
-		const total = dirs.reduce((s, d) => s + d.total, 0);
-		const cancelled = dirs.reduce((s, d) => s + d.cancelled, 0);
-		const avgDelay = weightedAvg(
-			dirs.map((d) => ({ value: blendedDelay(d), weight: d.total })),
-		);
-		const plannedFreq = avgNonNull(
-			dirs.map((d) => freqMinutes(d.total, d.first_time, d.last_time)),
-		);
-		const actualFreq = avgNonNull(
-			dirs.map((d) =>
-				freqMinutes(d.total - d.cancelled, d.first_time, d.last_time),
-			),
-		);
-		return {
-			stationId,
-			date,
-			total,
-			cancelled,
-			delayed: 0,
-			avgDelay,
-			plannedFreq,
-			actualFreq,
-		};
-	});
-
-	const totalCancelled = days.reduce((s, d) => s + d.cancelled, 0);
+	const totalCancelled = dayRows.reduce((s, d) => s + d.cancelled, 0);
 
 	return {
-		days,
-		avgCancelledPerDay: days.length > 0 ? totalCancelled / days.length : 0,
+		days: dayRows,
+		avgCancelledPerDay:
+			dayRows.length > 0 ? totalCancelled / dayRows.length : 0,
 		lastChange: lastChangeRows[0]?.fetchedAt ?? null,
 		haiku: haikuRows[0]?.haiku ?? null,
 	};
@@ -493,27 +401,20 @@ export async function getOperatorStats(
 	return { days, lines: lineRows.map((r) => r.line) };
 }
 
+const DELAY_THRESHOLD_MIN = 7.5;
+
 export function dayAvgDelay(departureRows: DepartureRow[]): number | null {
-	const byDir = Map.groupBy(departureRows, (d) => d.direction);
 	let totalDelay = 0;
 	let delayCount = 0;
-	for (const [, deps] of byDir) {
-		const sorted = deps.toSorted((a, b) => a.time.localeCompare(b.time));
-		const freq = freqMinutes(
-			sorted.length,
-			sorted[0].time,
-			sorted[sorted.length - 1].time,
-		);
-		for (const d of sorted) {
-			if (d.cancelled && freq !== null) {
-				totalDelay += freq;
-				delayCount++;
-			} else if (!d.cancelled && d.rtTime && d.rtDate) {
-				const scheduled = new Date(`${d.date}T${d.time}`).getTime();
-				const actual = new Date(`${d.rtDate}T${d.rtTime}`).getTime();
-				totalDelay += (actual - scheduled) / 60000;
-				delayCount++;
-			}
+	for (const d of departureRows) {
+		if (d.cancelled) {
+			totalDelay += DELAY_THRESHOLD_MIN;
+			delayCount++;
+		} else if (d.rtTime && d.rtDate) {
+			const scheduled = new Date(`${d.date}T${d.time}`).getTime();
+			const actual = new Date(`${d.rtDate}T${d.rtTime}`).getTime();
+			totalDelay += (actual - scheduled) / 60000;
+			delayCount++;
 		}
 	}
 	return delayCount > 0 ? totalDelay / delayCount : null;
