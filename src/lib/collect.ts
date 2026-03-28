@@ -299,8 +299,11 @@ export async function runCollection(
 	await generateDailyHaiku(db, ai);
 
 	const today = todayBerlin();
-	await materializeStationStats(db, today);
-	await materializeOperatorStats(db, today);
+	const yesterday = nowBerlin().subtract(1, "day").format("YYYY-MM-DD");
+	for (const date of [today, yesterday]) {
+		await materializeStationStats(db, date);
+		await materializeOperatorStats(db, date);
+	}
 
 	return summary;
 }
