@@ -50,6 +50,7 @@ const pill =
 		});
 	}
 
-	initFilters();
-	document.addEventListener("astro:page-load", initFilters);
+	document.addEventListener("astro:page-load", () => {
+		requestAnimationFrame(initFilters);
+	});
 </script>

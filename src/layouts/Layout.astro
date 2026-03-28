@@ -84,13 +84,17 @@ const otherPath = Astro.url.pathname.replace(`/${lang}`, `/${otherLang}`);
 			&uarr;
 		</button>
 		<script>
-			const btn = document.getElementById("scroll-top")!;
+			function initScrollTop() {
+				const btn = document.getElementById("scroll-top");
+				if (!btn) return;
+				btn.addEventListener("click", () => {
+					window.scrollTo({ top: 0, behavior: "smooth" });
+				});
+			}
 			window.addEventListener("scroll", () => {
-				btn.classList.toggle("hidden", window.scrollY < 400);
+				document.getElementById("scroll-top")?.classList.toggle("hidden", window.scrollY < 400);
 			}, { passive: true });
-			btn.addEventListener("click", () => {
-				window.scrollTo({ top: 0, behavior: "smooth" });
-			});
+			document.addEventListener("astro:page-load", initScrollTop);
 		</script>
 	</body>
 </html>
