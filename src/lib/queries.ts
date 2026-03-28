@@ -14,7 +14,7 @@ const CORE_HOURS = sql`((${departures.time} >= '06:00:00' AND ${departures.time}
 
 export type DaysFilter = "" | "weekdays" | "weekends";
 
-function daysCondition(dateCol: unknown, filter: DaysFilter) {
+function daysCondition(dateCol: unknown, filter: DaysFilter = "") {
 	if (filter === "weekdays")
 		return sql`strftime('%w', ${dateCol}) NOT IN ('0', '6')`;
 	if (filter === "weekends")
@@ -22,10 +22,13 @@ function daysCondition(dateCol: unknown, filter: DaysFilter) {
 	return undefined;
 }
 
+const validDays = new Set<DaysFilter>(["", "weekdays", "weekends"]);
+
 export function parseFilter(url: URL): QueryFilter {
+	const days = url.searchParams.get("days") ?? "";
 	return {
 		coreOnly: url.searchParams.get("hours") === "core",
-		days: (url.searchParams.get("days") as DaysFilter) || "",
+		days: validDays.has(days as DaysFilter) ? (days as DaysFilter) : "",
 	};
 }
 
@@ -52,7 +55,7 @@ export async function getStats(
 		return getStatsFallback(db, station, filter);
 	}
 
-	const daysCond = daysCondition(stationDailyStats.date, filter.days ?? "");
+	const daysCond = daysCondition(stationDailyStats.date, filter.days);
 	const conditions = [eq(stationDailyStats.stationId, station.id)];
 	if (daysCond) conditions.push(daysCond);
 
@@ -144,7 +147,7 @@ async function getStatsFallback(
 	station: Station,
 	filter: QueryFilter = {},
 ): Promise<Stats> {
-	const daysCond = daysCondition(departures.date, filter.days ?? "");
+	const daysCond = daysCondition(departures.date, filter.days);
 	const conditions = [eq(departures.stationId, station.id), CORE_HOURS];
 	if (daysCond) conditions.push(daysCond);
 
@@ -241,11 +244,8 @@ export async function getStationSummaries(
 	stations: Station[],
 	filter: QueryFilter = {},
 ): Promise<Map<string, StationSummary>> {
-	const depDaysCond = daysCondition(departures.date, filter.days ?? "");
-	const statsDaysCond = daysCondition(
-		stationDailyStats.date,
-		filter.days ?? "",
-	);
+	const depDaysCond = daysCondition(departures.date, filter.days);
+	const statsDaysCond = daysCondition(stationDailyStats.date, filter.days);
 
 	const [statsRows, catRows] = await Promise.all([
 		filter.coreOnly
@@ -376,8 +376,8 @@ export async function getOperatorSummaries(
 	db: Db,
 	filter: QueryFilter = {},
 ): Promise<OperatorSummary[]> {
-	const depDaysCond = daysCondition(departures.date, filter.days ?? "");
-	const opDaysCond = daysCondition(operatorDailyStats.date, filter.days ?? "");
+	const depDaysCond = daysCondition(departures.date, filter.days);
+	const opDaysCond = daysCondition(operatorDailyStats.date, filter.days);
 
 	const [statsRows, lineRows] = await Promise.all([
 		filter.coreOnly
@@ -440,8 +440,8 @@ export async function getOperatorStats(
 	operator: string,
 	filter: QueryFilter = {},
 ): Promise<{ days: OperatorDayStats[]; lines: string[] }> {
-	const depDaysCond = daysCondition(departures.date, filter.days ?? "");
-	const opDaysCond = daysCondition(operatorDailyStats.date, filter.days ?? "");
+	const depDaysCond = daysCondition(departures.date, filter.days);
+	const opDaysCond = daysCondition(operatorDailyStats.date, filter.days);
 
 	const [dayRows, lineRows] = await Promise.all([
 		filter.coreOnly

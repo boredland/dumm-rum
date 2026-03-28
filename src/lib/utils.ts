@@ -48,7 +48,7 @@ export function timeToMinutes(t: string): number {
 
 export function rateBorderColor(cancelled: number, total: number): string {
 	const rate = total > 0 ? (cancelled / total) * 100 : 0;
-	return rate >= 5
+	return rate >= 2
 		? "border-danger"
 		: rate >= 1
 			? "border-warning"
