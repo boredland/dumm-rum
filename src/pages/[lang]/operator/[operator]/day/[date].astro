@@ -5,7 +5,13 @@ import { createDb } from "../../../../../db/client";
 import Layout from "../../../../../layouts/Layout.astro";
 import { langFromParams, t } from "../../../../../lib/i18n";
 import { getOperatorDayDepartures } from "../../../../../lib/queries";
-import { delayMinutes, fmtDate, pct, shortDir } from "../../../../../lib/utils";
+import {
+	DELAY_THRESHOLD_MIN,
+	delayMinutes,
+	fmtDate,
+	pct,
+	shortDir,
+} from "../../../../../lib/utils";
 
 const lang = langFromParams(Astro.params);
 const operator = decodeURIComponent(Astro.params.operator!);
@@ -20,7 +26,7 @@ const delayedCount = departures.filter(
 		!d.cancelled &&
 		d.rtTime &&
 		d.rtDate &&
-		delayMinutes(d.date, d.time, d.rtDate, d.rtTime) >= 7.5,
+		delayMinutes(d.date, d.time, d.rtDate, d.rtTime) >= DELAY_THRESHOLD_MIN,
 ).length;
 ---
 
@@ -74,11 +80,12 @@ const delayedCount = departures.filter(
 						departures.map((d) => {
 							const time = d.time.slice(0, 5);
 							const rtTime = d.rtTime?.slice(0, 5) ?? null;
-							const delayMin = d.rtTime && d.rtDate
-								? Math.round(delayMinutes(d.date, d.time, d.rtDate, d.rtTime))
+							const rawDelay = d.rtTime && d.rtDate
+								? delayMinutes(d.date, d.time, d.rtDate, d.rtTime)
 								: null;
+							const delayMin = rawDelay !== null ? Math.round(rawDelay) : null;
 							const msgs: string[] = d.messages ? JSON.parse(d.messages) : [];
-							const status = d.cancelled ? "cancelled" : (delayMin !== null && delayMin >= 8) ? "delayed" : "ok";
+							const status = d.cancelled ? "cancelled" : (rawDelay !== null && rawDelay >= DELAY_THRESHOLD_MIN) ? "delayed" : "ok";
 							return (
 								<tr data-status={status} class="border-b border-border-dim last:border-b-0 hover:bg-surface-hover">
 									<td class="px-4 py-2.5 text-sm tabular-nums">

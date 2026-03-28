@@ -34,6 +34,11 @@ const [stats, categories] = await Promise.all([
 ]);
 
 const today = todayBerlin();
+const totalCancelled = stats.days.reduce((s, d) => s + d.cancelled, 0);
+const totalDelayed = stats.days.reduce((s, d) => s + d.delayed, 0);
+const totalDep = stats.days.reduce((s, d) => s + d.total, 0);
+const score = reliabilityScore(totalCancelled, totalDelayed, totalDep);
+const todayStats = stats.days.find((d) => d.date === today);
 ---
 
 <Layout title={station.name} lang={lang}>
@@ -50,13 +55,7 @@ const today = todayBerlin();
 			{station.name}
 		</h1>
 		<p class="text-muted text-sm mt-1">
-			{(() => {
-				const totalC = stats.days.reduce((s, d) => s + d.cancelled, 0);
-				const totalD = stats.days.reduce((s, d) => s + d.delayed, 0);
-				const totalT = stats.days.reduce((s, d) => s + d.total, 0);
-				const score = reliabilityScore(totalC, totalD, totalT);
-				return totalT > 0 ? <>{`${t(lang, "stat.reliability")}: ${score}/100 \u2014 `}</> : null;
-			})()}
+			{totalDep > 0 && <>{`${t(lang, "stat.reliability")}: ${score}/100 \u2014 `}</>}
 			{stats.days.length > 0 && (
 				<>
 					{`${t(lang, "stat.since")} `}<time datetime={stats.days[stats.days.length - 1].date}>{fmtDate(stats.days[stats.days.length - 1].date, lang)}</time>
@@ -79,13 +78,7 @@ const today = todayBerlin();
 
 	<HoursToggle basePath={`/${lang}/${station.slug}`} coreOnly={coreOnly} daysFilter={daysFilter} lang={lang} />
 
-	{(() => {
-		const totalCancelled = stats.days.reduce((s, d) => s + d.cancelled, 0);
-		const totalDelayed = stats.days.reduce((s, d) => s + d.delayed, 0);
-		const totalDep = stats.days.reduce((s, d) => s + d.total, 0);
-		const todayStats = stats.days.find((d) => d.date === today);
-		return (
-			<div class="grid grid-cols-3 gap-4 mb-8 max-sm:grid-cols-1">
+	<div class="grid grid-cols-3 gap-4 mb-8 max-sm:grid-cols-1">
 				<div class="bg-surface border border-border rounded-xl p-5">
 					<div class="text-[0.7rem] uppercase tracking-wide text-muted mb-1">{t(lang, "stat.cancelled")} {t(lang, "stat.avg_per_day").toLowerCase()}</div>
 					<div class:list={["text-4xl font-bold tabular-nums", totalCancelled > 0 ? "text-danger" : "text-success"]}>
@@ -113,9 +106,7 @@ const today = todayBerlin();
 						<div class="text-2xl font-bold tabular-nums text-muted">&mdash;</div>
 					)}
 				</div>
-			</div>
-		);
-	})()}
+		</div>
 
 	<NextDepartures server:defer stationSlug={station.slug} lang={lang} />
 

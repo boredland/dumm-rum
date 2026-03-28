@@ -93,10 +93,16 @@ export function trendColor(arrow: string): string {
 	return "";
 }
 
+export const DELAY_THRESHOLD_MIN = 7.5;
+
+function scoreColor(score: number): "danger" | "warning" | "success" {
+	return score <= 85 ? "danger" : score <= 93 ? "warning" : "success";
+}
+
 export function scoreBorderColor(score: number): string {
-	return score <= 85
-		? "border-danger"
-		: score <= 93
-			? "border-warning"
-			: "border-success";
+	return `border-${scoreColor(score)}`;
+}
+
+export function scoreBgColor(score: number): string {
+	return `bg-${scoreColor(score)}`;
 }
