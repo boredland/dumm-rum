@@ -49,8 +49,6 @@ const translations = {
 		"stat.rate": "Quote",
 		"stat.since": "Erfassung seit",
 		"stat.departures": "Abfahrten",
-		"stat.avg_delay": "\u00d8 Versp\u00e4tung",
-		"stat.cancelled_eq_freq": "Ausfall = geplanter Takt",
 		"stat.reliability": "Pünktlich",
 		"stat.cancellation_rate": "Ausfallquote",
 
@@ -63,8 +61,6 @@ const translations = {
 		"table.total": "Gesamt",
 		"table.cancelled": "Ausf\u00e4lle",
 		"table.delayed": "Versp\u00e4tet",
-		"table.delayed_tooltip":
-			"Abfahrten mit \u226550% des geplanten Takts oder \u22657,5 Minuten Versp\u00e4tung (50% der angenommenen durchschnittlichen Fahrtzeit innerhalb Frankfurts von 15 Min.).",
 		"table.rate": "Quote",
 		"table.avg_delay": "\u00d8 Versp\u00e4tung",
 		"table.time": "Zeit",
@@ -134,8 +130,6 @@ const translations = {
 		"stat.rate": "rate",
 		"stat.since": "tracking since",
 		"stat.departures": "Departures",
-		"stat.avg_delay": "Avg delay",
-		"stat.cancelled_eq_freq": "cancelled = planned freq",
 		"stat.reliability": "On time",
 		"stat.cancellation_rate": "cancellation rate",
 
@@ -148,8 +142,6 @@ const translations = {
 		"table.total": "Total",
 		"table.cancelled": "Cancelled",
 		"table.delayed": "Delayed",
-		"table.delayed_tooltip":
-			"Departures delayed by \u226550% of planned frequency or \u22657.5 minutes (50% of assumed average 15 min trip time within Frankfurt).",
 		"table.rate": "Rate",
 		"table.avg_delay": "Avg delay",
 		"table.time": "Time",

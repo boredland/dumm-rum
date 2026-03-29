@@ -76,7 +76,7 @@ const [
 			delayedAll += st.delayed;
 		}
 		const score = onTimeRate(cancelledAll, delayedAll, totalAll);
-		const color = score <= 85 ? "text-danger" : score <= 93 ? "text-warning" : "text-success";
+		const color = score < 80 ? "text-danger" : score < 90 ? "text-warning" : "text-success";
 		return totalAll > 0 ? (
 			<div class="mb-8 bg-surface border border-border rounded-xl p-5 flex items-center gap-6">
 				<div>
@@ -113,7 +113,7 @@ const [
 					return scoreA - scoreB || a.line.localeCompare(b.line, undefined, { numeric: true });
 				}).map((l) => {
 					const tr = lineTrends.get(l.line);
-					const arrow = tr ? trendArrow(tr, { cancelled: tr.prevCancelled, total: tr.prevTotal }) : "";
+					const arrow = tr ? trendArrow(tr, { cancelled: tr.prevCancelled, delayed: tr.prevDelayed, total: tr.prevTotal }) : "";
 					const borderColor = scoreBorderColor(onTimeRate(l.cancelled, l.delayed, l.total));
 					return (
 						<a
@@ -157,7 +157,7 @@ const [
 			}).map((s) => {
 				const st = stationStats.get(s.id);
 				const tr = stationTrends.get(s.id);
-				const arrow = tr ? trendArrow(tr, { cancelled: tr.prevCancelled, total: tr.prevTotal }) : "";
+				const arrow = tr ? trendArrow(tr, { cancelled: tr.prevCancelled, delayed: tr.prevDelayed, total: tr.prevTotal }) : "";
 				const score = st ? onTimeRate(st.cancelled, st.delayed, st.total) : 100;
 				const borderColor = scoreBorderColor(score);
 				return (
@@ -205,7 +205,7 @@ const [
 					return scoreA - scoreB || a.operator.localeCompare(b.operator);
 				}).map((op) => {
 					const tr = operatorTrends.get(op.operator);
-					const arrow = tr ? trendArrow(tr, { cancelled: tr.prevCancelled, total: tr.prevTotal }) : "";
+					const arrow = tr ? trendArrow(tr, { cancelled: tr.prevCancelled, delayed: tr.prevDelayed, total: tr.prevTotal }) : "";
 					const borderColor = scoreBorderColor(onTimeRate(op.cancelled, op.delayed, op.total));
 					return (
 						<a

@@ -71,13 +71,13 @@ export function onTimeRate(
 }
 
 export function trendArrow(
-	current: { cancelled: number; total: number },
-	prev: { cancelled: number; total: number },
+	current: { cancelled: number; delayed: number; total: number },
+	prev: { cancelled: number; delayed: number; total: number },
 ): string {
 	if (prev.total === 0 || current.total === 0) return "";
-	const currentRate = current.cancelled / current.total;
-	const prevRate = prev.cancelled / prev.total;
-	const diff = currentRate - prevRate;
+	const currentIssues = (current.cancelled + current.delayed) / current.total;
+	const prevIssues = (prev.cancelled + prev.delayed) / prev.total;
+	const diff = currentIssues - prevIssues;
 	if (Math.abs(diff) < 0.005) return "";
 	return diff > 0 ? "\u2191" : "\u2193";
 }

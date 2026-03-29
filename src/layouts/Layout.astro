@@ -163,6 +163,8 @@ const otherPath = Astro.url.pathname.replace(`/${lang}`, `/${otherLang}`);
 				clearInterval(refreshTimer);
 				refreshTimer = setInterval(async () => {
 					if (document.hidden) return;
+					const search = document.getElementById("search") as HTMLInputElement | null;
+					if (search && (search === document.activeElement || search.value)) return;
 					const { navigate } = await import("astro:transitions/client");
 					navigate(window.location.href, { history: "replace" });
 				}, 60_000);
