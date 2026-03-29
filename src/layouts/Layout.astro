@@ -157,6 +157,16 @@ const otherPath = Astro.url.pathname.replace(`/${lang}`, `/${otherLang}`);
 				}
 			});
 			document.addEventListener("astro:page-load", initSearch);
+
+			let refreshTimer: ReturnType<typeof setInterval>;
+			document.addEventListener("astro:page-load", () => {
+				clearInterval(refreshTimer);
+				refreshTimer = setInterval(async () => {
+					if (document.hidden) return;
+					const { navigate } = await import("astro:transitions/client");
+					navigate(window.location.href, { history: "replace" });
+				}, 60_000);
+			});
 		</script>
 	</body>
 </html>
