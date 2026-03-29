@@ -1,6 +1,6 @@
 ---
 import type { Lang } from "../lib/i18n";
-import { reliabilityScore, scoreBgColor } from "../lib/utils";
+import { onTimeRate, scoreBgColor } from "../lib/utils";
 
 interface Props {
 	days: { date: string; cancelled: number; delayed: number; total: number }[];
@@ -32,7 +32,7 @@ const ordered = [1, 2, 3, 4, 5, 6, 0];
 <div class="flex items-end gap-2 h-24 mb-8">
 	{ordered.map((dow) => {
 		const b = buckets[dow];
-		const score = reliabilityScore(b.cancelled, b.delayed, b.total);
+		const score = onTimeRate(b.cancelled, b.delayed, b.total);
 		const height = b.total > 0 ? Math.max(score, 2) : 2;
 		const color = scoreBgColor(score);
 		return (

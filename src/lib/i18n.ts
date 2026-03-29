@@ -15,9 +15,9 @@ const translations = {
 		"home.methodology_delayed":
 			"Als verspätet gilt eine Abfahrt, wenn die Verspätung \u226550% des geplanten Takts oder \u22657,5 Minuten beträgt (50% der angenommenen durchschnittlichen Fahrtzeit von 15 Minuten innerhalb Frankfurts).",
 		"home.methodology_reliability":
-			"Die Zuverlässigkeit (0\u2013100) kombiniert: Ausfallquote (Gewicht \u00d74) und Verspätungsquote (Gewicht \u00d72). 100 = perfekter Betrieb.",
+			"Die P\u00fcnktlichkeitsquote (OTP) ist der Anteil der Abfahrten, die weder ausgefallen noch versp\u00e4tet sind \u2014 ein g\u00e4ngiger Standard im \u00d6PNV.",
 		"home.methodology_colors":
-			"Farben: grün ab 94 Punkten, orange 86\u201393, rot unter 86.",
+			"Farben: gr\u00fcn ab 90%, orange 80\u201389%, rot unter 80%.",
 		"home.overall_score": "Gesamtbewertung",
 		"home.stations": "Haltestellen",
 		"home.operators": "Betreiber",
@@ -51,7 +51,7 @@ const translations = {
 		"stat.departures": "Abfahrten",
 		"stat.avg_delay": "\u00d8 Versp\u00e4tung",
 		"stat.cancelled_eq_freq": "Ausfall = geplanter Takt",
-		"stat.reliability": "Zuverlässigkeit",
+		"stat.reliability": "Pünktlich",
 		"stat.cancellation_rate": "Ausfallquote",
 
 		"section.weekday_pattern": "Zuverlässigkeit nach Wochentag",
@@ -100,9 +100,9 @@ const translations = {
 		"home.methodology_delayed":
 			"A departure counts as delayed if the delay is \u226550% of the planned frequency or \u22657.5 minutes (50% of the assumed average 15-minute trip time within Frankfurt).",
 		"home.methodology_reliability":
-			"The reliability score (0\u2013100) combines: cancellation rate (weight \u00d74) and delayed departure rate (weight \u00d72). 100 = perfect service.",
+			"On-time performance (OTP) is the share of departures that were neither cancelled nor delayed \u2014 a standard metric in public transport.",
 		"home.methodology_colors":
-			"Colors: green from 94 points, orange 86\u201393, red below 86.",
+			"Colors: green from 90%, orange 80\u201389%, red below 80%.",
 		"home.overall_score": "Overall score",
 		"home.stations": "Stations",
 		"home.operators": "Operators",
@@ -136,7 +136,7 @@ const translations = {
 		"stat.departures": "Departures",
 		"stat.avg_delay": "Avg delay",
 		"stat.cancelled_eq_freq": "cancelled = planned freq",
-		"stat.reliability": "Reliability",
+		"stat.reliability": "On time",
 		"stat.cancellation_rate": "cancellation rate",
 
 		"section.weekday_pattern": "Reliability by weekday",

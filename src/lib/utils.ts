@@ -61,18 +61,13 @@ export function delayMinutes(
 	);
 }
 
-export function reliabilityScore(
+export function onTimeRate(
 	cancelled: number,
 	delayed: number,
 	total: number,
 ): number {
 	if (total === 0) return 100;
-	const cancelRate = (cancelled / total) * 100;
-	const delayedRate = (delayed / total) * 100;
-	return Math.max(
-		0,
-		Math.min(100, Math.round(100 - cancelRate * 4 - delayedRate * 2)),
-	);
+	return Math.round(((total - cancelled - delayed) / total) * 100);
 }
 
 export function trendArrow(
@@ -95,14 +90,14 @@ export function trendColor(arrow: string): string {
 
 export const DELAY_THRESHOLD_MIN = 7.5;
 
-export function scoreBorderColor(score: number): string {
-	return score <= 85
+export function scoreBorderColor(otp: number): string {
+	return otp < 80
 		? "border-danger"
-		: score <= 93
+		: otp < 90
 			? "border-warning"
 			: "border-success";
 }
 
-export function scoreBgColor(score: number): string {
-	return score <= 85 ? "bg-danger" : score <= 93 ? "bg-warning" : "bg-success";
+export function scoreBgColor(otp: number): string {
+	return otp < 80 ? "bg-danger" : otp < 90 ? "bg-warning" : "bg-success";
 }

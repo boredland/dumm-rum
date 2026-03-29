@@ -69,7 +69,7 @@ A cron trigger runs every minute and fetches the RMV HAFAS realtime feed for one
 - **Cancellation rate** = cancelled departures / total departures
 - **Delayed departures** = departures with delay ≥7.5 minutes (50% of assumed average 15-minute trip time within Frankfurt)
 - **Average delay** = mean of (actual departure time - scheduled time) across all departures with realtime data. For cancelled departures, the planned frequency is used as the assumed wait time. Uses full datetime comparison to correctly handle cross-midnight departures.
-- **Reliability score** (0–100) = 100 - cancellation rate × 4 - delayed departure rate × 2
+- **On-time performance (OTP)** = % of departures neither cancelled nor delayed — [a standard metric in public transport](https://en.wikipedia.org/wiki/On-time_performance)
 - **Trend arrows** compare this week's cancellation rate vs the previous week
 
 ## How it works

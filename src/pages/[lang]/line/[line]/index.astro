@@ -10,8 +10,8 @@ import { categoryIcons } from "../../../../lib/stations";
 import {
 	fmtDate,
 	fmtDelay,
+	onTimeRate,
 	pct,
-	reliabilityScore,
 	todayBerlin,
 } from "../../../../lib/utils";
 
@@ -26,7 +26,7 @@ const { days, operators, categories } = await getLineStats(db, line, filter);
 const totalDepartures = days.reduce((s, d) => s + d.total, 0);
 const totalCancelled = days.reduce((s, d) => s + d.cancelled, 0);
 const totalDelayed = days.reduce((s, d) => s + d.delayed, 0);
-const score = reliabilityScore(totalCancelled, totalDelayed, totalDepartures);
+const score = onTimeRate(totalCancelled, totalDelayed, totalDepartures);
 const today = todayBerlin();
 const todayStats = days.find((d) => d.date === today);
 ---
@@ -43,7 +43,7 @@ const todayStats = days.find((d) => d.date === today);
 		<h1 class="text-2xl font-bold text-emphasis">{categoryIcons(categories)} {line}</h1>
 		<p class="text-muted text-sm mt-1">
 			{operators.join(", ")}
-			{totalDepartures > 0 && <>{` \u2014 ${t(lang, "stat.reliability")}: ${score}/100`}</>}
+			{totalDepartures > 0 && <>{` \u2014 ${t(lang, "stat.reliability")}: ${score}%`}</>}
 			{days.length > 0 && (
 				<>
 					{` \u2014 ${t(lang, "stat.since")} `}<time datetime={days[days.length - 1].date}>{fmtDate(days[days.length - 1].date, lang)}</time>
