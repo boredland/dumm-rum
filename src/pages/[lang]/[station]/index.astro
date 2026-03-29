@@ -118,19 +118,17 @@ const todayStats = stats.days.find((d) => d.date === today);
 		<table class="w-full border-collapse">
 			<thead>
 				<tr class="bg-surface-hover border-b border-border">
-					{[t(lang, "table.date"), t(lang, "table.total"), t(lang, "table.cancelled"), t(lang, "table.rate")].map((h) => (
+					{[t(lang, "table.date"), t(lang, "table.total"), t(lang, "table.cancelled"), t(lang, "table.delayed"), t(lang, "table.avg_delay"), t(lang, "table.rate")].map((h) => (
 						<th class="text-left px-4 py-3 text-[0.7rem] uppercase tracking-wide text-muted font-semibold">{h}</th>
 					))}
-					<th class="w-[120px] px-4 py-3 max-sm:hidden text-[0.7rem] uppercase tracking-wide text-muted font-semibold"></th>
-					<th class="text-left px-4 py-3 text-[0.7rem] uppercase tracking-wide text-muted font-semibold" title={t(lang, "table.delayed_tooltip")}>{t(lang, "table.delayed")} <span class="cursor-help">&#9432;</span></th>
-					<th class="text-left px-4 py-3 text-[0.7rem] uppercase tracking-wide text-muted font-semibold">{t(lang, "table.avg_delay")}</th>
 				</tr>
 			</thead>
 			<tbody>
 				{
 					stats.days.length > 0 ? (
 						stats.days.map((d) => {
-							const rate = pct(d.cancelled, d.total);
+							const issues = d.cancelled + d.delayed;
+							const rate = pct(issues, d.total);
 							return (
 								<tr class="border-b border-border-dim last:border-b-0 hover:bg-surface-hover">
 									<td class="px-4 py-2.5 text-sm tabular-nums">
@@ -146,10 +144,6 @@ const todayStats = stats.days.find((d) => d.date === today);
 											<span class="inline-block px-2 py-0.5 rounded-full text-xs font-semibold bg-success/10 text-success">0</span>
 										)}
 									</td>
-									<td class="px-4 py-2.5 text-sm tabular-nums">{rate}%</td>
-									<td class="w-[120px] px-4 py-2.5 max-sm:hidden">
-										<div class="w-full h-1.5 rounded bg-border-dim overflow-hidden"><div class="h-full rounded bg-danger" style={`width:${Math.min(parseFloat(rate) * 2, 100)}%`}></div></div>
-									</td>
 									<td class="px-4 py-2.5 text-sm">
 										{d.delayed > 0 ? (
 											<span class="inline-block px-2 py-0.5 rounded-full text-xs font-semibold bg-warning/15 text-warning">{d.delayed}</span>
@@ -158,11 +152,12 @@ const todayStats = stats.days.find((d) => d.date === today);
 										)}
 									</td>
 									<td class="px-4 py-2.5 text-sm tabular-nums">{fmtDelay(d.avgDelay)}</td>
+									<td class="px-4 py-2.5 text-sm tabular-nums">{rate}%</td>
 								</tr>
 							);
 						})
 					) : (
-						<tr><td colspan="8" class="text-center text-dimmed py-8">{t(lang, "table.no_data")}</td></tr>
+						<tr><td colspan="6" class="text-center text-dimmed py-8">{t(lang, "table.no_data")}</td></tr>
 					)
 				}
 			</tbody>
