@@ -54,7 +54,7 @@ const translations = {
 		"stat.reliability": "Zuverlässigkeit",
 		"stat.cancellation_rate": "Ausfallquote",
 
-		"section.weekday_pattern": "Wochentag-Muster",
+		"section.weekday_pattern": "Zuverlässigkeit nach Wochentag",
 		"section.next_departures": "N\u00e4chste Abfahrten",
 		"section.daily_breakdown": "Tages\u00fcbersicht",
 		"section.all_departures": "Alle Abfahrten",
@@ -139,7 +139,7 @@ const translations = {
 		"stat.reliability": "Reliability",
 		"stat.cancellation_rate": "cancellation rate",
 
-		"section.weekday_pattern": "Day-of-week pattern",
+		"section.weekday_pattern": "Reliability by weekday",
 		"section.next_departures": "Next departures",
 		"section.daily_breakdown": "Daily breakdown",
 		"section.all_departures": "All departures",
