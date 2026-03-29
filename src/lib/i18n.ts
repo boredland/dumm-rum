@@ -7,7 +7,7 @@ const translations = {
 		"home.subtitle": "Wissen, ob man dumm rumsteht",
 		"home.methodology_title": "Wie wir messen",
 		"home.methodology_collection":
-			"Alle 5 Minuten fragen wir die RMV-Echtzeitdaten ab und speichern Abfahrten, Ausfälle und Verspätungen.",
+			"Jede Minute fragen wir die RMV-Echtzeitdaten f\u00fcr eine Haltestelle ab (ca. alle 10 Minuten pro Haltestelle) und speichern Abfahrten, Ausf\u00e4lle und Versp\u00e4tungen.",
 		"home.methodology_cancellation":
 			"Die Ausfallquote ist der Anteil der ausgefallenen Abfahrten an der Gesamtzahl.",
 		"home.methodology_delay":
@@ -92,7 +92,7 @@ const translations = {
 		"home.subtitle": "Know if you\u2019re standing around for nothing",
 		"home.methodology_title": "How we measure",
 		"home.methodology_collection":
-			"Every 5 minutes we poll the RMV realtime feed and store departures, cancellations, and delays.",
+			"Every minute we poll the RMV realtime feed for one station (approximately every 10 minutes per station) and store departures, cancellations, and delays.",
 		"home.methodology_cancellation":
 			"The cancellation rate is the share of cancelled departures out of the total.",
 		"home.methodology_delay":
