@@ -110,7 +110,7 @@ const [
 				[...lines].sort((a, b) => {
 					const scoreA = onTimeRate(a.cancelled, a.delayed, a.total);
 					const scoreB = onTimeRate(b.cancelled, b.delayed, b.total);
-					return scoreA - scoreB;
+					return scoreA - scoreB || a.line.localeCompare(b.line, undefined, { numeric: true });
 				}).map((l) => {
 					const tr = lineTrends.get(l.line);
 					const arrow = tr ? trendArrow(tr, { cancelled: tr.prevCancelled, total: tr.prevTotal }) : "";
@@ -153,7 +153,7 @@ const [
 				const rb = stationStats.get(b.id);
 				const scoreA = ra ? onTimeRate(ra.cancelled, ra.delayed, ra.total) : 100;
 				const scoreB = rb ? onTimeRate(rb.cancelled, rb.delayed, rb.total) : 100;
-				return scoreA - scoreB;
+				return scoreA - scoreB || a.name.localeCompare(b.name);
 			}).map((s) => {
 				const st = stationStats.get(s.id);
 				const tr = stationTrends.get(s.id);
@@ -202,7 +202,7 @@ const [
 				[...operators].sort((a, b) => {
 					const scoreA = onTimeRate(a.cancelled, a.delayed, a.total);
 					const scoreB = onTimeRate(b.cancelled, b.delayed, b.total);
-					return scoreA - scoreB;
+					return scoreA - scoreB || a.operator.localeCompare(b.operator);
 				}).map((op) => {
 					const tr = operatorTrends.get(op.operator);
 					const arrow = tr ? trendArrow(tr, { cancelled: tr.prevCancelled, total: tr.prevTotal }) : "";
