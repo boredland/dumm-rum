@@ -15,6 +15,7 @@ import { nowBerlin, todayBerlin } from "./utils";
 
 type Departure = components["schemas"]["Departure"];
 
+const EXCLUDE_CATEGORIES = new Set(["ICE", "IC", "EC"]);
 const TEXT_NOTE_TYPES = new Set(["H", "M", "D", "Q", "L"]);
 
 function extractMessages(dep: Departure): string | null {
@@ -60,7 +61,6 @@ async function collectDepartures(
 		return 0;
 	}
 
-	const EXCLUDE_CATEGORIES = new Set(["ICE", "IC", "EC"]);
 	const deps = (data.Departure ?? []).filter(
 		(d: Departure) =>
 			d.ProductAtStop?.line &&
@@ -248,13 +248,17 @@ export async function runCollection(
 	db: Db,
 	ai: Ai,
 	apiKeys: string,
+	kv: KVNamespace,
 ): Promise<Record<string, number>> {
+	const idx = Number((await kv.get("station_idx")) ?? "0");
+	const station = STATIONS[idx % STATIONS.length];
+	await kv.put("station_idx", String((idx + 1) % STATIONS.length));
+
 	const summary: Record<string, number> = {};
-	for (const s of STATIONS) {
-		const count = await collectDepartures(db, pickKey(apiKeys), s);
-		summary[s.slug] = count;
-		console.log(`${s.slug}: upserted ${count} departures`);
-	}
+	const count = await collectDepartures(db, pickKey(apiKeys), station);
+	summary[station.slug] = count;
+	console.log(`${station.slug}: upserted ${count} departures`);
+
 	await generateDailyHaiku(db, ai);
 
 	const today = todayBerlin();
