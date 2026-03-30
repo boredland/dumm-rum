@@ -375,6 +375,7 @@ export interface LineSummary {
 	line: string;
 	category: string;
 	operators: string[];
+	destinations: string[];
 	total: number;
 	cancelled: number;
 	delayed: number;
@@ -397,6 +398,10 @@ export async function getLineSummaries(
 			operators: sql<string>`GROUP_CONCAT(DISTINCT ${departures.operator})`.as(
 				"operators",
 			),
+			destinations:
+				sql<string>`GROUP_CONCAT(DISTINCT ${departures.direction})`.as(
+					"destinations",
+				),
 			total: count().as("total"),
 			cancelled: sql<number>`SUM(${departures.cancelled})`.as("cancelled"),
 			delayed: delayedSql.as("delayed"),
@@ -411,6 +416,7 @@ export async function getLineSummaries(
 		line: r.line,
 		category: r.category ?? "Bus",
 		operators: r.operators ? r.operators.split(",") : [],
+		destinations: r.destinations ? r.destinations.split(",") : [],
 		total: r.total,
 		cancelled: r.cancelled,
 		delayed: r.delayed,
