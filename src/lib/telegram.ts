@@ -192,12 +192,22 @@ export async function handleTelegramWebhook(
 			return;
 		}
 
+		const directions = direction
+			.split("+")
+			.map((d) => d.trim())
+			.filter(Boolean);
 		const knownDirs = await fetchDirections(db, line);
-		const dirLower = direction.toLowerCase();
-		const match = knownDirs.some((d) =>
-			d.direction.toLowerCase().includes(dirLower),
-		);
-		if (!match) {
+		const unmatched: string[] = [];
+		const matched: string[] = [];
+		for (const dir of directions) {
+			const low = dir.toLowerCase();
+			if (knownDirs.some((d) => d.direction.toLowerCase().includes(low))) {
+				matched.push(dir);
+			} else {
+				unmatched.push(dir);
+			}
+		}
+		if (unmatched.length > 0) {
 			if (knownDirs.length === 0) {
 				await reply(
 					`Unknown line <b>${line}</b>. Check the line name and try again.`,
@@ -205,36 +215,36 @@ export async function handleTelegramWebhook(
 			} else {
 				const list = knownDirs.map((d) => `• ${d.direction}`).join("\n");
 				await reply(
-					`No direction matching "${direction}" for <b>${line}</b>.\n\nKnown destinations:\n${list}`,
+					`No direction matching "${unmatched.join(", ")}" for <b>${line}</b>.\n\nKnown destinations:\n${list}`,
 				);
 			}
 			return;
 		}
 
-		await db
-			.insert(telegramSubscriptions)
-			.values({
-				chatId,
-				lang,
-				line,
-				direction,
-				timeRanges: timeRanges.length > 0 ? timeRanges.join(",") : null,
-				weekdays,
-				createdAt: new Date().toISOString(),
-			})
-			.onConflictDoUpdate({
-				target: [
-					telegramSubscriptions.chatId,
-					telegramSubscriptions.line,
-					telegramSubscriptions.direction,
-				],
-				set: {
-					timeRanges: timeRanges.length > 0 ? timeRanges.join(",") : null,
+		const tr = timeRanges.length > 0 ? timeRanges.join(",") : null;
+		for (const dir of matched) {
+			await db
+				.insert(telegramSubscriptions)
+				.values({
+					chatId,
+					lang,
+					line,
+					direction: dir,
+					timeRanges: tr,
 					weekdays,
-				},
-			});
+					createdAt: new Date().toISOString(),
+				})
+				.onConflictDoUpdate({
+					target: [
+						telegramSubscriptions.chatId,
+						telegramSubscriptions.line,
+						telegramSubscriptions.direction,
+					],
+					set: { timeRanges: tr, weekdays },
+				});
+		}
 
-		let details = `<b>${line}</b> → ${direction}`;
+		let details = `<b>${line}</b> → ${matched.join(" + ")}`;
 		if (timeRanges.length > 0) details += `\n⏰ ${timeRanges.join(", ")}`;
 		if (weekdays) details += `\n📅 ${formatWeekdays(weekdays)}`;
 		await reply(`✅ Subscribed:\n${details}`);
