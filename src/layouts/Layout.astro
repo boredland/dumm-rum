@@ -160,13 +160,14 @@ const otherPath = Astro.url.pathname.replace(`/${lang}`, `/${otherLang}`);
 					link.href = `https://t.me/rumsteh_bot?start=subscribe_${encodeURIComponent(line)}`;
 					return;
 				}
-				const payload = [line, direction, timeRanges].join("|");
-				const encoded = btoa(payload).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
-				if (encoded.length <= 62) {
-					link.href = `https://t.me/rumsteh_bot?start=s-${encoded}`;
-				} else {
-					link.href = `https://t.me/rumsteh_bot?start=subscribe_${encodeURIComponent(line)}`;
+				function tryEncode(payload: string): string | null {
+					const encoded = btoa(payload).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+					return encoded.length <= 62 ? `https://t.me/rumsteh_bot?start=s-${encoded}` : null;
 				}
+				link.href =
+					tryEncode([line, direction, timeRanges].join("|")) ??
+					tryEncode([line, direction].join("|")) ??
+					`https://t.me/rumsteh_bot?start=subscribe_${encodeURIComponent(line)}`;
 			}
 
 			function initDepartureFilters() {
