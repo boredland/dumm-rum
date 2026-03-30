@@ -91,11 +91,29 @@ export async function handleTelegramWebhook(
 	if (text.startsWith("/subscribe ")) {
 		const args = text.slice("/subscribe ".length).trim().split(" ");
 		if (args.length < 2) {
-			await sendMessage(
-				token,
-				chatId,
-				"Usage: /subscribe &lt;line&gt; &lt;direction&gt; [HH:MM-HH:MM,...] [Mo,Di,...]\nExample: /subscribe S1 Wiesbaden 06:00-09:00,16:00-19:00 Mo,Di,Mi,Do,Fr",
-			);
+			const line = args[0];
+			const knownDirs = await db
+				.selectDistinct({ direction: departures.direction })
+				.from(departures)
+				.where(and(eq(departures.line, line), isNotNull(departures.direction)));
+			if (knownDirs.length > 0) {
+				const list = knownDirs
+					.map(
+						(d) => `• <code>/subscribe ${line} ${shortDir(d.direction)}</code>`,
+					)
+					.join("\n");
+				await sendMessage(
+					token,
+					chatId,
+					`Pick a direction for <b>${line}</b>:\n\n${list}`,
+				);
+			} else {
+				await sendMessage(
+					token,
+					chatId,
+					`Unknown line <b>${line}</b>.\n\nUsage: /subscribe &lt;line&gt; &lt;direction&gt; [HH:MM-HH:MM,...] [Mo,Di,...]`,
+				);
+			}
 			return;
 		}
 
