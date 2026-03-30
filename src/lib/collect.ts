@@ -268,13 +268,10 @@ export async function runCollection(
 	await generateDailyHaiku(db, ai);
 
 	const today = todayBerlin();
-	const yesterday = nowBerlin().subtract(1, "day").format("YYYY-MM-DD");
-	for (const date of [today, yesterday]) {
-		await Promise.all([
-			materializeStationStats(db, date),
-			materializeOperatorStats(db, date),
-		]);
-	}
+	await Promise.all([
+		materializeStationStats(db, today),
+		materializeOperatorStats(db, today),
+	]);
 
 	return summary;
 }
