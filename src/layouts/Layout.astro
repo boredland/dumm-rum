@@ -128,25 +128,53 @@ const otherPath = Astro.url.pathname.replace(`/${lang}`, `/${otherLang}`);
 			}
 			document.addEventListener("astro:page-load", initDepartureFilters);
 
+			let activeCat = "";
+
+			function applyFilters() {
+				const input = document.getElementById("search") as HTMLInputElement | null;
+				const q = input?.value.toLowerCase().trim() ?? "";
+				const cards = document.querySelectorAll<HTMLElement>("[data-search]");
+				const sections = new Set<HTMLElement>();
+				for (const card of cards) {
+					const matchText = !q || card.dataset.search!.includes(q);
+					let matchCat = !activeCat;
+					if (activeCat && card.dataset.categories) {
+						const cats = activeCat.split(",");
+						matchCat = cats.some((c) => card.dataset.categories!.split(",").includes(c));
+					}
+					const show = matchText && matchCat;
+					card.style.display = show ? "" : "none";
+					const section = card.closest("details");
+					if (section && show) sections.add(section as HTMLElement);
+				}
+				for (const details of document.querySelectorAll<HTMLDetailsElement>("details.group")) {
+					if (q || activeCat) details.open = sections.has(details);
+				}
+			}
+
 			function initSearch() {
 				const input = document.getElementById("search") as HTMLInputElement | null;
 				if (!input || input.dataset.initialized) return;
 				input.dataset.initialized = "1";
-				const cards = document.querySelectorAll<HTMLElement>("[data-search]");
+				input.addEventListener("input", applyFilters);
+			}
 
-				input.addEventListener("input", () => {
-					const q = input.value.toLowerCase().trim();
-					const sections = new Set<HTMLElement>();
-					for (const card of cards) {
-						const match = !q || card.dataset.search!.includes(q);
-						card.style.display = match ? "" : "none";
-						const section = card.closest("details");
-						if (section && match) sections.add(section as HTMLElement);
-					}
-					for (const details of document.querySelectorAll<HTMLDetailsElement>("details.group")) {
-						if (q) details.open = sections.has(details);
-					}
-				});
+			function initCategoryFilter() {
+				const container = document.getElementById("category-filter");
+				if (!container || container.dataset.initialized) return;
+				container.dataset.initialized = "1";
+				const buttons = container.querySelectorAll<HTMLButtonElement>("[data-cat]");
+				for (const btn of buttons) {
+					btn.addEventListener("click", () => {
+						activeCat = btn.dataset.cat!;
+						for (const b of buttons) {
+							b.classList.toggle("bg-surface-hover", b.dataset.cat === activeCat);
+							b.classList.toggle("text-emphasis", b.dataset.cat === activeCat);
+							b.classList.toggle("text-muted", b.dataset.cat !== activeCat);
+						}
+						applyFilters();
+					});
+				}
 			}
 
 			document.addEventListener("keydown", (e) => {
@@ -156,7 +184,11 @@ const otherPath = Astro.url.pathname.replace(`/${lang}`, `/${otherLang}`);
 					if (input) { input.focus(); input.select(); }
 				}
 			});
-			document.addEventListener("astro:page-load", initSearch);
+			document.addEventListener("astro:page-load", () => {
+				activeCat = "";
+				initSearch();
+				initCategoryFilter();
+			});
 
 			let refreshTimer: ReturnType<typeof setInterval>;
 			document.addEventListener("astro:page-load", () => {

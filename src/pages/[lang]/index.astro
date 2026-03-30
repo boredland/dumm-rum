@@ -91,7 +91,7 @@ const [
 		) : null;
 	})()}
 
-	<div class="relative mb-6">
+	<div class="relative mb-4">
 		<input
 			id="search"
 			type="search"
@@ -99,6 +99,15 @@ const [
 			class="w-full bg-surface border border-border rounded-xl px-4 py-2.5 text-sm text-text placeholder:text-muted focus:outline-none focus:border-link"
 		/>
 		<kbd class="absolute right-3 top-1/2 -translate-y-1/2 text-[0.6rem] text-dimmed bg-surface-hover border border-border-dim rounded px-1.5 py-0.5 pointer-events-none">Ctrl K</kbd>
+	</div>
+
+	<div id="category-filter" class="flex flex-wrap gap-2 mb-6">
+		<button data-cat="" class="px-3 py-1 rounded-full text-xs font-medium cursor-pointer transition-colors select-none bg-surface-hover text-emphasis">{lang === "de" ? "Alle" : "All"}</button>
+		<button data-cat="U-Bahn" class="px-3 py-1 rounded-full text-xs font-medium cursor-pointer transition-colors select-none text-muted">🚇 U-Bahn</button>
+		<button data-cat="S" class="px-3 py-1 rounded-full text-xs font-medium cursor-pointer transition-colors select-none text-muted">🚈 S-Bahn</button>
+		<button data-cat="Tram" class="px-3 py-1 rounded-full text-xs font-medium cursor-pointer transition-colors select-none text-muted">🚋 Tram</button>
+		<button data-cat="Bus" class="px-3 py-1 rounded-full text-xs font-medium cursor-pointer transition-colors select-none text-muted">🚌 Bus</button>
+		<button data-cat="RE,RB" class="px-3 py-1 rounded-full text-xs font-medium cursor-pointer transition-colors select-none text-muted">🚆 RE/RB</button>
 	</div>
 
 	<details class="group mb-8" open>
@@ -119,6 +128,7 @@ const [
 						<a
 							href={`/${lang}/line/${encodeURIComponent(l.line)}${Astro.url.search}`}
 							data-search={`${l.line} ${l.category} ${l.operators.join(" ")} ${l.destinations.join(" ")}`.toLowerCase()}
+						data-categories={l.category}
 							class:list={[
 								"bg-surface border rounded-xl p-4 no-underline hover:bg-surface-hover transition-colors",
 								borderColor,
@@ -164,6 +174,7 @@ const [
 					<a
 						href={`/${lang}/${s.slug}${Astro.url.search}`}
 						data-search={s.name.toLowerCase()}
+						data-categories={(st?.categories ?? []).join(",")}
 						class:list={[
 							"bg-surface border rounded-xl p-5 no-underline hover:bg-surface-hover transition-colors",
 							borderColor,
@@ -211,6 +222,7 @@ const [
 						<a
 							href={`/${lang}/operator/${encodeURIComponent(op.operator)}${Astro.url.search}`}
 							data-search={`${op.operator} ${op.lines.join(" ")}`.toLowerCase()}
+							data-categories={op.categories.join(",")}
 							class:list={[
 								"bg-surface border rounded-xl p-5 no-underline hover:bg-surface-hover transition-colors",
 								borderColor,
