@@ -70,55 +70,59 @@ async function collectDepartures(
 	if (deps.length === 0) return 0;
 
 	const now = new Date().toISOString();
-	const BATCH_SIZE = 5;
+	const BATCH_SIZE = 3;
 
 	for (let i = 0; i < deps.length; i += BATCH_SIZE) {
 		const batch = deps.slice(i, i + BATCH_SIZE);
-		await db
-			.insert(departures)
-			.values(
-				batch.map((dep: Departure) => {
-					const p = dep.ProductAtStop!;
-					return {
-						stationId: station.id,
-						date: dep.date,
-						time: dep.time,
-						rtDate: dep.rtDate ?? null,
-						rtTime: dep.rtTime ?? null,
-						line: p.line!,
-						direction: dep.direction ?? "",
-						journeyStatus: dep.JourneyStatus ?? "P",
-						cancelled: dep.cancelled ? 1 : 0,
-						operator: p.operator ?? null,
-						category: p.catOut ?? null,
-						journeyNum: p.num!,
-						reachable: dep.reachable ? 1 : 0,
-						stop: dep.stop ?? null,
-						stopExtId: dep.stopExtId ?? null,
-						messages: extractMessages(dep),
-						fetchedAt: now,
-					};
-				}),
-			)
-			.onConflictDoUpdate({
-				target: [
-					departures.stationId,
-					departures.date,
-					departures.time,
-					departures.line,
-					departures.direction,
-					departures.journeyNum,
-				],
-				set: {
-					rtDate: sql`COALESCE(excluded.rt_date, ${departures.rtDate})`,
-					rtTime: sql`COALESCE(excluded.rt_time, ${departures.rtTime})`,
-					journeyStatus: sql`excluded.journey_status`,
-					cancelled: sql`MAX(${departures.cancelled}, excluded.cancelled)`,
-					reachable: sql`CASE WHEN excluded.cancelled THEN 0 ELSE excluded.reachable END`,
-					messages: sql`COALESCE(excluded.messages, ${departures.messages})`,
-					fetchedAt: sql`excluded.fetched_at`,
-				},
-			});
+		try {
+			await db
+				.insert(departures)
+				.values(
+					batch.map((dep: Departure) => {
+						const p = dep.ProductAtStop!;
+						return {
+							stationId: station.id,
+							date: dep.date,
+							time: dep.time,
+							rtDate: dep.rtDate ?? null,
+							rtTime: dep.rtTime ?? null,
+							line: p.line!,
+							direction: dep.direction ?? "",
+							journeyStatus: dep.JourneyStatus ?? "P",
+							cancelled: dep.cancelled ? 1 : 0,
+							operator: p.operator ?? null,
+							category: p.catOut ?? null,
+							journeyNum: p.num!,
+							reachable: dep.reachable ? 1 : 0,
+							stop: dep.stop ?? null,
+							stopExtId: dep.stopExtId ?? null,
+							messages: extractMessages(dep),
+							fetchedAt: now,
+						};
+					}),
+				)
+				.onConflictDoUpdate({
+					target: [
+						departures.stationId,
+						departures.date,
+						departures.time,
+						departures.line,
+						departures.direction,
+						departures.journeyNum,
+					],
+					set: {
+						rtDate: sql`COALESCE(excluded.rt_date, ${departures.rtDate})`,
+						rtTime: sql`COALESCE(excluded.rt_time, ${departures.rtTime})`,
+						journeyStatus: sql`excluded.journey_status`,
+						cancelled: sql`MAX(${departures.cancelled}, excluded.cancelled)`,
+						reachable: sql`CASE WHEN excluded.cancelled THEN 0 ELSE excluded.reachable END`,
+						messages: sql`COALESCE(excluded.messages, ${departures.messages})`,
+						fetchedAt: sql`excluded.fetched_at`,
+					},
+				});
+		} catch (e) {
+			console.error(`Batch insert failed for ${station.slug}:`, e);
+		}
 	}
 
 	return deps.length;
