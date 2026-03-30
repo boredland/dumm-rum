@@ -75,6 +75,9 @@ const translations = {
 
 		"search.placeholder": "Linie, Haltestelle oder Betreiber suchen\u2026",
 
+		"share.button": "Teilen",
+		"share.copied": "Link kopiert!",
+
 		"filter.all": "Alle",
 		"filter.issues": "Ausfälle & Verspätungen",
 		"filter.on_time": "Pünktlich",
@@ -155,6 +158,9 @@ const translations = {
 		"table.no_departures": "No departures",
 
 		"search.placeholder": "Search lines, stations, or operators\u2026",
+
+		"share.button": "Share",
+		"share.copied": "Link copied!",
 
 		"filter.all": "All",
 		"filter.issues": "Cancelled & delayed",
