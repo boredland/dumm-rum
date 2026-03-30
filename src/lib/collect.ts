@@ -306,6 +306,7 @@ export async function runCollection(
 					rtTime: departures.rtTime,
 					date: departures.date,
 					stop: departures.stop,
+					journeyNum: departures.journeyNum,
 				})
 				.from(departures)
 				.where(
@@ -321,11 +322,19 @@ export async function runCollection(
 				.orderBy(departures.time);
 
 			if (recentIssues.length > 0) {
+				const seen = new Set<string>();
+				const unique = recentIssues.filter((d) => {
+					const key = `${d.date}|${d.time}|${d.line}|${d.direction}|${d.journeyNum}`;
+					if (seen.has(key)) return false;
+					seen.add(key);
+					return true;
+				});
+
 				const { notifySubscribers } = await import("./telegram");
 				await notifySubscribers(
 					db,
 					telegramToken,
-					recentIssues.map((d) => ({
+					unique.map((d) => ({
 						line: d.line,
 						direction: d.direction,
 						time: d.time,
