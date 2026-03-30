@@ -25,7 +25,14 @@ export function fmtDelay(delay: number | null): string {
 }
 
 export function shortDir(dir: string): string {
-	return dir.replace(/^Frankfurt \(Main\)\s*/i, "");
+	const stripped = dir.replace(/^Frankfurt \(Main\)\s*/i, "");
+	if (
+		stripped !== dir &&
+		/^(Hauptbahnhof|Hbf|Bahnhof|Südbahnhof)\b/.test(stripped)
+	) {
+		return `Frankfurt ${stripped}`;
+	}
+	return stripped;
 }
 
 export function fmtTimestamp(iso: string | null, lang = "de"): string {
