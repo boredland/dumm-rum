@@ -305,6 +305,7 @@ export async function runCollection(
 					rtDate: departures.rtDate,
 					rtTime: departures.rtTime,
 					date: departures.date,
+					stop: departures.stop,
 				})
 				.from(departures)
 				.where(
@@ -316,7 +317,8 @@ export async function runCollection(
 							sql`CASE WHEN ${departures.rtTime} IS NOT NULL AND ${departures.rtDate} IS NOT NULL THEN (strftime('%s', ${departures.rtDate} || ' ' || ${departures.rtTime}) - strftime('%s', ${departures.date} || ' ' || ${departures.time})) / 60.0 ELSE 0 END >= ${DELAY_THRESHOLD_MIN}`,
 						),
 					),
-				);
+				)
+				.orderBy(departures.time);
 
 			if (recentIssues.length > 0) {
 				const { notifySubscribers } = await import("./telegram");
@@ -327,6 +329,7 @@ export async function runCollection(
 						line: d.line,
 						direction: d.direction,
 						time: d.time,
+						stop: d.stop ?? "",
 						cancelled: !!d.cancelled,
 						delayMin:
 							d.rtTime && d.rtDate

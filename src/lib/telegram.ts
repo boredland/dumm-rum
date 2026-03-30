@@ -368,6 +368,7 @@ interface Issue {
 	line: string;
 	direction: string;
 	time: string;
+	stop: string;
 	cancelled: boolean;
 	delayMin: number | null;
 }
@@ -426,8 +427,9 @@ export async function notifySubscribers(
 			const status = issue.cancelled
 				? `❌ ${labels.cancelled}`
 				: `⏱ +${issue.delayMin} min ${labels.delay}`;
+			const stopInfo = issue.stop ? ` @ ${issue.stop}` : "";
 			entry.msgs.push(
-				`<b>${issue.line}</b> ${issue.time.slice(0, 5)} → ${issue.direction}: ${status}`,
+				`<b>${issue.line}</b> ${issue.time.slice(0, 5)} → ${issue.direction}${stopInfo}: ${status}`,
 			);
 			notifications.set(sub.chatId, entry);
 		}
