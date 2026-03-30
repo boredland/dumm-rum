@@ -116,7 +116,7 @@ export async function handleTelegramWebhook(
 	if (text.startsWith("/start subscribe_")) {
 		const line = decodeURIComponent(text.slice("/start subscribe_".length));
 		await reply(
-			`🚏 To subscribe to <b>${line}</b> alerts, send:\n\n<code>/subscribe ${line} &lt;direction&gt;</code>\n\nExample: <code>/subscribe ${line} Wiesbaden</code>\n\nAdd optional time/days:\n<code>/subscribe ${line} Wiesbaden 06:00-09:00,16:00-19:00 Mo,Di,Mi,Do,Fr</code>`,
+			`🚏 To subscribe to <b>${line}</b> alerts, send:\n\n<code>/subscribe ${line}</code> — to see destinations\n<code>/subscribe ${line} &lt;direction&gt;</code> — to subscribe\n\nOptions: time range, weekdays, multiple directions with +\n<code>/subscribe ${line} Wiesbaden+Ober-Roden 06:00-09:00,16:00-19:00 Mo-Fr</code>`,
 		);
 		return;
 	}
@@ -124,16 +124,19 @@ export async function handleTelegramWebhook(
 	if (text === "/start" || text === "/help") {
 		await reply(
 			"🚏 <b>DummRum Alerts</b>\n\n" +
-				"Subscribe to cancellation & delay alerts for Frankfurt public transport lines.\n\n" +
+				"Get notified about cancellations & delays on Frankfurt public transport.\n\n" +
 				"<b>Commands:</b>\n" +
+				"/subscribe S1 — show destinations for S1\n" +
 				"/subscribe S1 Wiesbaden — alerts for S1 towards Wiesbaden\n" +
-				"/subscribe S1 Wiesbaden 06:00-09:00,16:00-19:00 Mo,Di,Mi,Do,Fr — commute hours\n" +
-				"/unsubscribe S1 Wiesbaden — stop alerts\n" +
-				"/list — show your subscriptions\n\n" +
-				"<b>Options:</b>\n" +
-				"Time range: HH:MM-HH:MM (e.g. 06:00-09:00)\n" +
-				"Weekdays: Mo,Di,Mi,Do,Fr,Sa,So (or Mon,Tue,Wed,Thu,Fri,Sat,Sun)\n\n" +
-				"Direction is matched as a substring.",
+				"/subscribe S1 Wiesbaden+Ober-Roden — both directions\n" +
+				"/unsubscribe — list your subscriptions to remove\n" +
+				"/list — show all subscriptions\n\n" +
+				"<b>Options (add after direction):</b>\n" +
+				"Time: <code>7:50-8:30</code> or <code>06:00-09:00,16:00-19:00</code>\n" +
+				"Days: <code>Mo-Fr</code> or <code>Mo,Mi,Fr</code> or <code>Mo-We,Fr</code>\n\n" +
+				"<b>Example:</b>\n" +
+				"<code>/subscribe S1 Wiesbaden+Ober-Roden 06:00-09:00,16:00-19:00 Mo-Fr</code>\n\n" +
+				"Direction is matched as a substring (e.g. 'Wiesbaden' matches 'Wiesbaden Hauptbahnhof').",
 		);
 		return;
 	}
