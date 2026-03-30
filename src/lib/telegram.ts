@@ -233,8 +233,11 @@ export async function handleTelegramWebhook(
 		const matched: string[] = [];
 		for (const dir of directions) {
 			const low = dir.toLowerCase();
-			if (knownDirs.some((d) => d.direction.toLowerCase().includes(low))) {
-				matched.push(dir);
+			const found = knownDirs.find((d) =>
+				d.direction.toLowerCase().includes(low),
+			);
+			if (found) {
+				matched.push(found.direction);
 			} else {
 				unmatched.push(dir);
 			}
