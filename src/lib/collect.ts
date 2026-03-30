@@ -273,10 +273,26 @@ export async function runCollection(
 	await generateDailyHaiku(db, ai);
 
 	const today = todayBerlin();
-	await Promise.all([
-		materializeStationStats(db, today),
-		materializeOperatorStats(db, today),
-	]);
+	const lastMat = (await kv.get("last_materialized")) ?? "";
+	const changed = await db
+		.select({ cnt: count() })
+		.from(departures)
+		.where(
+			and(
+				eq(departures.date, today),
+				lastMat ? sql`${departures.fetchedAt} > ${lastMat}` : undefined,
+			),
+		);
+	if (changed[0].cnt > 0) {
+		await Promise.all([
+			materializeStationStats(db, today),
+			materializeOperatorStats(db, today),
+		]);
+		await kv.put("last_materialized", new Date().toISOString());
+		console.log("Materialized stats");
+	} else {
+		console.log("Skipped materialization, no changes");
+	}
 
 	return summary;
 }
