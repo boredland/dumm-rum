@@ -1,0 +1,1 @@
+ALTER TABLE `departures` ADD `notified` integer DEFAULT 0 NOT NULL;

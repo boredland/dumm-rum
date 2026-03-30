@@ -288,9 +288,9 @@ export async function runCollection(
 
 	if (telegramToken) {
 		try {
-			const cutoff = new Date(Date.now() - 4 * 60 * 1000).toISOString();
 			const recentIssues = await db
 				.select({
+					id: departures.id,
 					line: departures.line,
 					direction: departures.direction,
 					time: departures.time,
@@ -303,7 +303,7 @@ export async function runCollection(
 				.where(
 					and(
 						eq(departures.date, today),
-						gte(departures.fetchedAt, cutoff),
+						eq(departures.notified, 0),
 						or(
 							eq(departures.cancelled, 1),
 							sql`CASE WHEN ${departures.rtTime} IS NOT NULL AND ${departures.rtDate} IS NOT NULL THEN (strftime('%s', ${departures.rtDate} || ' ' || ${departures.rtTime}) - strftime('%s', ${departures.date} || ' ' || ${departures.time})) / 60.0 ELSE 0 END >= ${DELAY_THRESHOLD_MIN}`,
@@ -331,6 +331,17 @@ export async function runCollection(
 								: null,
 					})),
 				);
+
+				const ids = recentIssues.map((d) => d.id);
+				await db
+					.update(departures)
+					.set({ notified: 1 })
+					.where(
+						sql`${departures.id} IN (${sql.join(
+							ids.map((id) => sql`${id}`),
+							sql`,`,
+						)})`,
+					);
 			}
 		} catch (e) {
 			console.error("Telegram notification failed:", e);
