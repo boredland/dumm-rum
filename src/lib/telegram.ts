@@ -1,6 +1,6 @@
-import { and, eq } from "drizzle-orm";
+import { and, eq, isNotNull } from "drizzle-orm";
 import type { Db } from "../db/client";
-import { telegramSubscriptions } from "../db/schema";
+import { departures, telegramSubscriptions } from "../db/schema";
 import { shortDir } from "./utils";
 
 interface TelegramUpdate {
@@ -129,6 +129,34 @@ export async function handleTelegramWebhook(
 
 		if (!direction) {
 			await sendMessage(token, chatId, "Please specify a direction.");
+			return;
+		}
+
+		const knownDirs = await db
+			.selectDistinct({ direction: departures.direction })
+			.from(departures)
+			.where(and(eq(departures.line, line), isNotNull(departures.direction)));
+		const dirLower = direction.toLowerCase();
+		const match = knownDirs.some((d) =>
+			d.direction.toLowerCase().includes(dirLower),
+		);
+		if (!match) {
+			if (knownDirs.length === 0) {
+				await sendMessage(
+					token,
+					chatId,
+					`Unknown line <b>${line}</b>. Check the line name and try again.`,
+				);
+			} else {
+				const list = knownDirs
+					.map((d) => `• ${shortDir(d.direction)}`)
+					.join("\n");
+				await sendMessage(
+					token,
+					chatId,
+					`No direction matching "${direction}" for <b>${line}</b>.\n\nKnown destinations:\n${list}`,
+				);
+			}
 			return;
 		}
 
