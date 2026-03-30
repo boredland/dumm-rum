@@ -117,7 +117,12 @@ async function collectDepartures(
 						cancelled: sql`MAX(${departures.cancelled}, excluded.cancelled)`,
 						reachable: sql`CASE WHEN excluded.cancelled THEN 0 ELSE excluded.reachable END`,
 						messages: sql`COALESCE(excluded.messages, ${departures.messages})`,
-						fetchedAt: sql`excluded.fetched_at`,
+						fetchedAt: sql`CASE WHEN
+							COALESCE(excluded.rt_date, '') != COALESCE(${departures.rtDate}, '')
+							OR COALESCE(excluded.rt_time, '') != COALESCE(${departures.rtTime}, '')
+							OR excluded.cancelled != ${departures.cancelled}
+							OR COALESCE(excluded.messages, '') != COALESCE(${departures.messages}, '')
+							THEN excluded.fetched_at ELSE ${departures.fetchedAt} END`,
 					},
 				});
 		} catch (e) {
