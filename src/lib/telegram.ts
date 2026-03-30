@@ -94,7 +94,7 @@ export async function handleTelegramWebhook(
 			await sendMessage(
 				token,
 				chatId,
-				"Usage: /subscribe &lt;line&gt; &lt;direction&gt; [HH:MM-HH:MM] [Mo,Di,...]\nExample: /subscribe S1 Wiesbaden 06:00-09:00 Mo,Di,Mi,Do,Fr",
+				"Usage: /subscribe &lt;line&gt; &lt;direction&gt; [HH:MM-HH:MM,...] [Mo,Di,...]\nExample: /subscribe S1 Wiesbaden 06:00-09:00,16:00-19:00 Mo,Di,Mi,Do,Fr",
 			);
 			return;
 		}
@@ -103,15 +103,12 @@ export async function handleTelegramWebhook(
 		const remaining = args.slice(1);
 
 		let direction = "";
-		let timeFrom: string | null = null;
-		let timeTo: string | null = null;
+		const timeRanges: string[] = [];
 		let weekdays: string | null = null;
 
 		for (const arg of remaining) {
-			const timeMatch = arg.match(/^(\d{2}:\d{2})-(\d{2}:\d{2})$/);
-			if (timeMatch) {
-				timeFrom = timeMatch[1];
-				timeTo = timeMatch[2];
+			if (/^\d{2}:\d{2}-\d{2}:\d{2}(,\d{2}:\d{2}-\d{2}:\d{2})*$/.test(arg)) {
+				timeRanges.push(...arg.split(","));
 			} else if (
 				arg.includes(",") ||
 				Object.keys(WEEKDAY_NAMES).includes(arg.toLowerCase())
@@ -141,15 +138,14 @@ export async function handleTelegramWebhook(
 				chatId,
 				line,
 				direction,
-				timeFrom,
-				timeTo,
+				timeRanges: timeRanges.length > 0 ? timeRanges.join(",") : null,
 				weekdays,
 				createdAt: new Date().toISOString(),
 			})
 			.onConflictDoNothing();
 
 		let details = `<b>${line}</b> → ${direction}`;
-		if (timeFrom && timeTo) details += `\n⏰ ${timeFrom}–${timeTo}`;
+		if (timeRanges.length > 0) details += `\n⏰ ${timeRanges.join(", ")}`;
 		if (weekdays) {
 			const dayNames = ["So", "Mo", "Di", "Mi", "Do", "Fr", "Sa"];
 			details += `\n📅 ${weekdays
@@ -211,7 +207,7 @@ export async function handleTelegramWebhook(
 		const dayNames = ["So", "Mo", "Di", "Mi", "Do", "Fr", "Sa"];
 		const lines = subs.map((s) => {
 			let desc = `• <b>${s.line}</b> → ${s.direction}`;
-			if (s.timeFrom && s.timeTo) desc += ` ⏰ ${s.timeFrom}–${s.timeTo}`;
+			if (s.timeRanges) desc += ` ⏰ ${s.timeRanges.split(",").join(", ")}`;
 			if (s.weekdays)
 				desc += ` 📅 ${s.weekdays
 					.split(",")
@@ -264,9 +260,14 @@ export async function notifySubscribers(
 				if (!allowedDays.includes(currentDay)) continue;
 			}
 
-			if (sub.timeFrom && sub.timeTo) {
+			if (sub.timeRanges) {
 				const t = issue.time.slice(0, 5);
-				if (t < sub.timeFrom || t > sub.timeTo) continue;
+				const ranges = sub.timeRanges.split(",");
+				const inRange = ranges.some((r) => {
+					const [from, to] = r.split("-");
+					return t >= from && t <= to;
+				});
+				if (!inRange) continue;
 			}
 
 			const msgs = notifications.get(sub.chatId) ?? [];

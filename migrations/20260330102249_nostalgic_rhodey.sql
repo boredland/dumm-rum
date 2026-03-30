@@ -3,8 +3,7 @@ CREATE TABLE `telegram_subscriptions` (
 	`chat_id` text NOT NULL,
 	`line` text NOT NULL,
 	`direction` text NOT NULL,
-	`time_from` text,
-	`time_to` text,
+	`time_ranges` text,
 	`weekdays` text,
 	`created_at` text NOT NULL,
 	CONSTRAINT `telegram_subscriptions_chat_id_line_direction_unique` UNIQUE(`chat_id`,`line`,`direction`)

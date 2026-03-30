@@ -1,7 +1,7 @@
 {
   "version": "7",
   "dialect": "sqlite",
-  "id": "43e89507-d814-446b-86a0-729bda5f7f44",
+  "id": "a577123d-677c-4482-a181-2264ab85928a",
   "prevIds": [
     "beccd65d-bbf2-48f4-9b61-033bfdcef48d"
   ],
@@ -392,17 +392,7 @@
       "autoincrement": false,
       "default": null,
       "generated": null,
-      "name": "time_from",
-      "entityType": "columns",
-      "table": "telegram_subscriptions"
-    },
-    {
-      "type": "text",
-      "notNull": false,
-      "autoincrement": false,
-      "default": null,
-      "generated": null,
-      "name": "time_to",
+      "name": "time_ranges",
       "entityType": "columns",
       "table": "telegram_subscriptions"
     },
