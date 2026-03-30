@@ -1,7 +1,6 @@
-import { and, eq, isNotNull } from "drizzle-orm";
+import { and, eq, inArray, isNotNull } from "drizzle-orm";
 import type { Db } from "../db/client";
 import { departures, telegramSubscriptions } from "../db/schema";
-import { shortDir } from "./utils";
 
 interface TelegramUpdate {
 	message?: {
@@ -15,11 +14,12 @@ async function sendMessage(
 	chatId: string | number,
 	text: string,
 ) {
-	await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+	const res = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
 		method: "POST",
 		headers: { "Content-Type": "application/json" },
 		body: JSON.stringify({ chat_id: chatId, text, parse_mode: "HTML" }),
 	});
+	if (!res.ok) console.error(`Telegram API error: ${res.status}`);
 }
 
 const WEEKDAY_NAMES: Record<string, number> = {
@@ -39,6 +39,8 @@ const WEEKDAY_NAMES: Record<string, number> = {
 	sun: 0,
 };
 
+const DAY_NAMES = ["So", "Mo", "Di", "Mi", "Do", "Fr", "Sa"];
+
 function parseWeekdays(input: string): string | null {
 	const days = input.split(",").map((d) => {
 		const n = WEEKDAY_NAMES[d.trim().toLowerCase()];
@@ -46,6 +48,20 @@ function parseWeekdays(input: string): string | null {
 	});
 	if (days.some((d) => d === -1)) return null;
 	return days.sort().join(",");
+}
+
+function formatWeekdays(weekdays: string): string {
+	return weekdays
+		.split(",")
+		.map((d) => DAY_NAMES[Number(d)])
+		.join(", ");
+}
+
+async function fetchDirections(db: Db, line: string) {
+	return db
+		.selectDistinct({ direction: departures.direction })
+		.from(departures)
+		.where(and(eq(departures.line, line), isNotNull(departures.direction)));
 }
 
 export async function handleTelegramWebhook(
@@ -58,21 +74,18 @@ export async function handleTelegramWebhook(
 
 	const chatId = String(msg.chat.id);
 	const text = msg.text.trim();
+	const reply = (t: string) => sendMessage(token, chatId, t);
 
 	if (text.startsWith("/start subscribe_")) {
 		const line = decodeURIComponent(text.slice("/start subscribe_".length));
-		await sendMessage(
-			token,
-			chatId,
+		await reply(
 			`🚏 To subscribe to <b>${line}</b> alerts, send:\n\n<code>/subscribe ${line} &lt;direction&gt;</code>\n\nExample: <code>/subscribe ${line} Wiesbaden</code>\n\nAdd optional time/days:\n<code>/subscribe ${line} Wiesbaden 06:00-09:00,16:00-19:00 Mo,Di,Mi,Do,Fr</code>`,
 		);
 		return;
 	}
 
 	if (text === "/start" || text === "/help") {
-		await sendMessage(
-			token,
-			chatId,
+		await reply(
 			"🚏 <b>DummRum Alerts</b>\n\n" +
 				"Subscribe to cancellation & delay alerts for Frankfurt public transport lines.\n\n" +
 				"<b>Commands:</b>\n" +
@@ -92,25 +105,14 @@ export async function handleTelegramWebhook(
 		const args = text.slice("/subscribe ".length).trim().split(" ");
 		if (args.length < 2) {
 			const line = args[0];
-			const knownDirs = await db
-				.selectDistinct({ direction: departures.direction })
-				.from(departures)
-				.where(and(eq(departures.line, line), isNotNull(departures.direction)));
+			const knownDirs = await fetchDirections(db, line);
 			if (knownDirs.length > 0) {
 				const list = knownDirs
-					.map(
-						(d) => `• <code>/subscribe ${line} ${shortDir(d.direction)}</code>`,
-					)
+					.map((d) => `• <code>/subscribe ${line} ${d.direction}</code>`)
 					.join("\n");
-				await sendMessage(
-					token,
-					chatId,
-					`Pick a direction for <b>${line}</b>:\n\n${list}`,
-				);
+				await reply(`Pick a direction for <b>${line}</b>:\n\n${list}`);
 			} else {
-				await sendMessage(
-					token,
-					chatId,
+				await reply(
 					`Unknown line <b>${line}</b>.\n\nUsage: /subscribe &lt;line&gt; &lt;direction&gt; [HH:MM-HH:MM,...] [Mo,Di,...]`,
 				);
 			}
@@ -140,11 +142,7 @@ export async function handleTelegramWebhook(
 			) {
 				weekdays = parseWeekdays(arg);
 				if (!weekdays) {
-					await sendMessage(
-						token,
-						chatId,
-						`Invalid weekdays: ${arg}\nUse: Mo,Di,Mi,Do,Fr,Sa,So`,
-					);
+					await reply(`Invalid weekdays: ${arg}\nUse: Mo,Di,Mi,Do,Fr,Sa,So`);
 					return;
 				}
 			} else {
@@ -153,32 +151,23 @@ export async function handleTelegramWebhook(
 		}
 
 		if (!direction) {
-			await sendMessage(token, chatId, "Please specify a direction.");
+			await reply("Please specify a direction.");
 			return;
 		}
 
-		const knownDirs = await db
-			.selectDistinct({ direction: departures.direction })
-			.from(departures)
-			.where(and(eq(departures.line, line), isNotNull(departures.direction)));
+		const knownDirs = await fetchDirections(db, line);
 		const dirLower = direction.toLowerCase();
 		const match = knownDirs.some((d) =>
 			d.direction.toLowerCase().includes(dirLower),
 		);
 		if (!match) {
 			if (knownDirs.length === 0) {
-				await sendMessage(
-					token,
-					chatId,
+				await reply(
 					`Unknown line <b>${line}</b>. Check the line name and try again.`,
 				);
 			} else {
-				const list = knownDirs
-					.map((d) => `• ${shortDir(d.direction)}`)
-					.join("\n");
-				await sendMessage(
-					token,
-					chatId,
+				const list = knownDirs.map((d) => `• ${d.direction}`).join("\n");
+				await reply(
 					`No direction matching "${direction}" for <b>${line}</b>.\n\nKnown destinations:\n${list}`,
 				);
 			}
@@ -195,18 +184,22 @@ export async function handleTelegramWebhook(
 				weekdays,
 				createdAt: new Date().toISOString(),
 			})
-			.onConflictDoNothing();
+			.onConflictDoUpdate({
+				target: [
+					telegramSubscriptions.chatId,
+					telegramSubscriptions.line,
+					telegramSubscriptions.direction,
+				],
+				set: {
+					timeRanges: timeRanges.length > 0 ? timeRanges.join(",") : null,
+					weekdays,
+				},
+			});
 
 		let details = `<b>${line}</b> → ${direction}`;
 		if (timeRanges.length > 0) details += `\n⏰ ${timeRanges.join(", ")}`;
-		if (weekdays) {
-			const dayNames = ["So", "Mo", "Di", "Mi", "Do", "Fr", "Sa"];
-			details += `\n📅 ${weekdays
-				.split(",")
-				.map((d) => dayNames[Number(d)])
-				.join(", ")}`;
-		}
-		await sendMessage(token, chatId, `✅ Subscribed:\n${details}`);
+		if (weekdays) details += `\n📅 ${formatWeekdays(weekdays)}`;
+		await reply(`✅ Subscribed:\n${details}`);
 		return;
 	}
 
@@ -216,16 +209,12 @@ export async function handleTelegramWebhook(
 			.from(telegramSubscriptions)
 			.where(eq(telegramSubscriptions.chatId, chatId));
 		if (subs.length === 0) {
-			await sendMessage(token, chatId, "No subscriptions to remove.");
+			await reply("No subscriptions to remove.");
 		} else {
 			const list = subs.map(
 				(s) => `• <code>/unsubscribe ${s.line} ${s.direction}</code>`,
 			);
-			await sendMessage(
-				token,
-				chatId,
-				`Which subscription to remove?\n\n${list.join("\n")}`,
-			);
+			await reply(`Which subscription to remove?\n\n${list.join("\n")}`);
 		}
 		return;
 	}
@@ -234,11 +223,7 @@ export async function handleTelegramWebhook(
 		const parts = text.slice("/unsubscribe ".length).trim();
 		const spaceIdx = parts.indexOf(" ");
 		if (spaceIdx === -1) {
-			await sendMessage(
-				token,
-				chatId,
-				"Usage: /unsubscribe &lt;line&gt; &lt;direction&gt;",
-			);
+			await reply("Usage: /unsubscribe &lt;line&gt; &lt;direction&gt;");
 			return;
 		}
 		const line = parts.slice(0, spaceIdx);
@@ -257,11 +242,7 @@ export async function handleTelegramWebhook(
 			.limit(1);
 
 		if (existing.length === 0) {
-			await sendMessage(
-				token,
-				chatId,
-				`No subscription found for <b>${line}</b> → ${direction}`,
-			);
+			await reply(`No subscription found for <b>${line}</b> → ${direction}`);
 			return;
 		}
 
@@ -275,11 +256,7 @@ export async function handleTelegramWebhook(
 				),
 			);
 
-		await sendMessage(
-			token,
-			chatId,
-			`✅ Removed subscription for <b>${line}</b> → ${direction}`,
-		);
+		await reply(`✅ Removed subscription for <b>${line}</b> → ${direction}`);
 		return;
 	}
 
@@ -290,34 +267,21 @@ export async function handleTelegramWebhook(
 			.where(eq(telegramSubscriptions.chatId, chatId));
 
 		if (subs.length === 0) {
-			await sendMessage(
-				token,
-				chatId,
-				"No subscriptions yet. Try /subscribe S1 Wiesbaden",
-			);
+			await reply("No subscriptions yet. Try /subscribe S1 Wiesbaden");
 			return;
 		}
 
-		const dayNames = ["So", "Mo", "Di", "Mi", "Do", "Fr", "Sa"];
 		const lines = subs.map((s) => {
 			let desc = `• <b>${s.line}</b> → ${s.direction}`;
 			if (s.timeRanges) desc += ` ⏰ ${s.timeRanges.split(",").join(", ")}`;
-			if (s.weekdays)
-				desc += ` 📅 ${s.weekdays
-					.split(",")
-					.map((d) => dayNames[Number(d)])
-					.join(",")}`;
+			if (s.weekdays) desc += ` 📅 ${formatWeekdays(s.weekdays)}`;
 			return desc;
 		});
-		await sendMessage(
-			token,
-			chatId,
-			`📋 Your subscriptions:\n${lines.join("\n")}`,
-		);
+		await reply(`📋 Your subscriptions:\n${lines.join("\n")}`);
 		return;
 	}
 
-	await sendMessage(token, chatId, "Unknown command. Try /help");
+	await reply("Unknown command. Try /help");
 }
 
 interface Issue {
@@ -335,17 +299,28 @@ export async function notifySubscribers(
 ): Promise<void> {
 	if (issues.length === 0 || !token) return;
 
-	const subs = await db.select().from(telegramSubscriptions);
+	const issueLines = [...new Set(issues.map((i) => i.line))];
+	const subs = await db
+		.select()
+		.from(telegramSubscriptions)
+		.where(inArray(telegramSubscriptions.line, issueLines));
 	if (subs.length === 0) return;
 
-	const now = new Date();
-	const currentDay = now.getDay();
+	const subsByLine = new Map<string, typeof subs>();
+	for (const sub of subs) {
+		const list = subsByLine.get(sub.line) ?? [];
+		list.push(sub);
+		subsByLine.set(sub.line, list);
+	}
 
+	const currentDay = new Date().getDay();
 	const notifications = new Map<string, string[]>();
 
 	for (const issue of issues) {
-		for (const sub of subs) {
-			if (sub.line !== issue.line) continue;
+		const lineSubs = subsByLine.get(issue.line);
+		if (!lineSubs) continue;
+
+		for (const sub of lineSubs) {
 			if (!issue.direction.toLowerCase().includes(sub.direction.toLowerCase()))
 				continue;
 
@@ -356,8 +331,7 @@ export async function notifySubscribers(
 
 			if (sub.timeRanges) {
 				const t = issue.time.slice(0, 5);
-				const ranges = sub.timeRanges.split(",");
-				const inRange = ranges.some((r) => {
+				const inRange = sub.timeRanges.split(",").some((r) => {
 					const [from, to] = r.split("-");
 					return t >= from && t <= to;
 				});
@@ -369,7 +343,7 @@ export async function notifySubscribers(
 				? "❌ cancelled"
 				: `⏱ +${issue.delayMin} min`;
 			msgs.push(
-				`<b>${issue.line}</b> ${issue.time.slice(0, 5)} → ${shortDir(issue.direction)}: ${status}`,
+				`<b>${issue.line}</b> ${issue.time.slice(0, 5)} → ${issue.direction}: ${status}`,
 			);
 			notifications.set(sub.chatId, msgs);
 		}

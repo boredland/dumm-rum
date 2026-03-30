@@ -12,7 +12,6 @@ import {
 	fmtDate,
 	nowBerlin,
 	pct,
-	shortDir,
 	todayBerlin,
 } from "../../../../lib/utils";
 
@@ -118,7 +117,7 @@ let anchorPlaced = false;
 										{rtTime && rtTime !== time && <span class="text-warning"> &rarr; {rtTime}</span>}
 									</td>
 									<td class="px-4 py-2.5 text-sm"><a href={`/${lang}/line/${encodeURIComponent(d.line)}`} class="text-link no-underline hover:underline">{d.line}</a></td>
-									<td class="px-4 py-2.5 text-sm">{shortDir(d.direction)}</td>
+									<td class="px-4 py-2.5 text-sm">{d.direction}</td>
 									<td class="px-4 py-2.5 text-sm">
 										{d.cancelled ? (
 											<span class="inline-block px-2 py-0.5 rounded-full text-xs font-semibold bg-danger/15 text-danger">{t(lang, "status.cancelled")}</span>

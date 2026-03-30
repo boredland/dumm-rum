@@ -24,10 +24,6 @@ export function fmtDelay(delay: number | null): string {
 	return `${delay >= 0 ? "+" : ""}${delay.toFixed(1)} min`;
 }
 
-export function shortDir(dir: string): string {
-	return dir;
-}
-
 export function fmtTimestamp(iso: string | null, lang = "de"): string {
 	if (!iso) return "";
 	return new Date(iso).toLocaleString(lang, {

@@ -18,7 +18,6 @@ import {
 	onTimeRate,
 	pct,
 	scoreBorderColor,
-	shortDir,
 	trendArrow,
 	trendColor,
 } from "../../lib/utils";
@@ -135,7 +134,7 @@ const [
 							]}
 						>
 							<div class="text-lg font-bold text-emphasis">{categoryIcons([l.category])} {l.line}</div>
-							<div class="text-xs text-muted truncate" title={l.destinations.map(shortDir).join(" \u2194 ")}>{l.destinations.map(shortDir).join(" \u2194 ")}</div>
+							<div class="text-xs text-muted truncate" title={l.destinations.join(" \u2194 ")}>{l.destinations.join(" \u2194 ")}</div>
 							<div class="text-sm text-muted mt-1">
 								{pct(l.cancelled, l.total)}% {t(lang, "home.cancelled")} &middot; {pct(l.delayed, l.total)}% {t(lang, "home.delayed")}
 							</div>
@@ -184,7 +183,7 @@ const [
 							{categoryIcons(st?.categories ?? [])}
 						</div>
 						<div class="text-lg font-bold text-emphasis">
-							{shortDir(s.name)}
+							{s.name}
 						</div>
 						{st && st.total > 0 && (
 							<>
