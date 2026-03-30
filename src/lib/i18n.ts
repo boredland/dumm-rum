@@ -84,6 +84,7 @@ const translations = {
 		"filter.on_time": "Pünktlich",
 
 		"status.cancelled": "ausgefallen",
+		"status.delayed": "verspätet",
 		"status.ok": "ok",
 		"status.on_time": "p\u00fcnktlich",
 	},
@@ -169,6 +170,7 @@ const translations = {
 		"filter.on_time": "On time",
 
 		"status.cancelled": "cancelled",
+		"status.delayed": "delayed",
 		"status.ok": "ok",
 		"status.on_time": "on time",
 	},

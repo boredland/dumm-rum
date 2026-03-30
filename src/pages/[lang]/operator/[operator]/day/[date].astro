@@ -103,6 +103,8 @@ const delayedCount = departures.filter(
 									<td class="px-4 py-2.5 text-sm">
 										{d.cancelled ? (
 											<span class="inline-block px-2 py-0.5 rounded-full text-xs font-semibold bg-danger/15 text-danger">{t(lang, "status.cancelled")}</span>
+										) : status === "delayed" ? (
+											<span class="inline-block px-2 py-0.5 rounded-full text-xs font-semibold bg-warning/15 text-warning">{t(lang, "status.delayed")}</span>
 										) : (
 											<span class="inline-block px-2 py-0.5 rounded-full text-xs font-semibold bg-success/10 text-success">{t(lang, "status.ok")}</span>
 										)}
