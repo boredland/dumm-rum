@@ -323,12 +323,32 @@ export async function runCollection(
 
 			if (recentIssues.length > 0) {
 				const seen = new Set<string>();
-				const unique = recentIssues.filter((d) => {
-					const key = `${d.date}|${d.time}|${d.line}|${d.direction}|${d.journeyNum}`;
-					if (seen.has(key)) return false;
-					seen.add(key);
-					return true;
-				});
+				const unique = [...recentIssues]
+					.sort((a, b) => {
+						const scoreA = a.cancelled
+							? Infinity
+							: a.rtTime && a.rtDate
+								? Math.abs(
+										new Date(`${a.rtDate}T${a.rtTime}`).getTime() -
+											new Date(`${a.date}T${a.time}`).getTime(),
+									)
+								: 0;
+						const scoreB = b.cancelled
+							? Infinity
+							: b.rtTime && b.rtDate
+								? Math.abs(
+										new Date(`${b.rtDate}T${b.rtTime}`).getTime() -
+											new Date(`${b.date}T${b.time}`).getTime(),
+									)
+								: 0;
+						return scoreB - scoreA;
+					})
+					.filter((d) => {
+						const key = `${d.date}|${d.time}|${d.line}|${d.direction}|${d.journeyNum}`;
+						if (seen.has(key)) return false;
+						seen.add(key);
+						return true;
+					});
 
 				const { notifySubscribers } = await import("./telegram");
 				await notifySubscribers(
