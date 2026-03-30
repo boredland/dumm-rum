@@ -125,8 +125,15 @@ export async function handleTelegramWebhook(
 		let weekdays: string | null = null;
 
 		for (const arg of remaining) {
-			if (/^\d{2}:\d{2}-\d{2}:\d{2}(,\d{2}:\d{2}-\d{2}:\d{2})*$/.test(arg)) {
-				timeRanges.push(...arg.split(","));
+			if (
+				/^\d{1,2}:\d{2}-\d{1,2}:\d{2}(,\d{1,2}:\d{2}-\d{1,2}:\d{2})*$/.test(arg)
+			) {
+				timeRanges.push(
+					...arg.split(",").map((r) => {
+						const [from, to] = r.split("-");
+						return `${from.padStart(5, "0")}-${to.padStart(5, "0")}`;
+					}),
+				);
 			} else if (
 				arg.includes(",") ||
 				Object.keys(WEEKDAY_NAMES).includes(arg.toLowerCase())
