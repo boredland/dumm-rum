@@ -130,6 +130,7 @@ export async function handleTelegramWebhook(
 				"/subscribe S1 Wiesbaden — alerts for S1 towards Wiesbaden\n" +
 				"/subscribe S1 Wiesbaden+Ober-Roden — both directions\n" +
 				"/unsubscribe — list your subscriptions to remove\n" +
+				"/unsubscribe all — remove all subscriptions\n" +
 				"/list — show all subscriptions\n\n" +
 				"<b>Options (add after direction):</b>\n" +
 				"Time: <code>7:50-8:30</code> or <code>06:00-09:00,16:00-19:00</code>\n" +
@@ -251,6 +252,14 @@ export async function handleTelegramWebhook(
 		if (timeRanges.length > 0) details += `\n⏰ ${timeRanges.join(", ")}`;
 		if (weekdays) details += `\n📅 ${formatWeekdays(weekdays)}`;
 		await reply(`✅ Subscribed:\n${details}`);
+		return;
+	}
+
+	if (text === "/unsubscribe all") {
+		const deleted = await db
+			.delete(telegramSubscriptions)
+			.where(eq(telegramSubscriptions.chatId, chatId));
+		await reply("✅ Removed all subscriptions.");
 		return;
 	}
 
