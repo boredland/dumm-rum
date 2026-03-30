@@ -151,6 +151,24 @@ const otherPath = Astro.url.pathname.replace(`/${lang}`, `/${otherLang}`);
 				return (h >= 6 && h < 9) || (h >= 16 && h < 19);
 			}
 
+			function updateTelegramLink(direction: string, coreHours: boolean) {
+				const link = document.getElementById("telegram-subscribe") as HTMLAnchorElement | null;
+				if (!link) return;
+				const line = link.dataset.line ?? "";
+				const timeRanges = coreHours ? "06:00-09:00,16:00-19:00" : "";
+				if (!direction && !timeRanges) {
+					link.href = `https://t.me/rumsteh_bot?start=subscribe_${encodeURIComponent(line)}`;
+					return;
+				}
+				const payload = [line, direction, timeRanges].join("|");
+				const encoded = btoa(payload).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+				if (encoded.length <= 62) {
+					link.href = `https://t.me/rumsteh_bot?start=s-${encoded}`;
+				} else {
+					link.href = `https://t.me/rumsteh_bot?start=subscribe_${encodeURIComponent(line)}`;
+				}
+			}
+
 			function initDepartureFilters() {
 				for (const wrapper of document.querySelectorAll("[data-departure-filter]")) {
 					const el = wrapper as HTMLElement;
@@ -178,6 +196,7 @@ const otherPath = Astro.url.pathname.replace(`/${lang}`, `/${otherLang}`);
 							row.style.display = statusMatch && dirMatch && hoursMatch ? "" : "none";
 						}
 						syncParams({ status: activeStatus === "issues" ? "" : activeStatus, hours: activeHours, dir: activeDir });
+						updateTelegramLink(activeDir, !!activeHours);
 					}
 
 					stylePills(statusButtons, "filter", activeStatus);

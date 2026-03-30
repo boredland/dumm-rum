@@ -51,7 +51,13 @@ const todayStats = days.find((d) => d.date === today);
 			)}
 		</p>
 		<a
-			href={`https://t.me/rumsteh_bot?start=subscribe_${encodeURIComponent(line)}`}
+			id="telegram-subscribe"
+			href={(() => {
+				if (!coreOnly) return `https://t.me/rumsteh_bot?start=subscribe_${encodeURIComponent(line)}`;
+				const payload = btoa(`${line}||06:00-09:00,16:00-19:00`).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
+				return `https://t.me/rumsteh_bot?start=s-${payload}`;
+			})()}
+			data-line={line}
 			class="inline-flex items-center gap-1 text-xs text-link no-underline hover:underline mt-2"
 			target="_blank"
 			rel="noopener"

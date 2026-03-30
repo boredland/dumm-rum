@@ -113,6 +113,27 @@ export async function handleTelegramWebhook(
 	const text = msg.text.trim();
 	const reply = (t: string) => sendMessage(token, chatId, t);
 
+	if (text.startsWith("/start s-")) {
+		const encoded = text.slice("/start s-".length);
+		try {
+			const decoded = atob(encoded.replace(/-/g, "+").replace(/_/g, "/"));
+			const [line, direction, timeRanges, weekdays] = decoded.split("|");
+			let cmd = `/subscribe ${line}`;
+			if (direction) cmd += ` ${direction}`;
+			if (timeRanges) cmd += ` ${timeRanges}`;
+			if (weekdays) cmd += ` ${weekdays}`;
+			const desc = direction
+				? `<b>${line}</b> → ${direction}`
+				: `<b>${line}</b>`;
+			await reply(
+				`🚏 Subscribe to ${desc} alerts:\n\n<code>${cmd}</code>\n\nTap the command above to copy, then send it here.`,
+			);
+		} catch {
+			await reply("Invalid link. Try /help");
+		}
+		return;
+	}
+
 	if (text.startsWith("/start subscribe_")) {
 		const line = decodeURIComponent(text.slice("/start subscribe_".length));
 		const knownDirs = await fetchDirections(db, line);
