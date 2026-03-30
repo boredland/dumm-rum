@@ -126,7 +126,7 @@ export async function handleTelegramWebhook(
 				? `<b>${line}</b> → ${direction}`
 				: `<b>${line}</b>`;
 			await reply(
-				`🚏 Subscribe to ${desc} alerts:\n\n<code>${cmd}</code>\n\nTap the command above to copy, then send it here.`,
+				`🚏 Subscribe to ${desc} alerts:\n\n<code>${cmd}</code>\n\nTap the command above to copy, then send it here.\n\nYou can add options before sending:\n⏰ Time: <code>${cmd} 06:00-09:00,16:00-19:00</code>\n📅 Days: <code>${cmd} Mo-Fr</code>\n⏰📅 Both: <code>${cmd} 06:00-09:00 Mo-Fr</code>`,
 			);
 		} catch {
 			await reply("Invalid link. Try /help");
