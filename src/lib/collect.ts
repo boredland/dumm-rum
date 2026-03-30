@@ -1,4 +1,4 @@
-import { and, count, eq, isNotNull, sql } from "drizzle-orm";
+import { and, count, eq, gte, isNotNull, or, sql } from "drizzle-orm";
 import type { Db } from "../db/client";
 import { coalesce, excluded, max } from "../db/helpers";
 import {
@@ -12,7 +12,7 @@ import type { components } from "./hafas-types";
 import { avgDelaySql, delayedSql } from "./queries";
 import type { Station } from "./stations";
 import { STATIONS } from "./stations";
-import { nowBerlin, todayBerlin } from "./utils";
+import { DELAY_THRESHOLD_MIN, nowBerlin, todayBerlin } from "./utils";
 
 type Departure = components["schemas"]["Departure"];
 
@@ -264,6 +264,7 @@ export async function runCollection(
 	db: Db,
 	ai: Ai,
 	apiKeys: string,
+	telegramToken?: string,
 ): Promise<Record<string, number>> {
 	const now = nowBerlin();
 	const slot = Math.floor((now.hour() * 60 + now.minute()) / 3);
@@ -284,6 +285,57 @@ export async function runCollection(
 		materializeStationStats(db, today),
 		materializeOperatorStats(db, today),
 	]);
+
+	if (telegramToken) {
+		try {
+			const cutoff = new Date(Date.now() - 4 * 60 * 1000).toISOString();
+			const recentIssues = await db
+				.select({
+					line: departures.line,
+					direction: departures.direction,
+					time: departures.time,
+					cancelled: departures.cancelled,
+					rtDate: departures.rtDate,
+					rtTime: departures.rtTime,
+					date: departures.date,
+				})
+				.from(departures)
+				.where(
+					and(
+						eq(departures.date, today),
+						gte(departures.fetchedAt, cutoff),
+						or(
+							eq(departures.cancelled, 1),
+							sql`CASE WHEN ${departures.rtTime} IS NOT NULL AND ${departures.rtDate} IS NOT NULL THEN (strftime('%s', ${departures.rtDate} || ' ' || ${departures.rtTime}) - strftime('%s', ${departures.date} || ' ' || ${departures.time})) / 60.0 ELSE 0 END >= ${DELAY_THRESHOLD_MIN}`,
+						),
+					),
+				);
+
+			if (recentIssues.length > 0) {
+				const { notifySubscribers } = await import("./telegram");
+				await notifySubscribers(
+					db,
+					telegramToken,
+					recentIssues.map((d) => ({
+						line: d.line,
+						direction: d.direction,
+						time: d.time,
+						cancelled: !!d.cancelled,
+						delayMin:
+							d.rtTime && d.rtDate
+								? Math.round(
+										(new Date(`${d.rtDate}T${d.rtTime}`).getTime() -
+											new Date(`${d.date}T${d.time}`).getTime()) /
+											60000,
+									)
+								: null,
+					})),
+				);
+			}
+		} catch (e) {
+			console.error("Telegram notification failed:", e);
+		}
+	}
 
 	return summary;
 }

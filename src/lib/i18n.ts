@@ -77,6 +77,7 @@ const translations = {
 
 		"share.button": "Teilen",
 		"share.copied": "Link kopiert!",
+		"telegram.subscribe": "Telegram-Alerts",
 
 		"filter.all": "Alle",
 		"filter.issues": "Ausfälle & Verspätungen",
@@ -161,6 +162,7 @@ const translations = {
 
 		"share.button": "Share",
 		"share.copied": "Link copied!",
+		"telegram.subscribe": "Telegram alerts",
 
 		"filter.all": "All",
 		"filter.issues": "Cancelled & delayed",

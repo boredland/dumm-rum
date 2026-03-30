@@ -70,3 +70,21 @@ export const operatorDailyStats = sqliteTable(
 	},
 	(t) => [primaryKey({ columns: [t.operator, t.date] })],
 );
+
+export const telegramSubscriptions = sqliteTable(
+	"telegram_subscriptions",
+	{
+		id: integer().primaryKey({ autoIncrement: true }),
+		chatId: text("chat_id").notNull(),
+		line: text().notNull(),
+		direction: text().notNull(),
+		timeFrom: text("time_from"),
+		timeTo: text("time_to"),
+		weekdays: text(),
+		createdAt: text("created_at").notNull(),
+	},
+	(t) => [
+		unique().on(t.chatId, t.line, t.direction),
+		index("idx_telegram_line_dir").on(t.line, t.direction),
+	],
+);

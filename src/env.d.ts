@@ -3,5 +3,6 @@ declare namespace Cloudflare {
 		DB: D1Database;
 		AI: Ai;
 		RMV_API_KEY: string;
+		TELEGRAM_BOT_TOKEN: string;
 	}
 }
