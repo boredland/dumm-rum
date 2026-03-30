@@ -41,13 +41,30 @@ const WEEKDAY_NAMES: Record<string, number> = {
 
 const DAY_NAMES = ["So", "Mo", "Di", "Mi", "Do", "Fr", "Sa"];
 
+function expandRange(from: number, to: number): number[] {
+	const result: number[] = [];
+	for (let i = from; i !== (to + 1) % 7; i = (i + 1) % 7) result.push(i);
+	result.push(to);
+	return result;
+}
+
 function parseWeekdays(input: string): string | null {
-	const days = input.split(",").map((d) => {
-		const n = WEEKDAY_NAMES[d.trim().toLowerCase()];
-		return n !== undefined ? n : -1;
-	});
-	if (days.some((d) => d === -1)) return null;
-	return days.sort().join(",");
+	const days: number[] = [];
+	for (const part of input.split(",")) {
+		const trimmed = part.trim().toLowerCase();
+		const rangeParts = trimmed.split("-");
+		if (rangeParts.length === 2) {
+			const from = WEEKDAY_NAMES[rangeParts[0]];
+			const to = WEEKDAY_NAMES[rangeParts[1]];
+			if (from === undefined || to === undefined) return null;
+			days.push(...expandRange(from, to));
+		} else {
+			const n = WEEKDAY_NAMES[trimmed];
+			if (n === undefined) return null;
+			days.push(n);
+		}
+	}
+	return [...new Set(days)].sort().join(",");
 }
 
 function formatWeekdays(weekdays: string): string {
