@@ -95,6 +95,28 @@ const otherPath = Astro.url.pathname.replace(`/${lang}`, `/${otherLang}`);
 			}, { passive: true });
 			document.addEventListener("astro:page-load", initScrollTop);
 
+			function syncParams(updates: Record<string, string>) {
+				const url = new URL(window.location.href);
+				for (const [k, v] of Object.entries(updates)) {
+					if (v) url.searchParams.set(k, v);
+					else url.searchParams.delete(k);
+				}
+				history.replaceState(null, "", url);
+			}
+
+			function param(key: string): string {
+				return new URL(window.location.href).searchParams.get(key) ?? "";
+			}
+
+			function stylePills(buttons: NodeListOf<HTMLButtonElement>, attr: string, active: string) {
+				for (const b of buttons) {
+					const match = (b.dataset as Record<string, string>)[attr] === active;
+					b.classList.toggle("bg-surface-hover", match);
+					b.classList.toggle("text-emphasis", match);
+					b.classList.toggle("text-muted", !match);
+				}
+			}
+
 			function initDepartureFilters() {
 				for (const wrapper of document.querySelectorAll("[data-departure-filter]")) {
 					const el = wrapper as HTMLElement;
@@ -105,8 +127,8 @@ const otherPath = Astro.url.pathname.replace(`/${lang}`, `/${otherLang}`);
 					const table = el.querySelector("tbody");
 					if (!statusButtons.length || !table) continue;
 
-					let activeStatus = "issues";
-					let activeDir = "";
+					let activeStatus = param("status") || "issues";
+					let activeDir = param("dir");
 
 					function applyAll() {
 						for (const row of table!.querySelectorAll<HTMLElement>("tr[data-status]")) {
@@ -118,28 +140,23 @@ const otherPath = Astro.url.pathname.replace(`/${lang}`, `/${otherLang}`);
 							const dirMatch = !activeDir || row.dataset.direction === activeDir;
 							row.style.display = statusMatch && dirMatch ? "" : "none";
 						}
+						syncParams({ status: activeStatus === "issues" ? "" : activeStatus, dir: activeDir });
 					}
 
+					stylePills(statusButtons, "filter", activeStatus);
 					for (const btn of statusButtons) {
 						btn.addEventListener("click", () => {
 							activeStatus = btn.dataset.filter!;
-							for (const b of statusButtons) {
-								b.classList.toggle("bg-surface-hover", b.dataset.filter === activeStatus);
-								b.classList.toggle("text-emphasis", b.dataset.filter === activeStatus);
-								b.classList.toggle("text-muted", b.dataset.filter !== activeStatus);
-							}
+							stylePills(statusButtons, "filter", activeStatus);
 							applyAll();
 						});
 					}
 
+					stylePills(dirButtons, "dir", activeDir);
 					for (const btn of dirButtons) {
 						btn.addEventListener("click", () => {
 							activeDir = btn.dataset.dir!;
-							for (const b of dirButtons) {
-								b.classList.toggle("bg-surface-hover", b.dataset.dir === activeDir);
-								b.classList.toggle("text-emphasis", b.dataset.dir === activeDir);
-								b.classList.toggle("text-muted", b.dataset.dir !== activeDir);
-							}
+							stylePills(dirButtons, "dir", activeDir);
 							applyAll();
 						});
 					}
@@ -149,20 +166,17 @@ const otherPath = Astro.url.pathname.replace(`/${lang}`, `/${otherLang}`);
 			}
 			document.addEventListener("astro:page-load", initDepartureFilters);
 
-			let activeCat = "";
-			let searchQuery = "";
-
-			function applyFilters() {
+			function applyLandingFilters() {
 				const input = document.getElementById("search") as HTMLInputElement | null;
 				const q = input?.value.toLowerCase().trim() ?? "";
-				searchQuery = q;
+				const cat = activeCat;
 				const cards = document.querySelectorAll<HTMLElement>("[data-search]");
 				const sections = new Set<HTMLElement>();
 				for (const card of cards) {
 					const matchText = !q || card.dataset.search!.includes(q);
-					let matchCat = !activeCat;
-					if (activeCat && card.dataset.categories) {
-						const cats = activeCat.split(",");
+					let matchCat = !cat;
+					if (cat && card.dataset.categories) {
+						const cats = cat.split(",");
 						matchCat = cats.some((c) => card.dataset.categories!.split(",").includes(c));
 					}
 					const show = matchText && matchCat;
@@ -171,34 +185,32 @@ const otherPath = Astro.url.pathname.replace(`/${lang}`, `/${otherLang}`);
 					if (section && show) sections.add(section as HTMLElement);
 				}
 				for (const details of document.querySelectorAll<HTMLDetailsElement>("details.group")) {
-					if (q || activeCat) details.open = sections.has(details);
+					if (q || cat) details.open = sections.has(details);
 				}
+				syncParams({ q: q, cat: cat });
 			}
+
+			let activeCat = "";
 
 			function initSearch() {
 				const input = document.getElementById("search") as HTMLInputElement | null;
 				if (!input) return;
-				input.removeAttribute("data-initialized");
-				if (searchQuery) input.value = searchQuery;
-				input.addEventListener("input", applyFilters);
+				const q = param("q");
+				if (q) input.value = q;
+				input.addEventListener("input", applyLandingFilters);
 			}
 
 			function initCategoryFilter() {
 				const container = document.getElementById("category-filter");
 				if (!container) return;
+				activeCat = param("cat");
 				const buttons = container.querySelectorAll<HTMLButtonElement>("[data-cat]");
+				stylePills(buttons, "cat", activeCat);
 				for (const btn of buttons) {
-					btn.classList.toggle("bg-surface-hover", btn.dataset.cat === activeCat);
-					btn.classList.toggle("text-emphasis", btn.dataset.cat === activeCat);
-					btn.classList.toggle("text-muted", btn.dataset.cat !== activeCat);
 					btn.addEventListener("click", () => {
 						activeCat = btn.dataset.cat!;
-						for (const b of buttons) {
-							b.classList.toggle("bg-surface-hover", b.dataset.cat === activeCat);
-							b.classList.toggle("text-emphasis", b.dataset.cat === activeCat);
-							b.classList.toggle("text-muted", b.dataset.cat !== activeCat);
-						}
-						applyFilters();
+						stylePills(buttons, "cat", activeCat);
+						applyLandingFilters();
 					});
 				}
 			}
@@ -213,7 +225,7 @@ const otherPath = Astro.url.pathname.replace(`/${lang}`, `/${otherLang}`);
 			document.addEventListener("astro:page-load", () => {
 				initSearch();
 				initCategoryFilter();
-				if (searchQuery || activeCat) applyFilters();
+				if (param("q") || param("cat")) applyLandingFilters();
 			});
 
 			let refreshTimer: ReturnType<typeof setInterval>;
