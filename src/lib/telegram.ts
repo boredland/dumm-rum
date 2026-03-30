@@ -64,7 +64,7 @@ export async function handleTelegramWebhook(
 		await sendMessage(
 			token,
 			chatId,
-			`🚏 To subscribe to <b>${line}</b> alerts, send:\n\n<code>/subscribe ${line} &lt;direction&gt;</code>\n\nExample: <code>/subscribe ${line} Wiesbaden</code>\n\nAdd optional time/days: <code>/subscribe ${line} Wiesbaden 06:00-09:00 Mo,Di,Mi,Do,Fr</code>`,
+			`🚏 To subscribe to <b>${line}</b> alerts, send:\n\n<code>/subscribe ${line} &lt;direction&gt;</code>\n\nExample: <code>/subscribe ${line} Wiesbaden</code>\n\nAdd optional time/days:\n<code>/subscribe ${line} Wiesbaden 06:00-09:00,16:00-19:00 Mo,Di,Mi,Do,Fr</code>`,
 		);
 		return;
 	}
@@ -77,7 +77,7 @@ export async function handleTelegramWebhook(
 				"Subscribe to cancellation & delay alerts for Frankfurt public transport lines.\n\n" +
 				"<b>Commands:</b>\n" +
 				"/subscribe S1 Wiesbaden — alerts for S1 towards Wiesbaden\n" +
-				"/subscribe S1 Wiesbaden 06:00-09:00 Mo,Di,Mi,Do,Fr — only during commute\n" +
+				"/subscribe S1 Wiesbaden 06:00-09:00,16:00-19:00 Mo,Di,Mi,Do,Fr — commute hours\n" +
 				"/unsubscribe S1 Wiesbaden — stop alerts\n" +
 				"/list — show your subscriptions\n\n" +
 				"<b>Options:</b>\n" +
@@ -219,6 +219,27 @@ export async function handleTelegramWebhook(
 		const line = parts.slice(0, spaceIdx);
 		const direction = parts.slice(spaceIdx + 1).trim();
 
+		const existing = await db
+			.select({ id: telegramSubscriptions.id })
+			.from(telegramSubscriptions)
+			.where(
+				and(
+					eq(telegramSubscriptions.chatId, chatId),
+					eq(telegramSubscriptions.line, line),
+					eq(telegramSubscriptions.direction, direction),
+				),
+			)
+			.limit(1);
+
+		if (existing.length === 0) {
+			await sendMessage(
+				token,
+				chatId,
+				`No subscription found for <b>${line}</b> → ${direction}`,
+			);
+			return;
+		}
+
 		await db
 			.delete(telegramSubscriptions)
 			.where(
@@ -232,7 +253,7 @@ export async function handleTelegramWebhook(
 		await sendMessage(
 			token,
 			chatId,
-			`🗑 Unsubscribed from <b>${line}</b> → ${direction}`,
+			`✅ Removed subscription for <b>${line}</b> → ${direction}`,
 		);
 		return;
 	}
