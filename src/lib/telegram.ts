@@ -185,6 +185,26 @@ export async function handleTelegramWebhook(
 		return;
 	}
 
+	if (text === "/unsubscribe") {
+		const subs = await db
+			.select()
+			.from(telegramSubscriptions)
+			.where(eq(telegramSubscriptions.chatId, chatId));
+		if (subs.length === 0) {
+			await sendMessage(token, chatId, "No subscriptions to remove.");
+		} else {
+			const list = subs.map(
+				(s) => `• <code>/unsubscribe ${s.line} ${s.direction}</code>`,
+			);
+			await sendMessage(
+				token,
+				chatId,
+				`Which subscription to remove?\n\n${list.join("\n")}`,
+			);
+		}
+		return;
+	}
+
 	if (text.startsWith("/unsubscribe ")) {
 		const parts = text.slice("/unsubscribe ".length).trim();
 		const spaceIdx = parts.indexOf(" ");
