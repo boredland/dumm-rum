@@ -7,7 +7,7 @@ import {
 	operatorDailyStats,
 	stationDailyStats,
 } from "../db/schema";
-import type { Station } from "./stations";
+import { STATIONS, type Station } from "./stations";
 import { DELAY_THRESHOLD_MIN, nowBerlin, todayBerlin } from "./utils";
 
 const CORE_HOURS = sql`((${departures.time} >= '06:00:00' AND ${departures.time} < '09:00:00') OR (${departures.time} >= '16:00:00' AND ${departures.time} < '19:00:00'))`;
@@ -753,4 +753,93 @@ export async function getLineTrends(db: Db): Promise<Map<string, TrendData>> {
 		map.set(r.line, entry);
 	}
 	return map;
+}
+
+export interface TodayWorst {
+	name: string;
+	count: number;
+}
+
+export interface TodayOverview {
+	total: number;
+	cancelled: number;
+	delayed: number;
+	worstLineCancelled: TodayWorst | null;
+	worstLineDelayed: TodayWorst | null;
+	worstStationCancelled: TodayWorst | null;
+	worstStationDelayed: TodayWorst | null;
+	worstOperatorCancelled: TodayWorst | null;
+	worstOperatorDelayed: TodayWorst | null;
+}
+
+export async function getTodayOverview(db: Db): Promise<TodayOverview> {
+	const today = todayBerlin();
+
+	const [lineRows, stationRows, opRows] = await Promise.all([
+		db
+			.select({
+				line: departures.line,
+				total: count().as("total"),
+				cancelled: sql<number>`SUM(${departures.cancelled})`.as("cancelled"),
+				delayed: delayedSql.as("delayed"),
+			})
+			.from(departures)
+			.where(eq(departures.date, today))
+			.groupBy(departures.line),
+		db
+			.select()
+			.from(stationDailyStats)
+			.where(eq(stationDailyStats.date, today)),
+		db
+			.select()
+			.from(operatorDailyStats)
+			.where(eq(operatorDailyStats.date, today)),
+	]);
+
+	let total = 0,
+		cancelled = 0,
+		delayed = 0;
+	let worstLineCancelled: TodayWorst | null = null;
+	let worstLineDelayed: TodayWorst | null = null;
+	for (const r of lineRows) {
+		total += r.total;
+		cancelled += r.cancelled;
+		delayed += r.delayed;
+		if (r.cancelled > (worstLineCancelled?.count ?? 0))
+			worstLineCancelled = { name: r.line, count: r.cancelled };
+		if (r.delayed > (worstLineDelayed?.count ?? 0))
+			worstLineDelayed = { name: r.line, count: r.delayed };
+	}
+
+	let worstStationCancelled: TodayWorst | null = null;
+	let worstStationDelayed: TodayWorst | null = null;
+	for (const r of stationRows) {
+		const name =
+			STATIONS.find((s) => s.id === r.stationId)?.name ?? r.stationId;
+		if (r.cancelled > (worstStationCancelled?.count ?? 0))
+			worstStationCancelled = { name, count: r.cancelled };
+		if (r.delayed > (worstStationDelayed?.count ?? 0))
+			worstStationDelayed = { name, count: r.delayed };
+	}
+
+	let worstOperatorCancelled: TodayWorst | null = null;
+	let worstOperatorDelayed: TodayWorst | null = null;
+	for (const r of opRows) {
+		if (r.cancelled > (worstOperatorCancelled?.count ?? 0))
+			worstOperatorCancelled = { name: r.operator, count: r.cancelled };
+		if (r.delayed > (worstOperatorDelayed?.count ?? 0))
+			worstOperatorDelayed = { name: r.operator, count: r.delayed };
+	}
+
+	return {
+		total,
+		cancelled,
+		delayed,
+		worstLineCancelled,
+		worstLineDelayed,
+		worstStationCancelled,
+		worstStationDelayed,
+		worstOperatorCancelled,
+		worstOperatorDelayed,
+	};
 }

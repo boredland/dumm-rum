@@ -11,6 +11,7 @@ import {
 	getOperatorTrends,
 	getStationSummaries,
 	getStationTrends,
+	getTodayOverview,
 	parseFilter,
 } from "../../lib/queries";
 import { categoryIcons, STATIONS } from "../../lib/stations";
@@ -33,6 +34,7 @@ const [
 	stationTrends,
 	operatorTrends,
 	lineTrends,
+	today,
 ] = await Promise.all([
 	getStationSummaries(db, STATIONS, filter),
 	getOperatorSummaries(db, filter),
@@ -40,6 +42,7 @@ const [
 	getStationTrends(db),
 	getOperatorTrends(db),
 	getLineTrends(db),
+	getTodayOverview(db),
 ]);
 ---
 
@@ -90,6 +93,49 @@ const [
 		) : null;
 	})()}
 
+	{today.total > 0 && (() => {
+		const todayScore = onTimeRate(today.cancelled, today.delayed, today.total);
+		const todayColor = todayScore < 80 ? "text-danger" : todayScore < 90 ? "text-warning" : "text-success";
+		return (
+			<div class="mb-8">
+				<p class="text-xs uppercase tracking-wide text-muted font-semibold mb-3">{t(lang, "home.today")}</p>
+				<div class="grid grid-cols-3 gap-4 max-sm:grid-cols-1">
+					<div class="bg-surface border border-border rounded-xl p-5">
+						<div class="text-[0.7rem] uppercase tracking-wide text-muted mb-1">{t(lang, "home.today_score")}</div>
+						<div class:list={["text-4xl font-bold tabular-nums", todayColor]}>{todayScore}<span class="text-lg text-muted">%</span></div>
+						<div class="text-sm text-muted mt-1">{today.total.toLocaleString(lang)} {t(lang, "stat.departures").toLowerCase()}</div>
+					</div>
+					<div class="bg-surface border border-border rounded-xl p-5">
+						<div class="text-[0.7rem] uppercase tracking-wide text-muted mb-1">{t(lang, "home.worst_cancelled")}</div>
+						{today.worstLineCancelled && today.worstLineCancelled.count > 0 && (
+							<div class="text-sm mt-1"><span class="text-danger font-semibold">{today.worstLineCancelled.count}x</span> <span class="text-muted">{t(lang, "home.line")}</span> <span class="font-semibold">{today.worstLineCancelled.name}</span></div>
+						)}
+						{today.worstStationCancelled && today.worstStationCancelled.count > 0 && (
+							<div class="text-sm mt-1"><span class="text-danger font-semibold">{today.worstStationCancelled.count}x</span> <span class="text-muted">{t(lang, "home.station")}</span> <span class="font-semibold truncate">{today.worstStationCancelled.name}</span></div>
+						)}
+						{today.worstOperatorCancelled && today.worstOperatorCancelled.count > 0 && (
+							<div class="text-sm mt-1"><span class="text-danger font-semibold">{today.worstOperatorCancelled.count}x</span> <span class="text-muted">{t(lang, "home.operator")}</span> <span class="font-semibold truncate">{today.worstOperatorCancelled.name}</span></div>
+						)}
+						{!today.worstLineCancelled?.count && <div class="text-2xl font-bold text-success">0</div>}
+					</div>
+					<div class="bg-surface border border-border rounded-xl p-5">
+						<div class="text-[0.7rem] uppercase tracking-wide text-muted mb-1">{t(lang, "home.worst_delayed")}</div>
+						{today.worstLineDelayed && today.worstLineDelayed.count > 0 && (
+							<div class="text-sm mt-1"><span class="text-warning font-semibold">{today.worstLineDelayed.count}x</span> <span class="text-muted">{t(lang, "home.line")}</span> <span class="font-semibold">{today.worstLineDelayed.name}</span></div>
+						)}
+						{today.worstStationDelayed && today.worstStationDelayed.count > 0 && (
+							<div class="text-sm mt-1"><span class="text-warning font-semibold">{today.worstStationDelayed.count}x</span> <span class="text-muted">{t(lang, "home.station")}</span> <span class="font-semibold truncate">{today.worstStationDelayed.name}</span></div>
+						)}
+						{today.worstOperatorDelayed && today.worstOperatorDelayed.count > 0 && (
+							<div class="text-sm mt-1"><span class="text-warning font-semibold">{today.worstOperatorDelayed.count}x</span> <span class="text-muted">{t(lang, "home.operator")}</span> <span class="font-semibold truncate">{today.worstOperatorDelayed.name}</span></div>
+						)}
+						{!today.worstLineDelayed?.count && <div class="text-2xl font-bold text-success">0</div>}
+					</div>
+				</div>
+			</div>
+		);
+	})()}
+
 	<div class="relative mb-4">
 		<input
 			id="search"
@@ -109,7 +155,7 @@ const [
 		<button data-cat="RE,RB" class="px-3 py-1 rounded-full text-xs font-medium cursor-pointer transition-colors select-none text-muted">🚆 RE/RB</button>
 	</div>
 
-	<details class="group mb-8" open>
+	<details class="group mb-8">
 		<summary class="text-xs uppercase tracking-wide text-muted font-semibold mb-3 cursor-pointer select-none">
 			{t(lang, "home.lines")}
 		</summary>
