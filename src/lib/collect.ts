@@ -1,5 +1,6 @@
 import { and, count, eq, isNotNull, sql } from "drizzle-orm";
 import type { Db } from "../db/client";
+import { coalesce, excluded, max } from "../db/helpers";
 import {
 	departures,
 	haikus,
@@ -111,18 +112,24 @@ async function collectDepartures(
 						departures.journeyNum,
 					],
 					set: {
-						rtDate: sql`COALESCE(excluded.rt_date, ${departures.rtDate})`,
-						rtTime: sql`COALESCE(excluded.rt_time, ${departures.rtTime})`,
-						journeyStatus: sql`excluded.journey_status`,
-						cancelled: sql`MAX(${departures.cancelled}, excluded.cancelled)`,
-						reachable: sql`CASE WHEN excluded.cancelled THEN 0 ELSE excluded.reachable END`,
-						messages: sql`COALESCE(excluded.messages, ${departures.messages})`,
+						rtDate: coalesce(excluded(departures.rtDate), departures.rtDate),
+						rtTime: coalesce(excluded(departures.rtTime), departures.rtTime),
+						journeyStatus: excluded(departures.journeyStatus),
+						cancelled: max(
+							departures.cancelled,
+							excluded(departures.cancelled),
+						),
+						reachable: sql`CASE WHEN ${excluded(departures.cancelled)} THEN 0 ELSE ${excluded(departures.reachable)} END`,
+						messages: coalesce(
+							excluded(departures.messages),
+							departures.messages,
+						),
 						fetchedAt: sql`CASE WHEN
-							COALESCE(excluded.rt_date, '') != COALESCE(${departures.rtDate}, '')
-							OR COALESCE(excluded.rt_time, '') != COALESCE(${departures.rtTime}, '')
-							OR excluded.cancelled != ${departures.cancelled}
-							OR COALESCE(excluded.messages, '') != COALESCE(${departures.messages}, '')
-							THEN excluded.fetched_at ELSE ${departures.fetchedAt} END`,
+							${coalesce(excluded(departures.rtDate), sql`''`)} != ${coalesce(departures.rtDate, sql`''`)}
+							OR ${coalesce(excluded(departures.rtTime), sql`''`)} != ${coalesce(departures.rtTime, sql`''`)}
+							OR ${excluded(departures.cancelled)} != ${departures.cancelled}
+							OR ${coalesce(excluded(departures.messages), sql`''`)} != ${coalesce(departures.messages, sql`''`)}
+							THEN ${excluded(departures.fetchedAt)} ELSE ${departures.fetchedAt} END`,
 					},
 				});
 		} catch (e) {
