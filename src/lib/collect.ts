@@ -40,16 +40,16 @@ async function collectDepartures(
 	station: Station,
 ): Promise<number> {
 	const client = createHafasClient(apiKey);
-	const oneHourAgo = nowBerlin().subtract(1, "hour");
+	const start = nowBerlin().subtract(30, "minute");
 
 	const { data, error } = await client.GET("/departureBoard", {
 		params: {
 			query: {
 				type: "DEP",
 				id: station.id,
-				date: oneHourAgo.format("YYYY-MM-DD"),
-				time: oneHourAgo.format("HH:mm"),
-				duration: 120,
+				date: start.format("YYYY-MM-DD"),
+				time: start.format("HH:mm"),
+				duration: 90,
 				maxJourneys: -1,
 				format: "json",
 			},
