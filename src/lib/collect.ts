@@ -251,13 +251,15 @@ export async function runCollection(
 	kv: KVNamespace,
 ): Promise<Record<string, number>> {
 	const idx = Number((await kv.get("station_idx")) ?? "0");
-	const station = STATIONS[idx % STATIONS.length];
-	await kv.put("station_idx", String((idx + 1) % STATIONS.length));
+	const batch = [0, 1].map((i) => STATIONS[(idx + i) % STATIONS.length]);
+	await kv.put("station_idx", String((idx + 2) % STATIONS.length));
 
 	const summary: Record<string, number> = {};
-	const count = await collectDepartures(db, pickKey(apiKeys), station);
-	summary[station.slug] = count;
-	console.log(`${station.slug}: upserted ${count} departures`);
+	for (const station of batch) {
+		const count = await collectDepartures(db, pickKey(apiKeys), station);
+		summary[station.slug] = count;
+		console.log(`${station.slug}: upserted ${count} departures`);
+	}
 
 	await generateDailyHaiku(db, ai);
 

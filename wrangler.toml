@@ -7,7 +7,7 @@ compatibility_flags = ["nodejs_compat"]
 enabled = true
 
 [triggers]
-crons = ["* * * * *"]
+crons = ["*/3 * * * *"]
 
 [assets]
 binding = "ASSETS"

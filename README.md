@@ -64,7 +64,7 @@ All tracked stations are defined in `src/lib/stations.ts`. To add a new one:
 
 ## Methodology
 
-A cron trigger runs every minute and fetches the RMV HAFAS realtime feed for one station per invocation, rotating through all tracked stations. With 10 stations, each station is updated approximately every 10 minutes. ICE/IC/EC long-distance trains are excluded. From this data:
+A cron trigger runs every 3 minutes and fetches the RMV HAFAS realtime feed for two stations per invocation, rotating through all tracked stations. With 10 stations, each station is updated approximately every 15 minutes. ICE/IC/EC long-distance trains are excluded. From this data:
 
 - **Cancellation rate** = cancelled departures / total departures
 - **Delayed departures** = departures with delay ≥7.5 minutes (50% of assumed average 15-minute trip time within Frankfurt)
@@ -74,8 +74,8 @@ A cron trigger runs every minute and fetches the RMV HAFAS realtime feed for one
 
 ## How it works
 
-- A Cloudflare cron trigger (`* * * * *`) calls the `scheduled` handler in `src/worker.ts` every minute
-- Each invocation processes one station, rotating via a KV-stored index — this keeps CPU usage within the Workers free plan limit (10ms per cron)
+- A Cloudflare cron trigger (`*/3 * * * *`) calls the `scheduled` handler in `src/worker.ts` every 3 minutes
+- Each invocation processes two stations, rotating via a KV-stored index — this keeps CPU usage within the Workers free plan limit
 - After collection, daily statistics are materialized into `station_daily_stats` and `operator_daily_stats` tables for fast page loads
 - It also generates one haiku per day using Cloudflare Workers AI
 - Astro SSR pages read from materialized stats tables with edge caching (`s-maxage=300, stale-while-revalidate=300`)

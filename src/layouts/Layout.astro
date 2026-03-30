@@ -204,7 +204,7 @@ const otherPath = Astro.url.pathname.replace(`/${lang}`, `/${otherLang}`);
 					if (search && (search === document.activeElement || search.value)) return;
 					const { navigate } = await import("astro:transitions/client");
 					navigate(window.location.href, { history: "replace" });
-				}, 60_000);
+				}, 180_000);
 			});
 		</script>
 	</body>
