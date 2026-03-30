@@ -115,8 +115,14 @@ export async function handleTelegramWebhook(
 
 	if (text.startsWith("/start subscribe_")) {
 		const line = decodeURIComponent(text.slice("/start subscribe_".length));
+		const knownDirs = await fetchDirections(db, line);
+		const dirs = knownDirs.map((d) => d.direction);
+		const exampleDir =
+			dirs.length >= 2
+				? `${dirs[0]}+${dirs[1]}`
+				: (dirs[0] ?? "&lt;direction&gt;");
 		await reply(
-			`🚏 To subscribe to <b>${line}</b> alerts, send:\n\n<code>/subscribe ${line}</code> — to see destinations\n<code>/subscribe ${line} &lt;direction&gt;</code> — to subscribe\n\nOptions: time range, weekdays, multiple directions with +\n<code>/subscribe ${line} Wiesbaden+Ober-Roden 06:00-09:00,16:00-19:00 Mo-Fr</code>`,
+			`🚏 To subscribe to <b>${line}</b> alerts, send:\n\n<code>/subscribe ${line}</code> — to see destinations\n<code>/subscribe ${line} ${dirs[0] ?? "&lt;direction&gt;"}</code> — to subscribe\n\nOptions: time range, weekdays, multiple directions with +\n<code>/subscribe ${line} ${exampleDir} 06:00-09:00,16:00-19:00 Mo-Fr</code>`,
 		);
 		return;
 	}
