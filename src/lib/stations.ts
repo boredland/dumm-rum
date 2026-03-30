@@ -51,6 +51,11 @@ export const STATIONS: Station[] = [
 		slug: "roedelheim-bahnhof",
 	},
 	{
+		id: "3002599",
+		name: "Frankfurt (Main) Mainkur Bahnhof",
+		slug: "mainkur-bahnhof",
+	},
+	{
 		id: "3007011",
 		name: "Frankfurt (Main) Hauptbahnhof Südseite",
 		slug: "hauptbahnhof-suedseite",
