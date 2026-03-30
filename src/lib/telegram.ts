@@ -131,7 +131,8 @@ export async function handleTelegramWebhook(
 				"/subscribe S1 Wiesbaden+Ober-Roden — both directions\n" +
 				"/unsubscribe — list your subscriptions to remove\n" +
 				"/unsubscribe all — remove all subscriptions\n" +
-				"/list — show all subscriptions\n\n" +
+				"/list — show all subscriptions\n" +
+				"/lang de|en — change notification language\n\n" +
 				"<b>Options (add after direction):</b>\n" +
 				"Time: <code>7:50-8:30</code> or <code>06:00-09:00,16:00-19:00</code>\n" +
 				"Days: <code>Mo-Fr</code> or <code>Mo,Mi,Fr</code> or <code>Mo-We,Fr</code>\n\n" +
@@ -317,6 +318,25 @@ export async function handleTelegramWebhook(
 			);
 
 		await reply(`✅ Removed subscription for <b>${line}</b> → ${direction}`);
+		return;
+	}
+
+	if (text === "/lang de" || text === "/lang en") {
+		const newLang = text.slice(6) as Lang;
+		await db
+			.update(telegramSubscriptions)
+			.set({ lang: newLang })
+			.where(eq(telegramSubscriptions.chatId, chatId));
+		await reply(
+			newLang === "de"
+				? "✅ Sprache auf Deutsch gesetzt."
+				: "✅ Language set to English.",
+		);
+		return;
+	}
+
+	if (text === "/lang") {
+		await reply(`Current: <b>${lang}</b>\n\nChange: /lang de or /lang en`);
 		return;
 	}
 
