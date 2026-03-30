@@ -7,6 +7,6 @@ export default {
 
 	async scheduled(_controller: ScheduledController, env: Cloudflare.Env) {
 		const db = createDb(env.DB);
-		await runCollection(db, env.AI, env.RMV_API_KEY, env.SESSION);
+		await runCollection(db, env.AI, env.RMV_API_KEY);
 	},
 } satisfies ExportedHandler<Cloudflare.Env>;

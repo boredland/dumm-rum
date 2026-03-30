@@ -264,11 +264,11 @@ export async function runCollection(
 	db: Db,
 	ai: Ai,
 	apiKeys: string,
-	kv: KVNamespace,
 ): Promise<Record<string, number>> {
-	const idx = Number((await kv.get("station_idx")) ?? "0");
+	const now = nowBerlin();
+	const slot = Math.floor((now.hour() * 60 + now.minute()) / 3);
+	const idx = (slot * 2) % STATIONS.length;
 	const batch = [0, 1].map((i) => STATIONS[(idx + i) % STATIONS.length]);
-	await kv.put("station_idx", String((idx + 2) % STATIONS.length));
 
 	const summary: Record<string, number> = {};
 	for (const station of batch) {
@@ -280,26 +280,10 @@ export async function runCollection(
 	await generateDailyHaiku(db, ai);
 
 	const today = todayBerlin();
-	const lastMat = (await kv.get("last_materialized")) ?? "";
-	const changed = await db
-		.select({ cnt: count() })
-		.from(departures)
-		.where(
-			and(
-				eq(departures.date, today),
-				lastMat ? sql`${departures.fetchedAt} > ${lastMat}` : undefined,
-			),
-		);
-	if (changed[0].cnt > 0) {
-		await Promise.all([
-			materializeStationStats(db, today),
-			materializeOperatorStats(db, today),
-		]);
-		await kv.put("last_materialized", new Date().toISOString());
-		console.log("Materialized stats");
-	} else {
-		console.log("Skipped materialization, no changes");
-	}
+	await Promise.all([
+		materializeStationStats(db, today),
+		materializeOperatorStats(db, today),
+	]);
 
 	return summary;
 }

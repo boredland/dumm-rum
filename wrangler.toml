@@ -22,10 +22,6 @@ directory = "./dist"
 [ai]
 binding = "AI"
 
-[[kv_namespaces]]
-binding = "SESSION"
-id = "1c4a4871e4be414e8dbd3eac7973f8ae"
-
 [[d1_databases]]
 binding = "DB"
 database_name = "rmv-departures"
