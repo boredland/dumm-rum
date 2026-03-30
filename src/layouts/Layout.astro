@@ -129,10 +129,12 @@ const otherPath = Astro.url.pathname.replace(`/${lang}`, `/${otherLang}`);
 			document.addEventListener("astro:page-load", initDepartureFilters);
 
 			let activeCat = "";
+			let searchQuery = "";
 
 			function applyFilters() {
 				const input = document.getElementById("search") as HTMLInputElement | null;
 				const q = input?.value.toLowerCase().trim() ?? "";
+				searchQuery = q;
 				const cards = document.querySelectorAll<HTMLElement>("[data-search]");
 				const sections = new Set<HTMLElement>();
 				for (const card of cards) {
@@ -154,17 +156,20 @@ const otherPath = Astro.url.pathname.replace(`/${lang}`, `/${otherLang}`);
 
 			function initSearch() {
 				const input = document.getElementById("search") as HTMLInputElement | null;
-				if (!input || input.dataset.initialized) return;
-				input.dataset.initialized = "1";
+				if (!input) return;
+				input.removeAttribute("data-initialized");
+				if (searchQuery) input.value = searchQuery;
 				input.addEventListener("input", applyFilters);
 			}
 
 			function initCategoryFilter() {
 				const container = document.getElementById("category-filter");
-				if (!container || container.dataset.initialized) return;
-				container.dataset.initialized = "1";
+				if (!container) return;
 				const buttons = container.querySelectorAll<HTMLButtonElement>("[data-cat]");
 				for (const btn of buttons) {
+					btn.classList.toggle("bg-surface-hover", btn.dataset.cat === activeCat);
+					btn.classList.toggle("text-emphasis", btn.dataset.cat === activeCat);
+					btn.classList.toggle("text-muted", btn.dataset.cat !== activeCat);
 					btn.addEventListener("click", () => {
 						activeCat = btn.dataset.cat!;
 						for (const b of buttons) {
@@ -185,9 +190,9 @@ const otherPath = Astro.url.pathname.replace(`/${lang}`, `/${otherLang}`);
 				}
 			});
 			document.addEventListener("astro:page-load", () => {
-				activeCat = "";
 				initSearch();
 				initCategoryFilter();
+				if (searchQuery || activeCat) applyFilters();
 			});
 
 			let refreshTimer: ReturnType<typeof setInterval>;
