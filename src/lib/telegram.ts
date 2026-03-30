@@ -207,7 +207,8 @@ export async function handleTelegramWebhook(
 				);
 			} else if (
 				arg.includes(",") ||
-				Object.keys(WEEKDAY_NAMES).includes(arg.toLowerCase())
+				Object.keys(WEEKDAY_NAMES).includes(arg.toLowerCase()) ||
+				/^[A-Za-z]{2,3}-[A-Za-z]{2,3}$/.test(arg)
 			) {
 				weekdays = parseWeekdays(arg);
 				if (!weekdays) {
