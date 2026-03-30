@@ -22,24 +22,6 @@ import {
 type Departure = components["schemas"]["Departure"];
 
 const EXCLUDE_CATEGORIES = new Set(["ICE", "IC", "EC"]);
-const TEXT_NOTE_TYPES = new Set(["H", "M", "D", "Q", "L"]);
-
-function extractMessages(dep: Departure): string | null {
-	const msgs: string[] = [];
-	if (dep.Messages?.Message) {
-		for (const m of dep.Messages.Message) {
-			const text = m.head || m.text || m.lead;
-			if (text) msgs.push(text);
-		}
-	}
-	if (dep.Notes?.Note) {
-		for (const n of dep.Notes.Note) {
-			if (n.value && n.type && TEXT_NOTE_TYPES.has(n.type)) msgs.push(n.value);
-		}
-	}
-	return msgs.length > 0 ? JSON.stringify(msgs) : null;
-}
-
 async function collectDepartures(
 	db: Db,
 	apiKey: string,
@@ -102,7 +84,6 @@ async function collectDepartures(
 							reachable: dep.reachable ? 1 : 0,
 							stop: dep.stop ?? null,
 							stopExtId: dep.stopExtId ?? null,
-							messages: extractMessages(dep),
 							fetchedAt: now,
 						};
 					}),
@@ -125,10 +106,6 @@ async function collectDepartures(
 							excluded(departures.cancelled),
 						),
 						reachable: sql`CASE WHEN ${excluded(departures.cancelled)} THEN 0 ELSE ${excluded(departures.reachable)} END`,
-						messages: coalesce(
-							excluded(departures.messages),
-							departures.messages,
-						),
 						notified: sql`CASE WHEN ${departures.notified} = 1 AND (
 							${excluded(departures.cancelled)} != ${departures.cancelled}
 							OR ABS(
@@ -140,7 +117,6 @@ async function collectDepartures(
 							${coalesce(excluded(departures.rtDate), sql`''`)} != ${coalesce(departures.rtDate, sql`''`)}
 							OR ${coalesce(excluded(departures.rtTime), sql`''`)} != ${coalesce(departures.rtTime, sql`''`)}
 							OR ${excluded(departures.cancelled)} != ${departures.cancelled}
-							OR ${coalesce(excluded(departures.messages), sql`''`)} != ${coalesce(departures.messages, sql`''`)}
 							THEN ${excluded(departures.fetchedAt)} ELSE ${departures.fetchedAt} END`,
 					},
 				});

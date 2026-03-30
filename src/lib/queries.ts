@@ -238,7 +238,7 @@ export async function getDayDepartures(db: Db, station: Station, date: string) {
 			line: departures.line,
 			direction: departures.direction,
 			cancelled: departures.cancelled,
-			messages: departures.messages,
+
 			fetchedAt: departures.fetchedAt,
 		})
 		.from(departures)
@@ -494,7 +494,7 @@ export async function getLineDayDepartures(db: Db, line: string, date: string) {
 			operator: departures.operator,
 			category: departures.category,
 			stop: departures.stop,
-			messages: departures.messages,
+
 			fetchedAt: departures.fetchedAt,
 		})
 		.from(departures)
@@ -584,7 +584,7 @@ export async function getOperatorDayDepartures(
 			direction: departures.direction,
 			cancelled: departures.cancelled,
 			stop: departures.stop,
-			messages: departures.messages,
+
 			fetchedAt: departures.fetchedAt,
 		})
 		.from(departures)
