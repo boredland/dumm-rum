@@ -77,6 +77,7 @@ export const telegramSubscriptions = sqliteTable(
 	{
 		id: integer().primaryKey({ autoIncrement: true }),
 		chatId: text("chat_id").notNull(),
+		lang: text().notNull().default("de"),
 		line: text().notNull(),
 		direction: text().notNull(),
 		timeRanges: text("time_ranges"),

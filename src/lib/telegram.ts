@@ -5,9 +5,28 @@ import { departures, telegramSubscriptions } from "../db/schema";
 interface TelegramUpdate {
 	message?: {
 		chat: { id: number };
+		from?: { language_code?: string };
 		text?: string;
 	};
 }
+
+type Lang = "de" | "en";
+
+function detectLang(code?: string): Lang {
+	return code?.startsWith("de") ? "de" : "en";
+}
+
+const ALERT_LABELS: Record<
+	Lang,
+	{ title: string; cancelled: string; delay: string }
+> = {
+	de: {
+		title: "DummRum Meldung",
+		cancelled: "ausgefallen",
+		delay: "Verspätung",
+	},
+	en: { title: "DummRum Alert", cancelled: "cancelled", delay: "delay" },
+};
 
 async function sendMessage(
 	token: string,
@@ -90,6 +109,7 @@ export async function handleTelegramWebhook(
 	if (!msg?.text) return;
 
 	const chatId = String(msg.chat.id);
+	const lang = detectLang(msg.from?.language_code);
 	const text = msg.text.trim();
 	const reply = (t: string) => sendMessage(token, chatId, t);
 
@@ -195,6 +215,7 @@ export async function handleTelegramWebhook(
 			.insert(telegramSubscriptions)
 			.values({
 				chatId,
+				lang,
 				line,
 				direction,
 				timeRanges: timeRanges.length > 0 ? timeRanges.join(",") : null,
@@ -331,7 +352,7 @@ export async function notifySubscribers(
 	}
 
 	const currentDay = new Date().getDay();
-	const notifications = new Map<string, string[]>();
+	const notifications = new Map<string, { lang: Lang; msgs: string[] }>();
 
 	for (const issue of issues) {
 		const lineSubs = subsByLine.get(issue.line);
@@ -355,22 +376,26 @@ export async function notifySubscribers(
 				if (!inRange) continue;
 			}
 
-			const msgs = notifications.get(sub.chatId) ?? [];
+			const entry = notifications.get(sub.chatId) ?? {
+				lang: (sub.lang as Lang) ?? "de",
+				msgs: [],
+			};
+			const labels = ALERT_LABELS[entry.lang];
 			const status = issue.cancelled
-				? "❌ cancelled"
-				: `⏱ +${issue.delayMin} min`;
-			msgs.push(
+				? `❌ ${labels.cancelled}`
+				: `⏱ +${issue.delayMin} min ${labels.delay}`;
+			entry.msgs.push(
 				`<b>${issue.line}</b> ${issue.time.slice(0, 5)} → ${issue.direction}: ${status}`,
 			);
-			notifications.set(sub.chatId, msgs);
+			notifications.set(sub.chatId, entry);
 		}
 	}
 
-	for (const [chatId, msgs] of notifications) {
+	for (const [chatId, { lang: l, msgs }] of notifications) {
 		await sendMessage(
 			token,
 			chatId,
-			`🚏 <b>DummRum Alert</b>\n${msgs.join("\n")}`,
+			`🚏 <b>${ALERT_LABELS[l].title}</b>\n${msgs.join("\n")}`,
 		);
 	}
 }
