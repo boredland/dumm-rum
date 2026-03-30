@@ -112,7 +112,7 @@ let anchorPlaced = false;
 								anchorPlaced = true;
 							}
 							return (
-								<tr id={id} data-status={status} class="border-b border-border-dim last:border-b-0 hover:bg-surface-hover">
+								<tr id={id} data-status={status} data-time={time} class="border-b border-border-dim last:border-b-0 hover:bg-surface-hover">
 									<td class="px-4 py-2.5 text-sm tabular-nums">
 										{time}
 										{rtTime && rtTime !== time && <span class="text-warning"> &rarr; {rtTime}</span>}

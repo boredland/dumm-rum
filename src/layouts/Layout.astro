@@ -117,17 +117,24 @@ const otherPath = Astro.url.pathname.replace(`/${lang}`, `/${otherLang}`);
 				}
 			}
 
+			function isCoreHour(time: string): boolean {
+				const h = parseInt(time.split(":")[0], 10);
+				return (h >= 6 && h < 9) || (h >= 16 && h < 19);
+			}
+
 			function initDepartureFilters() {
 				for (const wrapper of document.querySelectorAll("[data-departure-filter]")) {
 					const el = wrapper as HTMLElement;
 					if (el.dataset.initialized) continue;
 					el.dataset.initialized = "1";
 					const statusButtons = el.querySelectorAll<HTMLButtonElement>("[data-filter]");
+					const hoursButtons = el.querySelectorAll<HTMLButtonElement>("[data-hours]");
 					const dirButtons = el.querySelectorAll<HTMLButtonElement>("[data-dir]");
 					const table = el.querySelector("tbody");
 					if (!statusButtons.length || !table) continue;
 
 					let activeStatus = param("status") || "issues";
+					let activeHours = param("hours");
 					let activeDir = param("dir");
 
 					function applyAll() {
@@ -138,9 +145,10 @@ const otherPath = Astro.url.pathname.replace(`/${lang}`, `/${otherLang}`);
 								(activeStatus === "issues" && (s === "cancelled" || s === "delayed")) ||
 								(activeStatus === "on_time" && s === "ok");
 							const dirMatch = !activeDir || row.dataset.direction === activeDir;
-							row.style.display = statusMatch && dirMatch ? "" : "none";
+							const hoursMatch = !activeHours || (row.dataset.time && isCoreHour(row.dataset.time));
+							row.style.display = statusMatch && dirMatch && hoursMatch ? "" : "none";
 						}
-						syncParams({ status: activeStatus === "issues" ? "" : activeStatus, dir: activeDir });
+						syncParams({ status: activeStatus === "issues" ? "" : activeStatus, hours: activeHours, dir: activeDir });
 					}
 
 					stylePills(statusButtons, "filter", activeStatus);
@@ -148,6 +156,15 @@ const otherPath = Astro.url.pathname.replace(`/${lang}`, `/${otherLang}`);
 						btn.addEventListener("click", () => {
 							activeStatus = btn.dataset.filter!;
 							stylePills(statusButtons, "filter", activeStatus);
+							applyAll();
+						});
+					}
+
+					stylePills(hoursButtons, "hours", activeHours);
+					for (const btn of hoursButtons) {
+						btn.addEventListener("click", () => {
+							activeHours = btn.dataset.hours!;
+							stylePills(hoursButtons, "hours", activeHours);
 							applyAll();
 						});
 					}
