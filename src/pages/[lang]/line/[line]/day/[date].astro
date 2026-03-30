@@ -25,6 +25,7 @@ const cancelledCount = departures.filter((d) => d.cancelled).length;
 const categories = [
 	...new Set(departures.map((d) => d.category).filter(Boolean)),
 ];
+const destinations = [...new Set(departures.map((d) => d.direction))];
 const delayedCount = departures.filter(
 	(d) =>
 		!d.cancelled &&
@@ -70,6 +71,14 @@ const delayedCount = departures.filter(
 	<p class="text-xs uppercase tracking-wide text-muted font-semibold mb-3">{t(lang, "section.all_departures")}</p>
 	<div data-departure-filter>
 	<DepartureFilter lang={lang} />
+	{destinations.length > 1 && (
+		<div data-direction-filter class="flex flex-wrap gap-2 mb-3">
+			<button data-dir="" class="px-3 py-1 rounded-full text-xs font-medium cursor-pointer transition-colors select-none bg-surface-hover text-emphasis">{lang === "de" ? "Alle Richtungen" : "All directions"}</button>
+			{destinations.map((dir) => (
+				<button data-dir={dir} class="px-3 py-1 rounded-full text-xs font-medium cursor-pointer transition-colors select-none text-muted">{shortDir(dir)}</button>
+			))}
+		</div>
+	)}
 	<div class="bg-surface border border-border rounded-xl overflow-hidden">
 		<table class="w-full border-collapse">
 			<thead>
@@ -92,7 +101,7 @@ const delayedCount = departures.filter(
 							const msgs: string[] = d.messages ? JSON.parse(d.messages) : [];
 							const status = d.cancelled ? "cancelled" : (rawDelay !== null && rawDelay >= DELAY_THRESHOLD_MIN) ? "delayed" : "ok";
 							return (
-								<tr data-status={status} class="border-b border-border-dim last:border-b-0 hover:bg-surface-hover">
+								<tr data-status={status} data-direction={d.direction} class="border-b border-border-dim last:border-b-0 hover:bg-surface-hover">
 									<td class="px-4 py-2.5 text-sm tabular-nums">
 										{time}
 										{rtTime && rtTime !== time && <span class="text-warning"> &rarr; {rtTime}</span>}

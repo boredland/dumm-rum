@@ -100,30 +100,51 @@ const otherPath = Astro.url.pathname.replace(`/${lang}`, `/${otherLang}`);
 					const el = wrapper as HTMLElement;
 					if (el.dataset.initialized) continue;
 					el.dataset.initialized = "1";
-					const buttons = el.querySelectorAll<HTMLButtonElement>("[data-filter]");
+					const statusButtons = el.querySelectorAll<HTMLButtonElement>("[data-filter]");
+					const dirButtons = el.querySelectorAll<HTMLButtonElement>("[data-dir]");
 					const table = el.querySelector("tbody");
-					if (!buttons.length || !table) continue;
+					if (!statusButtons.length || !table) continue;
 
-					function apply(filter: string) {
-						for (const btn of buttons) {
-							btn.classList.toggle("bg-surface-hover", btn.dataset.filter === filter);
-							btn.classList.toggle("text-emphasis", btn.dataset.filter === filter);
-							btn.classList.toggle("text-muted", btn.dataset.filter !== filter);
-						}
+					let activeStatus = "issues";
+					let activeDir = "";
+
+					function applyAll() {
 						for (const row of table!.querySelectorAll<HTMLElement>("tr[data-status]")) {
 							const s = row.dataset.status;
-							row.style.display =
-								filter === "all" ||
-								(filter === "issues" && (s === "cancelled" || s === "delayed")) ||
-								(filter === "on_time" && s === "ok")
-									? "" : "none";
+							const statusMatch =
+								activeStatus === "all" ||
+								(activeStatus === "issues" && (s === "cancelled" || s === "delayed")) ||
+								(activeStatus === "on_time" && s === "ok");
+							const dirMatch = !activeDir || row.dataset.direction === activeDir;
+							row.style.display = statusMatch && dirMatch ? "" : "none";
 						}
 					}
 
-					for (const btn of buttons) {
-						btn.addEventListener("click", () => apply(btn.dataset.filter!));
+					for (const btn of statusButtons) {
+						btn.addEventListener("click", () => {
+							activeStatus = btn.dataset.filter!;
+							for (const b of statusButtons) {
+								b.classList.toggle("bg-surface-hover", b.dataset.filter === activeStatus);
+								b.classList.toggle("text-emphasis", b.dataset.filter === activeStatus);
+								b.classList.toggle("text-muted", b.dataset.filter !== activeStatus);
+							}
+							applyAll();
+						});
 					}
-					apply("issues");
+
+					for (const btn of dirButtons) {
+						btn.addEventListener("click", () => {
+							activeDir = btn.dataset.dir!;
+							for (const b of dirButtons) {
+								b.classList.toggle("bg-surface-hover", b.dataset.dir === activeDir);
+								b.classList.toggle("text-emphasis", b.dataset.dir === activeDir);
+								b.classList.toggle("text-muted", b.dataset.dir !== activeDir);
+							}
+							applyAll();
+						});
+					}
+
+					applyAll();
 				}
 			}
 			document.addEventListener("astro:page-load", initDepartureFilters);
