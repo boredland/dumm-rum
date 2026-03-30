@@ -258,7 +258,20 @@ export async function handleTelegramWebhook(
 		}
 
 		const tr = timeRanges.length > 0 ? timeRanges.join(",") : null;
+		let updated = false;
 		for (const dir of matched) {
+			const existing = await db
+				.select({ id: telegramSubscriptions.id })
+				.from(telegramSubscriptions)
+				.where(
+					and(
+						eq(telegramSubscriptions.chatId, chatId),
+						eq(telegramSubscriptions.line, line),
+						eq(telegramSubscriptions.direction, dir),
+					),
+				)
+				.limit(1);
+			if (existing.length > 0) updated = true;
 			await db
 				.insert(telegramSubscriptions)
 				.values({
@@ -283,7 +296,7 @@ export async function handleTelegramWebhook(
 		let details = `<b>${line}</b> → ${matched.join(" + ")}`;
 		if (timeRanges.length > 0) details += `\n⏰ ${timeRanges.join(", ")}`;
 		if (weekdays) details += `\n📅 ${formatWeekdays(weekdays)}`;
-		await reply(`✅ Subscribed:\n${details}`);
+		await reply(`✅ ${updated ? "Updated" : "Subscribed"}:\n${details}`);
 		return;
 	}
 
