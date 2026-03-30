@@ -8,7 +8,7 @@ import {
 	stationDailyStats,
 } from "../db/schema";
 import type { Station } from "./stations";
-import { nowBerlin, todayBerlin } from "./utils";
+import { DELAY_THRESHOLD_MIN, nowBerlin, todayBerlin } from "./utils";
 
 const CORE_HOURS = sql`((${departures.time} >= '06:00:00' AND ${departures.time} < '09:00:00') OR (${departures.time} >= '16:00:00' AND ${departures.time} < '19:00:00'))`;
 
@@ -93,7 +93,7 @@ export const avgDelaySql = sql<
 	number | null
 >`AVG(CASE WHEN ${departures.cancelled} = 0 AND ${departures.rtTime} IS NOT NULL THEN (strftime('%s', ${departures.rtDate} || ' ' || ${departures.rtTime}) - strftime('%s', ${departures.date} || ' ' || ${departures.time})) / 60.0 END)`;
 
-export const delayedSql = sql<number>`SUM(CASE WHEN ${departures.cancelled} = 0 AND ${departures.rtTime} IS NOT NULL AND (strftime('%s', ${departures.rtDate} || ' ' || ${departures.rtTime}) - strftime('%s', ${departures.date} || ' ' || ${departures.time})) / 60.0 >= 7.5 THEN 1 ELSE 0 END)`;
+export const delayedSql = sql<number>`SUM(CASE WHEN ${departures.cancelled} = 0 AND ${departures.rtTime} IS NOT NULL AND (strftime('%s', ${departures.rtDate} || ' ' || ${departures.rtTime}) - strftime('%s', ${departures.date} || ' ' || ${departures.time})) / 60.0 >= ${DELAY_THRESHOLD_MIN} THEN 1 ELSE 0 END)`;
 
 async function getStatsFallback(
 	db: Db,
@@ -164,7 +164,7 @@ export async function getStationSummaries(
 					.select({
 						stationId: departures.stationId,
 						cancelled: sum(departures.cancelled).as("cancelled"),
-						delayed: sql<number>`0`.as("delayed"),
+						delayed: delayedSql.as("delayed"),
 						total: count().as("total"),
 						avgDelay: avgDelaySql.as("avg_delay"),
 					})
@@ -526,6 +526,7 @@ export async function getOperatorStats(
 						cancelled: sql<number>`SUM(${departures.cancelled})`.as(
 							"cancelled",
 						),
+						delayed: delayedSql.as("delayed"),
 						avgDelay: avgDelaySql.as("avg_delay"),
 					})
 					.from(departures)
@@ -557,7 +558,7 @@ export async function getOperatorStats(
 		date: d.date,
 		total: Number(d.total),
 		cancelled: Number(d.cancelled),
-		delayed: "delayed" in d ? Number(d.delayed) : 0,
+		delayed: Number(d.delayed),
 		avgDelay: d.avgDelay,
 	}));
 	return {

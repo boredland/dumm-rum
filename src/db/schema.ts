@@ -38,6 +38,7 @@ export const departures = sqliteTable(
 		index("idx_departures_fetched").on(t.fetchedAt),
 		index("idx_departures_operator_line").on(t.operator, t.line, t.date),
 		index("idx_departures_date").on(t.date),
+		index("idx_departures_line_date").on(t.line, t.date),
 	],
 );
 

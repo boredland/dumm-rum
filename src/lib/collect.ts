@@ -1,4 +1,4 @@
-import { and, count, eq, gte, isNotNull, or, sql } from "drizzle-orm";
+import { and, count, eq, isNotNull, or, sql } from "drizzle-orm";
 import type { Db } from "../db/client";
 import { coalesce, excluded, max } from "../db/helpers";
 import {
@@ -12,7 +12,12 @@ import type { components } from "./hafas-types";
 import { avgDelaySql, delayedSql } from "./queries";
 import type { Station } from "./stations";
 import { STATIONS } from "./stations";
-import { DELAY_THRESHOLD_MIN, nowBerlin, todayBerlin } from "./utils";
+import {
+	DELAY_THRESHOLD_MIN,
+	delayMinutes,
+	nowBerlin,
+	todayBerlin,
+} from "./utils";
 
 type Departure = components["schemas"]["Departure"];
 
@@ -275,12 +280,19 @@ export async function runCollection(
 ): Promise<Record<string, number>> {
 	const now = nowBerlin();
 	const slot = Math.floor((now.hour() * 60 + now.minute()) / 3);
-	const idx = (slot * 2) % STATIONS.length;
-	const batch = [0, 1].map((i) => STATIONS[(idx + i) % STATIONS.length]);
+	const idx = (slot * 3) % STATIONS.length;
+	const batch = [0, 1, 2].map((i) => STATIONS[(idx + i) % STATIONS.length]);
 
 	const summary: Record<string, number> = {};
-	for (const station of batch) {
-		const count = await collectDepartures(db, pickKey(apiKeys), station);
+	const results = await Promise.all(
+		batch.map((station) =>
+			collectDepartures(db, pickKey(apiKeys), station).then((count) => ({
+				station,
+				count,
+			})),
+		),
+	);
+	for (const { station, count } of results) {
 		summary[station.slug] = count;
 		console.log(`${station.slug}: upserted ${count} departures`);
 	}
@@ -328,18 +340,12 @@ export async function runCollection(
 						const scoreA = a.cancelled
 							? Infinity
 							: a.rtTime && a.rtDate
-								? Math.abs(
-										new Date(`${a.rtDate}T${a.rtTime}`).getTime() -
-											new Date(`${a.date}T${a.time}`).getTime(),
-									)
+								? Math.abs(delayMinutes(a.date, a.time, a.rtDate, a.rtTime))
 								: 0;
 						const scoreB = b.cancelled
 							? Infinity
 							: b.rtTime && b.rtDate
-								? Math.abs(
-										new Date(`${b.rtDate}T${b.rtTime}`).getTime() -
-											new Date(`${b.date}T${b.time}`).getTime(),
-									)
+								? Math.abs(delayMinutes(b.date, b.time, b.rtDate, b.rtTime))
 								: 0;
 						return scoreB - scoreA;
 					})
@@ -362,11 +368,7 @@ export async function runCollection(
 						cancelled: !!d.cancelled,
 						delayMin:
 							d.rtTime && d.rtDate
-								? Math.round(
-										(new Date(`${d.rtDate}T${d.rtTime}`).getTime() -
-											new Date(`${d.date}T${d.time}`).getTime()) /
-											60000,
-									)
+								? Math.round(delayMinutes(d.date, d.time, d.rtDate, d.rtTime))
 								: null,
 					})),
 				);

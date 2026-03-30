@@ -1,6 +1,7 @@
 import { and, eq, inArray, isNotNull } from "drizzle-orm";
 import type { Db } from "../db/client";
 import { departures, telegramSubscriptions } from "../db/schema";
+import { nowBerlin } from "./utils";
 
 interface TelegramUpdate {
 	message?: {
@@ -301,7 +302,7 @@ export async function handleTelegramWebhook(
 	}
 
 	if (text === "/unsubscribe all") {
-		const deleted = await db
+		await db
 			.delete(telegramSubscriptions)
 			.where(eq(telegramSubscriptions.chatId, chatId));
 		await reply("✅ Removed all subscriptions.");
@@ -438,7 +439,7 @@ export async function notifySubscribers(
 		subsByLine.set(sub.line, list);
 	}
 
-	const currentDay = new Date().getDay();
+	const currentDay = nowBerlin().day();
 	const notifications = new Map<string, { lang: Lang; msgs: string[] }>();
 
 	for (const issue of issues) {
@@ -479,11 +480,13 @@ export async function notifySubscribers(
 		}
 	}
 
-	for (const [chatId, { lang: l, msgs }] of notifications) {
-		await sendMessage(
-			token,
-			chatId,
-			`🚏 <b>${ALERT_LABELS[l].title}</b>\n${msgs.join("\n")}`,
-		);
-	}
+	await Promise.allSettled(
+		[...notifications].map(([chatId, { lang: l, msgs }]) =>
+			sendMessage(
+				token,
+				chatId,
+				`🚏 <b>${ALERT_LABELS[l].title}</b>\n${msgs.join("\n")}`,
+			),
+		),
+	);
 }

@@ -95,7 +95,8 @@ const otherPath = Astro.url.pathname.replace(`/${lang}`, `/${otherLang}`);
 		<script>
 			function initShare() {
 				const btn = document.getElementById("share-btn");
-				if (!btn) return;
+				if (!btn || btn.dataset.initialized) return;
+				btn.dataset.initialized = "1";
 				btn.addEventListener("click", async () => {
 					const url = window.location.href;
 					const title = document.title;
@@ -114,7 +115,8 @@ const otherPath = Astro.url.pathname.replace(`/${lang}`, `/${otherLang}`);
 
 			function initScrollTop() {
 				const btn = document.getElementById("scroll-top");
-				if (!btn) return;
+				if (!btn || btn.dataset.initialized) return;
+				btn.dataset.initialized = "1";
 				btn.addEventListener("click", () => {
 					window.scrollTo({ top: 0, behavior: "smooth" });
 				});
