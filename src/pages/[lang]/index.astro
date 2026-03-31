@@ -26,7 +26,7 @@ import {
 const db = createDb(env.DB);
 const lang = langFromParams(Astro.params);
 const filter = parseFilter(Astro.url);
-const { coreOnly, days: daysFilter } = filter;
+const { coreOnly, days: daysFilter, category } = filter;
 const [
 	stationStats,
 	operators,
@@ -42,7 +42,7 @@ const [
 	getStationTrends(db),
 	getOperatorTrends(db),
 	getLineTrends(db),
-	getTodayOverview(db),
+	getTodayOverview(db, filter),
 ]);
 ---
 
@@ -68,7 +68,7 @@ const [
 		</ul>
 	</details>
 
-	<HoursToggle basePath={`/${lang}`} coreOnly={coreOnly} daysFilter={daysFilter} lang={lang} />
+	<HoursToggle basePath={`/${lang}`} coreOnly={coreOnly} daysFilter={daysFilter} category={category ?? ""} lang={lang} />
 
 	{(() => {
 		let totalAll = 0, cancelledAll = 0, delayedAll = 0;
@@ -144,15 +144,6 @@ const [
 			class="w-full bg-surface border border-border rounded-xl px-4 py-2.5 text-sm text-text placeholder:text-muted focus:outline-none focus:border-link"
 		/>
 		<kbd class="absolute right-3 top-1/2 -translate-y-1/2 text-[0.6rem] text-dimmed bg-surface-hover border border-border-dim rounded px-1.5 py-0.5 pointer-events-none">Ctrl K</kbd>
-	</div>
-
-	<div id="category-filter" class="flex flex-wrap gap-2 mb-6">
-		<button data-cat="" class="px-3 py-1 rounded-full text-xs font-medium cursor-pointer transition-colors select-none bg-surface-hover text-emphasis">{lang === "de" ? "Alle" : "All"}</button>
-		<button data-cat="U-Bahn" class="px-3 py-1 rounded-full text-xs font-medium cursor-pointer transition-colors select-none text-muted">🚇 U-Bahn</button>
-		<button data-cat="S" class="px-3 py-1 rounded-full text-xs font-medium cursor-pointer transition-colors select-none text-muted">🚈 S-Bahn</button>
-		<button data-cat="Tram" class="px-3 py-1 rounded-full text-xs font-medium cursor-pointer transition-colors select-none text-muted">🚋 Tram</button>
-		<button data-cat="Bus" class="px-3 py-1 rounded-full text-xs font-medium cursor-pointer transition-colors select-none text-muted">🚌 Bus</button>
-		<button data-cat="RE,RB" class="px-3 py-1 rounded-full text-xs font-medium cursor-pointer transition-colors select-none text-muted">🚆 RE/RB</button>
 	</div>
 
 	<details class="group mb-8">

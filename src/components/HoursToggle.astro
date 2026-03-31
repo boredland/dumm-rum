@@ -6,22 +6,38 @@ interface Props {
 	basePath: string;
 	coreOnly: boolean;
 	daysFilter: string;
+	category?: string;
 	lang: Lang;
 }
 
-const { basePath, coreOnly, daysFilter, lang } = Astro.props;
+const { basePath, coreOnly, daysFilter, category, lang } = Astro.props;
 
-function buildHref(params: { hours?: string; days?: string }): string {
+function buildHref(params: {
+	hours?: string;
+	days?: string;
+	cat?: string;
+}): string {
 	const search = new URLSearchParams();
 	const hours = params.hours ?? (coreOnly ? "core" : "");
 	const days = params.days ?? daysFilter;
+	const cat = params.cat ?? category;
 	if (hours) search.set("hours", hours);
 	if (days) search.set("days", days);
+	if (cat) search.set("cat", cat);
 	const qs = search.toString();
 	return qs ? `${basePath}?${qs}` : basePath;
 }
 const pill =
 	"inline-block px-3 py-1 rounded-full text-xs font-semibold no-underline";
+
+const categories = [
+	{ value: "", label: lang === "de" ? "Alle" : "All", icon: "" },
+	{ value: "U-Bahn", label: "U-Bahn", icon: "🚇" },
+	{ value: "S", label: "S-Bahn", icon: "🚈" },
+	{ value: "Tram", label: "Tram", icon: "🚋" },
+	{ value: "Bus", label: "Bus", icon: "🚌" },
+	{ value: "RE,RB", label: "RE/RB", icon: "🚆" },
+];
 ---
 
 <div class="flex flex-wrap gap-x-4 gap-y-2 mb-6 items-center">
@@ -86,4 +102,22 @@ const pill =
 			{t(lang, "days.weekends")}
 		</a>
 	</div>
+
+	{category !== undefined && (
+		<div class="flex gap-2 items-center flex-wrap">
+			{categories.map((cat) => (
+				<a
+					href={buildHref({ cat: cat.value })}
+					class:list={[
+						pill,
+						category === cat.value
+							? "bg-warning/10 text-warning"
+							: "bg-warning/10 text-warning opacity-50",
+					]}
+				>
+					{cat.icon}{cat.icon ? " " : ""}{cat.label}
+				</a>
+			))}
+		</div>
+	)}
 </div>
