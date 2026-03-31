@@ -92,7 +92,7 @@ const delayedCount = departures.filter(
 		<table class="w-full border-collapse">
 			<thead>
 				<tr class="bg-surface-hover border-b border-border">
-					{[t(lang, "table.time"), t(lang, "table.direction"), t(lang, "table.status"), t(lang, "table.delay"), t(lang, "table.last_checked")].map((h) => (
+					{[t(lang, "table.time"), t(lang, "table.direction"), t(lang, "table.station"), t(lang, "table.status"), t(lang, "table.delay")].map((h) => (
 						<th class="text-left px-4 py-3 text-[0.7rem] uppercase tracking-wide text-muted font-semibold">{h}</th>
 					))}
 				</tr>
@@ -115,6 +115,7 @@ const status = d.cancelled ? "cancelled" : (rawDelay !== null && rawDelay >= DEL
 										{rtTime && rtTime !== time && <span class="text-warning"> &rarr; {rtTime}</span>}
 									</td>
 									<td class="px-4 py-2.5 text-sm">{d.direction}</td>
+									<td class="px-4 py-2.5 text-sm text-muted truncate max-w-[200px]" title={d.stop ?? ""}>{d.stop}</td>
 									<td class="px-4 py-2.5 text-sm">
 										{d.cancelled ? (
 											<span class="inline-block px-2 py-0.5 rounded-full text-xs font-semibold bg-danger/15 text-danger">{t(lang, "status.cancelled")}</span>
@@ -135,7 +136,6 @@ const status = d.cancelled ? "cancelled" : (rawDelay !== null && rawDelay >= DEL
 											<span class="text-muted">{t(lang, "status.on_time")}</span>
 										)}
 									</td>
-									<td class="px-4 py-2.5 text-sm text-muted"><time datetime={d.fetchedAt}>{d.fetchedAt.slice(0, 16).replace("T", " ")}</time></td>
 								</tr>
 							);
 						})

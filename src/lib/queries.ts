@@ -618,7 +618,6 @@ export async function getLineDayDepartures(db: Db, line: string, date: string) {
 			operator: departures.operator,
 			category: departures.category,
 			stop: departures.stop,
-			fetchedAt: sql<string>`max(${departures.fetchedAt})`.as("fetched_at"),
 		})
 		.from(departures)
 		.where(and(eq(departures.line, line), eq(departures.date, date)))
