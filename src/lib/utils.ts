@@ -84,6 +84,7 @@ export function trendColor(arrow: string): string {
 	return "";
 }
 
+export const PLANNED_FREQUENCY_MIN = 15;
 export const DELAY_THRESHOLD_MIN = 7.5;
 
 export function scoreBorderColor(otp: number): string {
