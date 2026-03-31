@@ -18,7 +18,9 @@ const translations = {
 			"Die P\u00fcnktlichkeitsquote (OTP) ist der Anteil der Abfahrten, die weder ausgefallen noch versp\u00e4tet sind \u2014 ein g\u00e4ngiger Standard im \u00d6PNV.",
 		"home.methodology_colors":
 			"Farben: gr\u00fcn ab 90%, orange 80\u201389%, rot unter 80%.",
-		"home.overall_score": "Gesamtbewertung",
+		"home.overall_score": "Pünktlich",
+		"home.most_cancellations": "Meiste Ausfälle",
+		"home.most_delays": "Meiste Verspätungen",
 		"home.stations": "Haltestellen",
 		"home.operators": "Betreiber",
 		"home.lines": "Linien",
@@ -111,7 +113,9 @@ const translations = {
 			"On-time performance (OTP) is the share of departures that were neither cancelled nor delayed \u2014 a standard metric in public transport.",
 		"home.methodology_colors":
 			"Colors: green from 90%, orange 80\u201389%, red below 80%.",
-		"home.overall_score": "Overall score",
+		"home.overall_score": "On time",
+		"home.most_cancellations": "Most cancellations",
+		"home.most_delays": "Most delays",
 		"home.stations": "Stations",
 		"home.operators": "Operators",
 		"home.lines": "Lines",

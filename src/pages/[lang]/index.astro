@@ -77,20 +77,57 @@ const [
 			cancelledAll += st.cancelled;
 			delayedAll += st.delayed;
 		}
+		if (totalAll === 0) return null;
 		const score = onTimeRate(cancelledAll, delayedAll, totalAll);
 		const color = score < 80 ? "text-danger" : score < 90 ? "text-warning" : "text-success";
-		return totalAll > 0 ? (
-			<div class="mb-8 bg-surface border border-border rounded-xl p-5 flex items-center gap-6">
-				<div>
+
+		let worstCancelled: { name: string; count: number; type: string } | null = null;
+		let worstDelayed: { name: string; count: number; type: string } | null = null;
+		for (const l of lines) {
+			if (l.cancelled > (worstCancelled?.count ?? 0)) worstCancelled = { name: l.line, count: l.cancelled, type: "line" };
+			if (l.delayed > (worstDelayed?.count ?? 0)) worstDelayed = { name: l.line, count: l.delayed, type: "line" };
+		}
+		for (const [id, st] of stationStats) {
+			const name = STATIONS.find((s) => s.id === id)?.name ?? id;
+			if (st.cancelled > (worstCancelled?.count ?? 0)) worstCancelled = { name, count: st.cancelled, type: "station" };
+			if (st.delayed > (worstDelayed?.count ?? 0)) worstDelayed = { name, count: st.delayed, type: "station" };
+		}
+		for (const op of operators) {
+			if (op.cancelled > (worstCancelled?.count ?? 0)) worstCancelled = { name: op.operator, count: op.cancelled, type: "operator" };
+			if (op.delayed > (worstDelayed?.count ?? 0)) worstDelayed = { name: op.operator, count: op.delayed, type: "operator" };
+		}
+		const typeLabel = (type: string) => t(lang, type === "line" ? "home.line" : type === "station" ? "home.station" : "home.operator");
+
+		return (
+			<div class="mb-8 grid grid-cols-3 gap-4 max-sm:grid-cols-1">
+				<div class="bg-surface border border-border rounded-xl p-5">
 					<div class="text-[0.7rem] uppercase tracking-wide text-muted mb-1">{t(lang, "home.overall_score")}</div>
 					<div class:list={["text-5xl font-bold tabular-nums", color]}>{score}<span class="text-lg text-muted">%</span></div>
+					<div class="text-sm text-muted mt-1">
+						<div>{pct(cancelledAll, totalAll)}% {t(lang, "home.cancelled")} &middot; {pct(delayedAll, totalAll)}% {t(lang, "home.delayed")}</div>
+						<div>{totalAll.toLocaleString(lang)} {t(lang, "stat.departures").toLowerCase()}</div>
+					</div>
 				</div>
-				<div class="text-sm text-muted">
-					<div>{pct(cancelledAll, totalAll)}% {t(lang, "home.cancelled")} &middot; {pct(delayedAll, totalAll)}% {t(lang, "home.delayed")}</div>
-					<div>{totalAll.toLocaleString(lang)} {t(lang, "stat.departures").toLowerCase()}</div>
+				<div class="bg-surface border border-border rounded-xl p-5">
+					<div class="text-[0.7rem] uppercase tracking-wide text-muted mb-1">{t(lang, "home.most_cancellations")}</div>
+					{worstCancelled && worstCancelled.count > 0 ? (
+						<>
+							<div class="text-2xl font-bold text-danger tabular-nums">{worstCancelled.count.toLocaleString(lang)}</div>
+							<div class="text-sm text-muted mt-1 truncate"><span class="text-muted">{typeLabel(worstCancelled.type)}</span> <span class="font-semibold">{worstCancelled.name}</span></div>
+						</>
+					) : <div class="text-2xl font-bold text-success">0</div>}
+				</div>
+				<div class="bg-surface border border-border rounded-xl p-5">
+					<div class="text-[0.7rem] uppercase tracking-wide text-muted mb-1">{t(lang, "home.most_delays")}</div>
+					{worstDelayed && worstDelayed.count > 0 ? (
+						<>
+							<div class="text-2xl font-bold text-warning tabular-nums">{worstDelayed.count.toLocaleString(lang)}</div>
+							<div class="text-sm text-muted mt-1 truncate"><span class="text-muted">{typeLabel(worstDelayed.type)}</span> <span class="font-semibold">{worstDelayed.name}</span></div>
+						</>
+					) : <div class="text-2xl font-bold text-success">0</div>}
 				</div>
 			</div>
-		) : null;
+		);
 	})()}
 
 	{today.total > 0 && (() => {
@@ -103,7 +140,10 @@ const [
 					<div class="bg-surface border border-border rounded-xl p-5">
 						<div class="text-[0.7rem] uppercase tracking-wide text-muted mb-1">{t(lang, "home.today_score")}</div>
 						<div class:list={["text-4xl font-bold tabular-nums", todayColor]}>{todayScore}<span class="text-lg text-muted">%</span></div>
-						<div class="text-sm text-muted mt-1">{today.total.toLocaleString(lang)} {t(lang, "stat.departures").toLowerCase()}</div>
+						<div class="text-sm text-muted mt-1">
+							{pct(today.cancelled, today.total)}% {t(lang, "home.cancelled")} &middot; {pct(today.delayed, today.total)}% {t(lang, "home.delayed")}
+						</div>
+						<div class="text-sm text-muted">{today.total.toLocaleString(lang)} {t(lang, "stat.departures").toLowerCase()}</div>
 					</div>
 					<div class="bg-surface border border-border rounded-xl p-5">
 						<div class="text-[0.7rem] uppercase tracking-wide text-muted mb-1">{t(lang, "home.worst_cancelled")}</div>
