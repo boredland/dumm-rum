@@ -9,7 +9,13 @@ import {
 } from "../db/schema";
 import { createHafasClient } from "./hafas";
 import type { components } from "./hafas-types";
-import { avgDelaySql, delayedSql } from "./queries";
+import {
+	avgDelaySql,
+	cancelledDistinctSql,
+	delayedDistinctSql,
+	delayedSql,
+	totalDistinctSql,
+} from "./queries";
 import type { Station } from "./stations";
 import { STATIONS } from "./stations";
 import {
@@ -209,9 +215,9 @@ async function materializeOperatorStats(db: Db, date: string): Promise<void> {
 	const rows = await db
 		.select({
 			operator: departures.operator,
-			total: count().as("total"),
-			cancelled: sql<number>`SUM(${departures.cancelled})`.as("cancelled"),
-			delayed: delayedSql.as("delayed"),
+			total: totalDistinctSql.as("total"),
+			cancelled: cancelledDistinctSql.as("cancelled"),
+			delayed: delayedDistinctSql.as("delayed"),
 			avgDelay: avgDelaySql.as("avg_delay"),
 		})
 		.from(departures)

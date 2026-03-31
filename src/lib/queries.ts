@@ -110,6 +110,10 @@ export const avgDelaySql = sql<
 
 export const delayedSql = sql<number>`SUM(CASE WHEN ${departures.cancelled} = 0 AND ${departures.rtTime} IS NOT NULL AND (strftime('%s', ${departures.rtDate} || ' ' || ${departures.rtTime}) - strftime('%s', ${departures.date} || ' ' || ${departures.time})) / 60.0 >= ${DELAY_THRESHOLD_MIN} THEN 1 ELSE 0 END)`;
 
+export const totalDistinctSql = sql<number>`COUNT(DISTINCT ${departures.journeyNum})`;
+export const cancelledDistinctSql = sql<number>`COUNT(DISTINCT CASE WHEN ${departures.cancelled} = 1 THEN ${departures.journeyNum} END)`;
+export const delayedDistinctSql = sql<number>`COUNT(DISTINCT CASE WHEN ${departures.cancelled} = 0 AND ${departures.rtTime} IS NOT NULL AND (strftime('%s', ${departures.rtDate} || ' ' || ${departures.rtTime}) - strftime('%s', ${departures.date} || ' ' || ${departures.time})) / 60.0 >= ${DELAY_THRESHOLD_MIN} THEN ${departures.journeyNum} END)`;
+
 async function getStatsFallback(
 	db: Db,
 	station: Station,
@@ -332,11 +336,9 @@ export async function getOperatorSummaries(
 			? db
 					.select({
 						operator: departures.operator,
-						total: count().as("total"),
-						cancelled: sql<number>`SUM(${departures.cancelled})`.as(
-							"cancelled",
-						),
-						delayed: delayedSql.as("delayed"),
+						total: totalDistinctSql.as("total"),
+						cancelled: cancelledDistinctSql.as("cancelled"),
+						delayed: delayedDistinctSql.as("delayed"),
 						avgDelay: avgDelaySql.as("avg_delay"),
 					})
 					.from(departures)
@@ -432,9 +434,9 @@ export async function getLineSummaries(
 				sql<string>`GROUP_CONCAT(DISTINCT ${departures.direction})`.as(
 					"destinations",
 				),
-			total: count().as("total"),
-			cancelled: sql<number>`SUM(${departures.cancelled})`.as("cancelled"),
-			delayed: delayedSql.as("delayed"),
+			total: totalDistinctSql.as("total"),
+			cancelled: cancelledDistinctSql.as("cancelled"),
+			delayed: delayedDistinctSql.as("delayed"),
 			avgDelay: avgDelaySql.as("avg_delay"),
 		})
 		.from(departures)
@@ -480,9 +482,9 @@ export async function getLineStats(
 		db
 			.select({
 				date: departures.date,
-				total: count().as("total"),
-				cancelled: sql<number>`SUM(${departures.cancelled})`.as("cancelled"),
-				delayed: delayedSql.as("delayed"),
+				total: totalDistinctSql.as("total"),
+				cancelled: cancelledDistinctSql.as("cancelled"),
+				delayed: delayedDistinctSql.as("delayed"),
 				avgDelay: avgDelaySql.as("avg_delay"),
 			})
 			.from(departures)
@@ -558,11 +560,9 @@ export async function getOperatorStats(
 					.select({
 						operator: departures.operator,
 						date: departures.date,
-						total: count().as("total"),
-						cancelled: sql<number>`SUM(${departures.cancelled})`.as(
-							"cancelled",
-						),
-						delayed: delayedSql.as("delayed"),
+						total: totalDistinctSql.as("total"),
+						cancelled: cancelledDistinctSql.as("cancelled"),
+						delayed: delayedDistinctSql.as("delayed"),
 						avgDelay: avgDelaySql.as("avg_delay"),
 					})
 					.from(departures)
@@ -618,13 +618,19 @@ export async function getOperatorDayDepartures(
 			line: departures.line,
 			category: departures.category,
 			direction: departures.direction,
-			cancelled: departures.cancelled,
+			cancelled: sql<number>`max(${departures.cancelled})`.as("cancelled"),
 			stop: departures.stop,
-
-			fetchedAt: departures.fetchedAt,
+			fetchedAt: sql<string>`max(${departures.fetchedAt})`.as("fetched_at"),
 		})
 		.from(departures)
 		.where(and(eq(departures.operator, operator), eq(departures.date, date)))
+		.groupBy(
+			departures.date,
+			departures.time,
+			departures.line,
+			departures.direction,
+			departures.journeyNum,
+		)
 		.orderBy(departures.time, departures.line, departures.direction);
 }
 
@@ -746,9 +752,9 @@ export async function getLineTrends(db: Db): Promise<Map<string, TrendData>> {
 	const rows = await db
 		.select({
 			line: departures.line,
-			cancelled: sql<number>`SUM(${departures.cancelled})`.as("cancelled"),
-			delayed: delayedSql.as("delayed"),
-			total: count().as("total"),
+			cancelled: cancelledDistinctSql.as("cancelled"),
+			delayed: delayedDistinctSql.as("delayed"),
+			total: totalDistinctSql.as("total"),
 			avgDelay: avgDelaySql.as("avg_delay"),
 			week: sql<number>`CASE WHEN ${departures.date} >= date(${today}, '-6 days') THEN 1 ELSE 0 END`.as(
 				"week",
@@ -826,9 +832,9 @@ export async function getTodayOverview(
 		db
 			.select({
 				line: departures.line,
-				total: count().as("total"),
-				cancelled: sql<number>`SUM(${departures.cancelled})`.as("cancelled"),
-				delayed: delayedSql.as("delayed"),
+				total: totalDistinctSql.as("total"),
+				cancelled: cancelledDistinctSql.as("cancelled"),
+				delayed: delayedDistinctSql.as("delayed"),
 			})
 			.from(departures)
 			.where(and(eq(departures.date, today), catCond))
@@ -837,11 +843,9 @@ export async function getTodayOverview(
 			? db
 					.select({
 						stationId: departures.stationId,
-						cancelled: sql<number>`SUM(${departures.cancelled})`.as(
-							"cancelled",
-						),
-						delayed: delayedSql.as("delayed"),
-						total: count().as("total"),
+						cancelled: cancelledDistinctSql.as("cancelled"),
+						delayed: delayedDistinctSql.as("delayed"),
+						total: totalDistinctSql.as("total"),
 					})
 					.from(departures)
 					.where(and(eq(departures.date, today), catCond))
@@ -854,11 +858,9 @@ export async function getTodayOverview(
 			? db
 					.select({
 						operator: departures.operator,
-						cancelled: sql<number>`SUM(${departures.cancelled})`.as(
-							"cancelled",
-						),
-						delayed: delayedSql.as("delayed"),
-						total: count().as("total"),
+						cancelled: cancelledDistinctSql.as("cancelled"),
+						delayed: delayedDistinctSql.as("delayed"),
+						total: totalDistinctSql.as("total"),
 					})
 					.from(departures)
 					.where(
