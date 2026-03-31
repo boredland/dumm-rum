@@ -127,14 +127,12 @@ const status = d.cancelled ? "cancelled" : (rawDelay !== null && rawDelay >= DEL
 										)}
 									</td>
 									<td class="px-4 py-2.5 text-sm tabular-nums">
-										{d.cancelled ? (
-											<span class="text-muted">&mdash;</span>
-										) : delayMin !== null && delayMin !== 0 ? (
+										{delayMin !== null && delayMin !== 0 ? (
 											<span class={delayMin > 0 ? "text-warning" : "text-success"}>
 												{delayMin > 0 ? "+" : ""}{delayMin} min
 											</span>
 										) : (
-											<span class="text-muted">{t(lang, "status.on_time")}</span>
+											<span class="text-muted">&mdash;</span>
 										)}
 									</td>
 									<td class="px-4 py-2.5 text-sm text-muted"><time datetime={d.fetchedAt}>{d.fetchedAt.slice(0, 16).replace("T", " ")}</time></td>
