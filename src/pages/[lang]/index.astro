@@ -7,6 +7,7 @@ import { langFromParams, t } from "../../lib/i18n";
 import {
 	getLineSummaries,
 	getLineTrends,
+	getOldestDate,
 	getOperatorSummaries,
 	getOperatorTrends,
 	getStationSummaries,
@@ -35,6 +36,7 @@ const [
 	operatorTrends,
 	lineTrends,
 	today,
+	oldestDate,
 ] = await Promise.all([
 	getStationSummaries(db, STATIONS, filter),
 	getOperatorSummaries(db, filter),
@@ -43,6 +45,7 @@ const [
 	getOperatorTrends(db),
 	getLineTrends(db),
 	getTodayOverview(db, filter),
+	getOldestDate(db),
 ]);
 ---
 
@@ -54,6 +57,11 @@ const [
 		<p class="text-muted text-sm mt-1">
 			{t(lang, "home.subtitle")}
 		</p>
+		{oldestDate && (
+			<p class="text-muted text-xs mt-1">
+				hier für dich yannick 😘: tracking since {new Date(oldestDate).toLocaleDateString(lang, { year: "numeric", month: "long", day: "numeric" })}
+			</p>
+		)}
 	</header>
 
 	<details class="mb-6 text-sm text-muted">

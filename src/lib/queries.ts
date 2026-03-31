@@ -802,6 +802,13 @@ export interface TodayOverview {
 	worstOperatorDelayed: TodayWorst | null;
 }
 
+export async function getOldestDate(db: Db): Promise<string | null> {
+	const rows = await db
+		.select({ date: sql<string>`MIN(${stationDailyStats.date})` })
+		.from(stationDailyStats);
+	return rows[0]?.date ?? null;
+}
+
 export async function getTodayOverview(
 	db: Db,
 	filter: QueryFilter = {},
