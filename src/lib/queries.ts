@@ -24,11 +24,15 @@ function daysCondition(dateCol: unknown, filter: DaysFilter = "") {
 
 const validDays = new Set<DaysFilter>(["", "weekdays", "weekends"]);
 
+const validCategories = new Set(["U-Bahn", "S", "Tram", "Bus", "RE,RB"]);
+
 export function parseFilter(url: URL): QueryFilter {
 	const days = url.searchParams.get("days") ?? "";
+	const cat = url.searchParams.get("cat") ?? "";
 	return {
 		coreOnly: url.searchParams.get("hours") === "core",
 		days: validDays.has(days as DaysFilter) ? (days as DaysFilter) : "",
+		category: validCategories.has(cat) ? cat : "",
 	};
 }
 
@@ -37,6 +41,17 @@ export type DayStats = InferSelectModel<typeof stationDailyStats>;
 export interface QueryFilter {
 	coreOnly?: boolean;
 	days?: DaysFilter;
+	category?: string;
+}
+
+function categoryCondition(category?: string) {
+	if (!category) return undefined;
+	const cats = category.split(",");
+	if (cats.length === 1) return eq(departures.category, cats[0]);
+	return sql`${departures.category} IN (${sql.join(
+		cats.map((c) => sql`${c}`),
+		sql`, `,
+	)})`;
 }
 
 export interface Stats {
@@ -157,9 +172,11 @@ export async function getStationSummaries(
 ): Promise<Map<string, StationSummary>> {
 	const depDaysCond = daysCondition(departures.date, filter.days);
 	const statsDaysCond = daysCondition(stationDailyStats.date, filter.days);
+	const catCond = categoryCondition(filter.category);
+	const useDepartures = filter.coreOnly || !!catCond;
 
 	const [statsRows, catRows] = await Promise.all([
-		filter.coreOnly
+		useDepartures
 			? db
 					.select({
 						stationId: departures.stationId,
@@ -169,7 +186,9 @@ export async function getStationSummaries(
 						avgDelay: avgDelaySql.as("avg_delay"),
 					})
 					.from(departures)
-					.where(and(CORE_HOURS, depDaysCond))
+					.where(
+						and(filter.coreOnly ? CORE_HOURS : undefined, depDaysCond, catCond),
+					)
 					.groupBy(departures.stationId)
 			: db
 					.select({
@@ -305,9 +324,11 @@ export async function getOperatorSummaries(
 ): Promise<OperatorSummary[]> {
 	const depDaysCond = daysCondition(departures.date, filter.days);
 	const opDaysCond = daysCondition(operatorDailyStats.date, filter.days);
+	const catCond = categoryCondition(filter.category);
+	const useDepartures = filter.coreOnly || !!catCond;
 
 	const [statsRows, lineRows] = await Promise.all([
-		filter.coreOnly
+		useDepartures
 			? db
 					.select({
 						operator: departures.operator,
@@ -319,7 +340,14 @@ export async function getOperatorSummaries(
 						avgDelay: avgDelaySql.as("avg_delay"),
 					})
 					.from(departures)
-					.where(and(isNotNull(departures.operator), CORE_HOURS, depDaysCond))
+					.where(
+						and(
+							isNotNull(departures.operator),
+							filter.coreOnly ? CORE_HOURS : undefined,
+							depDaysCond,
+							catCond,
+						),
+					)
 					.groupBy(departures.operator)
 			: db
 					.select({
@@ -387,9 +415,11 @@ export async function getLineSummaries(
 	filter: QueryFilter = {},
 ): Promise<LineSummary[]> {
 	const daysCond = daysCondition(departures.date, filter.days);
+	const catCond = categoryCondition(filter.category);
 	const conditions = [isNotNull(departures.operator)];
 	if (filter.coreOnly) conditions.push(CORE_HOURS);
 	if (daysCond) conditions.push(daysCond);
+	if (catCond) conditions.push(catCond);
 
 	const rows = await db
 		.select({
@@ -772,8 +802,12 @@ export interface TodayOverview {
 	worstOperatorDelayed: TodayWorst | null;
 }
 
-export async function getTodayOverview(db: Db): Promise<TodayOverview> {
+export async function getTodayOverview(
+	db: Db,
+	filter: QueryFilter = {},
+): Promise<TodayOverview> {
 	const today = todayBerlin();
+	const catCond = categoryCondition(filter.category);
 
 	const [lineRows, stationRows, opRows] = await Promise.all([
 		db
@@ -784,16 +818,48 @@ export async function getTodayOverview(db: Db): Promise<TodayOverview> {
 				delayed: delayedSql.as("delayed"),
 			})
 			.from(departures)
-			.where(eq(departures.date, today))
+			.where(and(eq(departures.date, today), catCond))
 			.groupBy(departures.line),
-		db
-			.select()
-			.from(stationDailyStats)
-			.where(eq(stationDailyStats.date, today)),
-		db
-			.select()
-			.from(operatorDailyStats)
-			.where(eq(operatorDailyStats.date, today)),
+		catCond
+			? db
+					.select({
+						stationId: departures.stationId,
+						cancelled: sql<number>`SUM(${departures.cancelled})`.as(
+							"cancelled",
+						),
+						delayed: delayedSql.as("delayed"),
+						total: count().as("total"),
+					})
+					.from(departures)
+					.where(and(eq(departures.date, today), catCond))
+					.groupBy(departures.stationId)
+			: db
+					.select()
+					.from(stationDailyStats)
+					.where(eq(stationDailyStats.date, today)),
+		catCond
+			? db
+					.select({
+						operator: departures.operator,
+						cancelled: sql<number>`SUM(${departures.cancelled})`.as(
+							"cancelled",
+						),
+						delayed: delayedSql.as("delayed"),
+						total: count().as("total"),
+					})
+					.from(departures)
+					.where(
+						and(
+							eq(departures.date, today),
+							isNotNull(departures.operator),
+							catCond,
+						),
+					)
+					.groupBy(departures.operator)
+			: db
+					.select()
+					.from(operatorDailyStats)
+					.where(eq(operatorDailyStats.date, today)),
 	]);
 
 	let total = 0,
@@ -825,10 +891,11 @@ export async function getTodayOverview(db: Db): Promise<TodayOverview> {
 	let worstOperatorCancelled: TodayWorst | null = null;
 	let worstOperatorDelayed: TodayWorst | null = null;
 	for (const r of opRows) {
+		const opName = r.operator ?? "";
 		if (r.cancelled > (worstOperatorCancelled?.count ?? 0))
-			worstOperatorCancelled = { name: r.operator, count: r.cancelled };
+			worstOperatorCancelled = { name: opName, count: r.cancelled };
 		if (r.delayed > (worstOperatorDelayed?.count ?? 0))
-			worstOperatorDelayed = { name: r.operator, count: r.delayed };
+			worstOperatorDelayed = { name: opName, count: r.delayed };
 	}
 
 	return {

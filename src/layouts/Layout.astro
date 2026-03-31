@@ -237,28 +237,19 @@ const otherPath = Astro.url.pathname.replace(`/${lang}`, `/${otherLang}`);
 			function applyLandingFilters() {
 				const input = document.getElementById("search") as HTMLInputElement | null;
 				const q = input?.value.toLowerCase().trim() ?? "";
-				const cat = activeCat;
 				const cards = document.querySelectorAll<HTMLElement>("[data-search]");
 				const sections = new Set<HTMLElement>();
 				for (const card of cards) {
-					const matchText = !q || card.dataset.search!.includes(q);
-					let matchCat = !cat;
-					if (cat && card.dataset.categories) {
-						const cats = cat.split(",");
-						matchCat = cats.some((c) => card.dataset.categories!.split(",").includes(c));
-					}
-					const show = matchText && matchCat;
+					const show = !q || card.dataset.search!.includes(q);
 					card.style.display = show ? "" : "none";
 					const section = card.closest("details");
 					if (section && show) sections.add(section as HTMLElement);
 				}
 				for (const details of document.querySelectorAll<HTMLDetailsElement>("details.group")) {
-					if (q || cat) details.open = sections.has(details);
+					if (q) details.open = sections.has(details);
 				}
-				syncParams({ q: q, cat: cat });
+				syncParams({ q: q });
 			}
-
-			let activeCat = "";
 
 			function initSearch() {
 				const input = document.getElementById("search") as HTMLInputElement | null;
@@ -266,21 +257,6 @@ const otherPath = Astro.url.pathname.replace(`/${lang}`, `/${otherLang}`);
 				const q = param("q");
 				if (q) input.value = q;
 				input.addEventListener("input", applyLandingFilters);
-			}
-
-			function initCategoryFilter() {
-				const container = document.getElementById("category-filter");
-				if (!container) return;
-				activeCat = param("cat");
-				const buttons = container.querySelectorAll<HTMLButtonElement>("[data-cat]");
-				stylePills(buttons, "cat", activeCat);
-				for (const btn of buttons) {
-					btn.addEventListener("click", () => {
-						activeCat = btn.dataset.cat!;
-						stylePills(buttons, "cat", activeCat);
-						applyLandingFilters();
-					});
-				}
 			}
 
 			document.addEventListener("keydown", (e) => {
@@ -292,8 +268,7 @@ const otherPath = Astro.url.pathname.replace(`/${lang}`, `/${otherLang}`);
 			});
 			document.addEventListener("astro:page-load", () => {
 				initSearch();
-				initCategoryFilter();
-				if (param("q") || param("cat")) applyLandingFilters();
+				if (param("q")) applyLandingFilters();
 			});
 
 			let refreshTimer: ReturnType<typeof setInterval>;
