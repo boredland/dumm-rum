@@ -17,7 +17,7 @@ const translations = {
 		"home.methodology_reliability":
 			"Die P\u00fcnktlichkeitsquote (OTP) ist der Anteil der Abfahrten, die weder ausgefallen noch versp\u00e4tet sind \u2014 ein g\u00e4ngiger Standard im \u00d6PNV.",
 		"home.methodology_dedup":
-			"Für die Linien- und Betreiberstatistiken wird jede Fahrt nur einmal gezählt, auch wenn sie mehrere überwachte Haltestellen passiert \u2014 wir deduplizieren nach Fahrtnummer, damit ein und derselbe Zug oder Bus nicht mehrfach gezählt wird.",
+			"Für die Linien- und Betreiberstatistiken wird jede Fahrt nur einmal gezählt, auch wenn sie mehrere erfasste Haltestellen passiert \u2014 wir deduplizieren nach Fahrtnummer. Wird eine Fahrt an mehreren Haltestellen beobachtet, werden die früheste Abfahrtszeit und der schlechteste Status (ausgefallen > verspätet > pünktlich) verwendet.",
 		"home.methodology_colors":
 			"Farben: gr\u00fcn ab 90%, orange 80\u201389%, rot unter 80%.",
 		"home.overall_score": "Pünktlich",
@@ -114,7 +114,7 @@ const translations = {
 		"home.methodology_reliability":
 			"On-time performance (OTP) is the share of departures that were neither cancelled nor delayed \u2014 a standard metric in public transport.",
 		"home.methodology_dedup":
-			"For line and operator statistics, each journey is counted once even if it passes through multiple tracked stations \u2014 we deduplicate by journey number so the same train or bus isn\u2019t counted multiple times.",
+			"For line and operator statistics, each journey is counted once even if it passes through multiple tracked stations \u2014 we deduplicate by journey number. When a journey is observed at several stations, the earliest departure time and worst status (cancelled > delayed > on-time) are used.",
 		"home.methodology_colors":
 			"Colors: green from 90%, orange 80\u201389%, red below 80%.",
 		"home.overall_score": "On time",
