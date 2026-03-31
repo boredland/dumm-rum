@@ -520,15 +520,21 @@ export async function getLineDayDepartures(db: Db, line: string, date: string) {
 			rtDate: departures.rtDate,
 			rtTime: departures.rtTime,
 			direction: departures.direction,
-			cancelled: departures.cancelled,
+			cancelled: sql<number>`max(${departures.cancelled})`.as("cancelled"),
 			operator: departures.operator,
 			category: departures.category,
 			stop: departures.stop,
-
-			fetchedAt: departures.fetchedAt,
+			fetchedAt: sql<string>`max(${departures.fetchedAt})`.as("fetched_at"),
 		})
 		.from(departures)
 		.where(and(eq(departures.line, line), eq(departures.date, date)))
+		.groupBy(
+			departures.date,
+			departures.time,
+			departures.line,
+			departures.direction,
+			departures.journeyNum,
+		)
 		.orderBy(departures.time, departures.direction);
 }
 

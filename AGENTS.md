@@ -143,6 +143,16 @@ Pattern-matching search for stops, stations, addresses, and POIs.
 
 Use `type=S` to search for station/stop IDs when adding new stations.
 
+#### Finding station IDs without an API key
+
+The RMV website exposes a public autocomplete endpoint that returns station IDs without authentication:
+
+```
+https://www.rmv.de/auskunft/bin/jp/ajax-getstop.exe/dn?REQ0JourneyStopsS0A=1&REQ0JourneyStopsS0G=<search-term>&js=true
+```
+
+The response contains `extId` fields with the station IDs (e.g., `003006903` → use `3006903` without leading zeros).
+
 ### API types
 
 Types are auto-generated from the OpenAPI spec into `src/lib/hafas-types.ts`. The typed client is in `src/lib/hafas.ts`. Regenerate with `npm run generate:api`.

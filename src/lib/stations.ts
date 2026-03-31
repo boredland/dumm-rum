@@ -60,6 +60,11 @@ export const STATIONS: Station[] = [
 		name: "Frankfurt (Main) Hauptbahnhof Südseite",
 		slug: "hauptbahnhof-suedseite",
 	},
+	{
+		id: "3006903",
+		name: "Wiesbaden-Mainz-Kastel Bahnhof",
+		slug: "mainz-kastel-bahnhof",
+	},
 ];
 
 export function findStation(slug: string): Station | undefined {

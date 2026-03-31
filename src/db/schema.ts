@@ -34,10 +34,11 @@ export const departures = sqliteTable(
 		unique().on(t.stationId, t.date, t.time, t.line, t.direction, t.journeyNum),
 		index("idx_departures_station_date").on(t.stationId, t.date),
 		index("idx_departures_next").on(t.stationId, t.date, t.cancelled, t.time),
-		index("idx_departures_fetched").on(t.fetchedAt),
-		index("idx_departures_operator_line").on(t.operator, t.line, t.date),
+		index("idx_departures_station_fetched").on(t.stationId, t.fetchedAt),
+		index("idx_departures_operator_date").on(t.operator, t.date),
 		index("idx_departures_date").on(t.date),
 		index("idx_departures_line_date").on(t.line, t.date),
+		index("idx_departures_date_notified").on(t.date, t.notified),
 	],
 );
 
@@ -56,7 +57,10 @@ export const stationDailyStats = sqliteTable(
 		delayed: integer().notNull().default(0),
 		avgDelay: real("avg_delay"),
 	},
-	(t) => [primaryKey({ columns: [t.stationId, t.date] })],
+	(t) => [
+		primaryKey({ columns: [t.stationId, t.date] }),
+		index("idx_station_daily_stats_date").on(t.date),
+	],
 );
 
 export const operatorDailyStats = sqliteTable(
@@ -69,7 +73,10 @@ export const operatorDailyStats = sqliteTable(
 		delayed: integer().notNull().default(0),
 		avgDelay: real("avg_delay"),
 	},
-	(t) => [primaryKey({ columns: [t.operator, t.date] })],
+	(t) => [
+		primaryKey({ columns: [t.operator, t.date] }),
+		index("idx_operator_daily_stats_date").on(t.date),
+	],
 );
 
 export const telegramSubscriptions = sqliteTable(
