@@ -53,7 +53,8 @@ async function collectDepartures(
 		(d: Departure) =>
 			d.ProductAtStop?.line &&
 			d.ProductAtStop?.num &&
-			!EXCLUDE_CATEGORIES.has(d.ProductAtStop?.catOut ?? ""),
+			!EXCLUDE_CATEGORIES.has(d.ProductAtStop?.catOut ?? "") &&
+			!/N$/.test(d.ProductAtStop!.line!),
 	);
 	if (deps.length === 0) return 0;
 
