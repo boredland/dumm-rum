@@ -329,13 +329,18 @@ export async function getDayDepartures(db: Db, station: Station, date: string) {
 		.orderBy(departures.time, departures.direction);
 }
 
-export async function getHaiku(db: Db, date: string): Promise<string | null> {
+export async function getHaiku(
+	db: Db,
+	date: string,
+	lang = "en",
+): Promise<string | null> {
 	const rows = await db
-		.select({ haiku: haikus.haiku })
+		.select({ haiku: haikus.haiku, haikuDe: haikus.haikuDe })
 		.from(haikus)
 		.where(eq(haikus.date, date))
 		.limit(1);
-	return rows[0]?.haiku ?? null;
+	if (!rows[0]) return null;
+	return (lang === "de" ? rows[0].haikuDe : null) ?? rows[0].haiku;
 }
 
 export async function getNextDepartures(db: Db, station: Station) {

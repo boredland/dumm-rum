@@ -20,7 +20,7 @@ const date = Astro.params.date!;
 const db = createDb(env.DB);
 const [departures, haiku] = await Promise.all([
 	getLineDayDepartures(db, line, date),
-	getHaiku(db, date),
+	getHaiku(db, date, lang),
 ]);
 
 const cancelledCount = departures.filter((d) => d.cancelled).length;

@@ -135,6 +135,62 @@ async function collectDepartures(
 	return deps.length;
 }
 
+function extractHaiku(response: unknown): string | undefined {
+	const result = response as Record<string, unknown>;
+	return (
+		(result.response as string) ??
+		(result.choices as { message: { content: string } }[])?.[0]?.message
+			?.content
+	)?.trim();
+}
+
+async function getYesterdayWorstCategory(db: Db): Promise<string> {
+	const yesterday = nowBerlin().subtract(1, "day").format("YYYY-MM-DD");
+	const rows = await db
+		.select({
+			category: departures.category,
+			cancelled: sql<number>`SUM(${departures.cancelled})`.as("cancelled"),
+		})
+		.from(departures)
+		.where(and(eq(departures.date, yesterday), isNotNull(departures.category)))
+		.groupBy(departures.category)
+		.orderBy(sql`cancelled DESC`)
+		.limit(1);
+	return rows[0]?.category ?? "Bus";
+}
+
+const CATEGORY_THEMES: Record<string, { en: string; de: string }> = {
+	Bus: {
+		en: "waiting at a bus stop, not knowing if the bus was cancelled or if it ever existed. Theme: missing buses, uncertainty, urban melancholy.",
+		de: "das Warten an einer Bushaltestelle, ohne zu wissen ob der Bus ausfällt oder ob es ihn je gab. Thema: fehlende Busse, Ungewissheit, urbane Melancholie.",
+	},
+	"U-Bahn": {
+		en: "standing on an empty underground platform, staring at a departure board that keeps changing. Theme: delayed U-Bahn trains, echoing tunnels, frustrated commuters.",
+		de: "das Stehen auf einem leeren U-Bahn-Bahnsteig und Starren auf eine Anzeigetafel, die sich ständig ändert. Thema: verspätete U-Bahnen, hallende Tunnel, frustrierte Pendler.",
+	},
+	Tram: {
+		en: "watching tram tracks disappear into fog, wondering if the next tram will come. Theme: unreliable trams, empty rails, quiet streets.",
+		de: "Straßenbahnschienen, die im Nebel verschwinden, und die Frage, ob die nächste Bahn kommt. Thema: unzuverlässige Straßenbahnen, leere Gleise, stille Straßen.",
+	},
+	S: {
+		en: "a crowded S-Bahn platform where the display just switched to 'cancelled'. Theme: S-Bahn chaos, packed platforms, daily struggle.",
+		de: "einen überfüllten S-Bahn-Bahnsteig, auf dem die Anzeige gerade auf 'fällt aus' umspringt. Thema: S-Bahn-Chaos, volle Bahnsteige, täglicher Kampf.",
+	},
+	RE: {
+		en: "a regional express train that was supposed to arrive 20 minutes ago. Theme: delayed regional trains, empty platforms, broken promises.",
+		de: "einen Regionalexpress, der vor 20 Minuten hätte kommen sollen. Thema: verspätete Regionalzüge, leere Bahnsteige, gebrochene Versprechen.",
+	},
+	RB: {
+		en: "a regional train that quietly disappeared from the departure board. Theme: cancelled Regionalbahn, rural isolation, vanishing connections.",
+		de: "eine Regionalbahn, die leise von der Anzeigetafel verschwunden ist. Thema: ausgefallene Regionalbahn, ländliche Isolation, verlorene Anschlüsse.",
+	},
+};
+
+const DEFAULT_THEME = {
+	en: "waiting for public transport that never comes in Frankfurt. Theme: cancelled trains, urban melancholy, commuter despair.",
+	de: "das Warten auf öffentliche Verkehrsmittel, die in Frankfurt nie kommen. Thema: ausgefallene Züge, urbane Melancholie, Pendler-Verzweiflung.",
+};
+
 async function generateDailyHaiku(db: Db, ai: Ai): Promise<void> {
 	const today = todayBerlin();
 	const existing = await db
@@ -144,35 +200,50 @@ async function generateDailyHaiku(db: Db, ai: Ai): Promise<void> {
 		.limit(1);
 	if (existing.length > 0) return;
 
-	const response = await ai.run("@cf/ibm-granite/granite-4.0-h-micro", {
-		messages: [
-			{
-				role: "system",
-				content:
-					"You write haikus (5-7-5 syllables). Respond with ONLY the haiku, nothing else. No quotes, no explanation, no title.",
-			},
-			{
-				role: "user",
-				content:
-					"Write a haiku about waiting at a bus stop, not knowing if the bus was cancelled or if it ever existed. Theme: missing buses, uncertainty, urban melancholy.",
-			},
-		],
-		max_tokens: 100,
-	});
+	const worstCategory = await getYesterdayWorstCategory(db);
+	const theme = CATEGORY_THEMES[worstCategory] ?? DEFAULT_THEME;
 
-	const result = response as Record<string, unknown>;
-	const haiku = (
-		(result.response as string) ??
-		(result.choices as { message: { content: string } }[])?.[0]?.message
-			?.content
-	)?.trim();
+	const [enResponse, deResponse] = await Promise.all([
+		ai.run("@cf/ibm-granite/granite-4.0-h-micro", {
+			messages: [
+				{
+					role: "system",
+					content:
+						"You write haikus (5-7-5 syllables). Respond with ONLY the haiku, nothing else. No quotes, no explanation, no title.",
+				},
+				{ role: "user", content: `Write a haiku about ${theme.en}` },
+			],
+			max_tokens: 100,
+		}),
+		ai.run("@cf/ibm-granite/granite-4.0-h-micro", {
+			messages: [
+				{
+					role: "system",
+					content:
+						"Du schreibst Haikus (5-7-5 Silben) auf Deutsch. Antworte NUR mit dem Haiku, nichts anderes. Keine Anführungszeichen, keine Erklärung, kein Titel.",
+				},
+				{
+					role: "user",
+					content: `Schreibe ein Haiku über ${theme.de}`,
+				},
+			],
+			max_tokens: 100,
+		}),
+	]);
+
+	const haiku = extractHaiku(enResponse);
+	const haikuDe = extractHaiku(deResponse);
 	if (!haiku) {
-		console.error("Haiku generation returned empty response", response);
+		console.error("Haiku generation returned empty response", enResponse);
 		return;
 	}
-	console.log(`Generated haiku: ${haiku}`);
+	console.log(`Generated haiku (en): ${haiku}`);
+	if (haikuDe) console.log(`Generated haiku (de): ${haikuDe}`);
 
-	await db.insert(haikus).values({ date: today, haiku }).onConflictDoNothing();
+	await db
+		.insert(haikus)
+		.values({ date: today, haiku, haikuDe: haikuDe ?? null })
+		.onConflictDoNothing();
 }
 
 async function materializeStationStats(db: Db, date: string): Promise<void> {
