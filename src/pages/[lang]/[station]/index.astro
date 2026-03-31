@@ -6,11 +6,7 @@ import WeekdayChart from "../../../components/WeekdayChart.astro";
 import { createDb } from "../../../db/client";
 import Layout from "../../../layouts/Layout.astro";
 import { langFromParams, t } from "../../../lib/i18n";
-import {
-	getStationCategories,
-	getStats,
-	parseFilter,
-} from "../../../lib/queries";
+import { getStats, parseFilter } from "../../../lib/queries";
 import { categoryIcons, findStation } from "../../../lib/stations";
 import {
 	fmtDate,
@@ -28,10 +24,8 @@ if (!station) return new Response("Not found", { status: 404 });
 
 const filter = parseFilter(Astro.url);
 const { coreOnly, days: daysFilter } = filter;
-const [stats, categories] = await Promise.all([
-	getStats(db, station, filter),
-	getStationCategories(db, station),
-]);
+const stats = await getStats(db, station, filter);
+const categories = stats.categories;
 
 const today = todayBerlin();
 const totalCancelled = stats.days.reduce((s, d) => s + d.cancelled, 0);

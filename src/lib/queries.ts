@@ -7,7 +7,7 @@ import {
 	operatorDailyStats,
 	stationDailyStats,
 } from "../db/schema";
-import { STATIONS, type Station } from "./stations";
+import type { Station } from "./stations";
 import { DELAY_THRESHOLD_MIN, nowBerlin, todayBerlin } from "./utils";
 
 const CORE_HOURS = sql`((${departures.time} >= '06:00:00' AND ${departures.time} < '09:00:00') OR (${departures.time} >= '16:00:00' AND ${departures.time} < '19:00:00'))`;
@@ -59,6 +59,7 @@ export interface Stats {
 	avgCancelledPerDay: number;
 	lastChange: string | null;
 	haiku: string | null;
+	categories: string[];
 }
 
 export async function getStats(
@@ -74,7 +75,7 @@ export async function getStats(
 	const conditions = [eq(stationDailyStats.stationId, station.id)];
 	if (daysCond) conditions.push(daysCond);
 
-	const [dayRows, lastChangeRows, haikuRows] = await Promise.all([
+	const [dayRows, lastChangeRows, haikuRows, catRows] = await Promise.all([
 		db
 			.select()
 			.from(stationDailyStats)
@@ -91,6 +92,15 @@ export async function getStats(
 			.from(haikus)
 			.where(eq(haikus.date, todayBerlin()))
 			.limit(1),
+		db
+			.selectDistinct({ category: departures.category })
+			.from(departures)
+			.where(
+				and(
+					eq(departures.stationId, station.id),
+					isNotNull(departures.category),
+				),
+			),
 	]);
 
 	const totalCancelled = dayRows.reduce((s, d) => s + d.cancelled, 0);
@@ -101,6 +111,7 @@ export async function getStats(
 			dayRows.length > 0 ? totalCancelled / dayRows.length : 0,
 		lastChange: lastChangeRows[0]?.fetchedAt ?? null,
 		haiku: haikuRows[0]?.haiku ?? null,
+		categories: catRows.map((r) => r.category!),
 	};
 }
 
@@ -123,7 +134,7 @@ async function getStatsFallback(
 	const conditions = [eq(departures.stationId, station.id), CORE_HOURS];
 	if (daysCond) conditions.push(daysCond);
 
-	const [dayRows, lastChangeRows, haikuRows] = await Promise.all([
+	const [dayRows, lastChangeRows, haikuRows, catRows] = await Promise.all([
 		db
 			.select({
 				stationId: departures.stationId,
@@ -148,6 +159,15 @@ async function getStatsFallback(
 			.from(haikus)
 			.where(eq(haikus.date, todayBerlin()))
 			.limit(1),
+		db
+			.selectDistinct({ category: departures.category })
+			.from(departures)
+			.where(
+				and(
+					eq(departures.stationId, station.id),
+					isNotNull(departures.category),
+				),
+			),
 	]);
 
 	const totalCancelled = dayRows.reduce((s, d) => s + d.cancelled, 0);
@@ -158,6 +178,7 @@ async function getStatsFallback(
 			dayRows.length > 0 ? totalCancelled / dayRows.length : 0,
 		lastChange: lastChangeRows[0]?.fetchedAt ?? null,
 		haiku: haikuRows[0]?.haiku ?? null,
+		categories: catRows.map((r) => r.category!),
 	};
 }
 
@@ -167,6 +188,9 @@ export interface StationSummary {
 	total: number;
 	avgDelay: number | null;
 	categories: string[];
+	todayCancelled: number;
+	todayDelayed: number;
+	todayTotal: number;
 }
 
 export async function getStationSummaries(
@@ -174,6 +198,7 @@ export async function getStationSummaries(
 	stations: Station[],
 	filter: QueryFilter = {},
 ): Promise<Map<string, StationSummary>> {
+	const today = todayBerlin();
 	const depDaysCond = daysCondition(departures.date, filter.days);
 	const statsDaysCond = daysCondition(stationDailyStats.date, filter.days);
 	const catCond = categoryCondition(filter.category);
@@ -188,6 +213,18 @@ export async function getStationSummaries(
 						delayed: delayedSql.as("delayed"),
 						total: count().as("total"),
 						avgDelay: avgDelaySql.as("avg_delay"),
+						todayCancelled:
+							sql<number>`SUM(CASE WHEN ${departures.date} = ${today} THEN ${departures.cancelled} ELSE 0 END)`.as(
+								"today_cancelled",
+							),
+						todayDelayed:
+							sql<number>`SUM(CASE WHEN ${departures.date} = ${today} AND ${departures.cancelled} = 0 AND ${departures.rtTime} IS NOT NULL AND (strftime('%s', ${departures.rtDate} || ' ' || ${departures.rtTime}) - strftime('%s', ${departures.date} || ' ' || ${departures.time})) / 60.0 >= ${DELAY_THRESHOLD_MIN} THEN 1 ELSE 0 END)`.as(
+								"today_delayed",
+							),
+						todayTotal:
+							sql<number>`SUM(CASE WHEN ${departures.date} = ${today} THEN 1 ELSE 0 END)`.as(
+								"today_total",
+							),
 					})
 					.from(departures)
 					.where(
@@ -205,6 +242,18 @@ export async function getStationSummaries(
 						>`SUM(${stationDailyStats.avgDelay} * ${stationDailyStats.total}) / NULLIF(SUM(CASE WHEN ${stationDailyStats.avgDelay} IS NOT NULL THEN ${stationDailyStats.total} END), 0)`.as(
 							"avg_delay",
 						),
+						todayCancelled:
+							sql<number>`SUM(CASE WHEN ${stationDailyStats.date} = ${today} THEN ${stationDailyStats.cancelled} ELSE 0 END)`.as(
+								"today_cancelled",
+							),
+						todayDelayed:
+							sql<number>`SUM(CASE WHEN ${stationDailyStats.date} = ${today} THEN ${stationDailyStats.delayed} ELSE 0 END)`.as(
+								"today_delayed",
+							),
+						todayTotal:
+							sql<number>`SUM(CASE WHEN ${stationDailyStats.date} = ${today} THEN ${stationDailyStats.total} ELSE 0 END)`.as(
+								"today_total",
+							),
 					})
 					.from(stationDailyStats)
 					.where(statsDaysCond)
@@ -226,6 +275,9 @@ export async function getStationSummaries(
 				delayed: Number(r.delayed ?? 0),
 				total: Number(r.total ?? 0),
 				avgDelay: r.avgDelay,
+				todayCancelled: Number(r.todayCancelled ?? 0),
+				todayDelayed: Number(r.todayDelayed ?? 0),
+				todayTotal: Number(r.todayTotal ?? 0),
 			},
 		]),
 	);
@@ -246,6 +298,9 @@ export async function getStationSummaries(
 				total: statsMap.get(s.id)?.total ?? 0,
 				avgDelay: statsMap.get(s.id)?.avgDelay ?? null,
 				categories: catMap.get(s.id) ?? [],
+				todayCancelled: statsMap.get(s.id)?.todayCancelled ?? 0,
+				todayDelayed: statsMap.get(s.id)?.todayDelayed ?? 0,
+				todayTotal: statsMap.get(s.id)?.todayTotal ?? 0,
 			},
 		]),
 	);
@@ -267,19 +322,6 @@ export async function getDayDepartures(db: Db, station: Station, date: string) {
 		.from(departures)
 		.where(and(eq(departures.stationId, station.id), eq(departures.date, date)))
 		.orderBy(departures.time, departures.direction);
-}
-
-export async function getStationCategories(
-	db: Db,
-	station: Station,
-): Promise<string[]> {
-	const rows = await db
-		.selectDistinct({ category: departures.category })
-		.from(departures)
-		.where(
-			and(eq(departures.stationId, station.id), isNotNull(departures.category)),
-		);
-	return rows.map((r) => r.category!);
 }
 
 export async function getHaiku(db: Db, date: string): Promise<string | null> {
@@ -320,12 +362,16 @@ export interface OperatorSummary {
 	cancelled: number;
 	delayed: number;
 	avgDelay: number | null;
+	todayCancelled: number;
+	todayDelayed: number;
+	todayTotal: number;
 }
 
 export async function getOperatorSummaries(
 	db: Db,
 	filter: QueryFilter = {},
 ): Promise<OperatorSummary[]> {
+	const today = todayBerlin();
 	const depDaysCond = daysCondition(departures.date, filter.days);
 	const opDaysCond = daysCondition(operatorDailyStats.date, filter.days);
 	const catCond = categoryCondition(filter.category);
@@ -340,6 +386,18 @@ export async function getOperatorSummaries(
 						cancelled: cancelledDistinctSql.as("cancelled"),
 						delayed: delayedDistinctSql.as("delayed"),
 						avgDelay: avgDelaySql.as("avg_delay"),
+						todayCancelled:
+							sql<number>`COUNT(DISTINCT CASE WHEN ${departures.date} = ${today} AND ${departures.cancelled} = 1 THEN ${departures.journeyNum} END)`.as(
+								"today_cancelled",
+							),
+						todayDelayed:
+							sql<number>`COUNT(DISTINCT CASE WHEN ${departures.date} = ${today} AND ${departures.cancelled} = 0 AND ${departures.rtTime} IS NOT NULL AND (strftime('%s', ${departures.rtDate} || ' ' || ${departures.rtTime}) - strftime('%s', ${departures.date} || ' ' || ${departures.time})) / 60.0 >= ${DELAY_THRESHOLD_MIN} THEN ${departures.journeyNum} END)`.as(
+								"today_delayed",
+							),
+						todayTotal:
+							sql<number>`COUNT(DISTINCT CASE WHEN ${departures.date} = ${today} THEN ${departures.journeyNum} END)`.as(
+								"today_total",
+							),
 					})
 					.from(departures)
 					.where(
@@ -362,6 +420,18 @@ export async function getOperatorSummaries(
 						>`SUM(${operatorDailyStats.avgDelay} * ${operatorDailyStats.total}) / NULLIF(SUM(CASE WHEN ${operatorDailyStats.avgDelay} IS NOT NULL THEN ${operatorDailyStats.total} END), 0)`.as(
 							"avg_delay",
 						),
+						todayCancelled:
+							sql<number>`SUM(CASE WHEN ${operatorDailyStats.date} = ${today} THEN ${operatorDailyStats.cancelled} ELSE 0 END)`.as(
+								"today_cancelled",
+							),
+						todayDelayed:
+							sql<number>`SUM(CASE WHEN ${operatorDailyStats.date} = ${today} THEN ${operatorDailyStats.delayed} ELSE 0 END)`.as(
+								"today_delayed",
+							),
+						todayTotal:
+							sql<number>`SUM(CASE WHEN ${operatorDailyStats.date} = ${today} THEN ${operatorDailyStats.total} ELSE 0 END)`.as(
+								"today_total",
+							),
 					})
 					.from(operatorDailyStats)
 					.where(opDaysCond)
@@ -398,6 +468,9 @@ export async function getOperatorSummaries(
 		cancelled: Number(r.cancelled ?? 0),
 		delayed: Number(r.delayed ?? 0),
 		avgDelay: r.avgDelay,
+		todayCancelled: Number(r.todayCancelled ?? 0),
+		todayDelayed: Number(r.todayDelayed ?? 0),
+		todayTotal: Number(r.todayTotal ?? 0),
 	}));
 }
 
@@ -410,12 +483,16 @@ export interface LineSummary {
 	cancelled: number;
 	delayed: number;
 	avgDelay: number | null;
+	todayCancelled: number;
+	todayDelayed: number;
+	todayTotal: number;
 }
 
 export async function getLineSummaries(
 	db: Db,
 	filter: QueryFilter = {},
 ): Promise<LineSummary[]> {
+	const today = todayBerlin();
 	const daysCond = daysCondition(departures.date, filter.days);
 	const catCond = categoryCondition(filter.category);
 	const conditions = [isNotNull(departures.operator)];
@@ -438,6 +515,18 @@ export async function getLineSummaries(
 			cancelled: cancelledDistinctSql.as("cancelled"),
 			delayed: delayedDistinctSql.as("delayed"),
 			avgDelay: avgDelaySql.as("avg_delay"),
+			todayCancelled:
+				sql<number>`COUNT(DISTINCT CASE WHEN ${departures.date} = ${today} AND ${departures.cancelled} = 1 THEN ${departures.journeyNum} END)`.as(
+					"today_cancelled",
+				),
+			todayDelayed:
+				sql<number>`COUNT(DISTINCT CASE WHEN ${departures.date} = ${today} AND ${departures.cancelled} = 0 AND ${departures.rtTime} IS NOT NULL AND (strftime('%s', ${departures.rtDate} || ' ' || ${departures.rtTime}) - strftime('%s', ${departures.date} || ' ' || ${departures.time})) / 60.0 >= ${DELAY_THRESHOLD_MIN} THEN ${departures.journeyNum} END)`.as(
+					"today_delayed",
+				),
+			todayTotal:
+				sql<number>`COUNT(DISTINCT CASE WHEN ${departures.date} = ${today} THEN ${departures.journeyNum} END)`.as(
+					"today_total",
+				),
 		})
 		.from(departures)
 		.where(and(...conditions))
@@ -453,6 +542,9 @@ export async function getLineSummaries(
 		cancelled: r.cancelled,
 		delayed: r.delayed,
 		avgDelay: r.avgDelay,
+		todayCancelled: r.todayCancelled,
+		todayDelayed: r.todayDelayed,
+		todayTotal: r.todayTotal,
 	}));
 }
 
@@ -518,7 +610,7 @@ export async function getLineDayDepartures(db: Db, line: string, date: string) {
 	return db
 		.select({
 			date: departures.date,
-			time: departures.time,
+			time: sql<string>`min(${departures.time})`.as("time"),
 			rtDate: departures.rtDate,
 			rtTime: departures.rtTime,
 			direction: departures.direction,
@@ -532,12 +624,11 @@ export async function getLineDayDepartures(db: Db, line: string, date: string) {
 		.where(and(eq(departures.line, line), eq(departures.date, date)))
 		.groupBy(
 			departures.date,
-			departures.time,
 			departures.line,
 			departures.direction,
 			departures.journeyNum,
 		)
-		.orderBy(departures.time, departures.direction);
+		.orderBy(sql`time`, departures.direction);
 }
 
 type OperatorDayStats = InferSelectModel<typeof operatorDailyStats>;
@@ -612,7 +703,7 @@ export async function getOperatorDayDepartures(
 	return db
 		.select({
 			date: departures.date,
-			time: departures.time,
+			time: sql<string>`min(${departures.time})`.as("time"),
 			rtDate: departures.rtDate,
 			rtTime: departures.rtTime,
 			line: departures.line,
@@ -626,12 +717,11 @@ export async function getOperatorDayDepartures(
 		.where(and(eq(departures.operator, operator), eq(departures.date, date)))
 		.groupBy(
 			departures.date,
-			departures.time,
 			departures.line,
 			departures.direction,
 			departures.journeyNum,
 		)
-		.orderBy(departures.time, departures.line, departures.direction);
+		.orderBy(sql`time`, departures.line, departures.direction);
 }
 
 export interface TrendData {
@@ -797,131 +887,9 @@ export async function getLineTrends(db: Db): Promise<Map<string, TrendData>> {
 	return map;
 }
 
-export interface TodayWorst {
-	name: string;
-	count: number;
-}
-
-export interface TodayOverview {
-	total: number;
-	cancelled: number;
-	delayed: number;
-	worstLineCancelled: TodayWorst | null;
-	worstLineDelayed: TodayWorst | null;
-	worstStationCancelled: TodayWorst | null;
-	worstStationDelayed: TodayWorst | null;
-	worstOperatorCancelled: TodayWorst | null;
-	worstOperatorDelayed: TodayWorst | null;
-}
-
 export async function getOldestDate(db: Db): Promise<string | null> {
 	const rows = await db
 		.select({ date: sql<string>`MIN(${stationDailyStats.date})` })
 		.from(stationDailyStats);
 	return rows[0]?.date ?? null;
-}
-
-export async function getTodayOverview(
-	db: Db,
-	filter: QueryFilter = {},
-): Promise<TodayOverview> {
-	const today = todayBerlin();
-	const catCond = categoryCondition(filter.category);
-
-	const [lineRows, stationRows, opRows] = await Promise.all([
-		db
-			.select({
-				line: departures.line,
-				total: totalDistinctSql.as("total"),
-				cancelled: cancelledDistinctSql.as("cancelled"),
-				delayed: delayedDistinctSql.as("delayed"),
-			})
-			.from(departures)
-			.where(and(eq(departures.date, today), catCond))
-			.groupBy(departures.line),
-		catCond
-			? db
-					.select({
-						stationId: departures.stationId,
-						cancelled: cancelledDistinctSql.as("cancelled"),
-						delayed: delayedDistinctSql.as("delayed"),
-						total: totalDistinctSql.as("total"),
-					})
-					.from(departures)
-					.where(and(eq(departures.date, today), catCond))
-					.groupBy(departures.stationId)
-			: db
-					.select()
-					.from(stationDailyStats)
-					.where(eq(stationDailyStats.date, today)),
-		catCond
-			? db
-					.select({
-						operator: departures.operator,
-						cancelled: cancelledDistinctSql.as("cancelled"),
-						delayed: delayedDistinctSql.as("delayed"),
-						total: totalDistinctSql.as("total"),
-					})
-					.from(departures)
-					.where(
-						and(
-							eq(departures.date, today),
-							isNotNull(departures.operator),
-							catCond,
-						),
-					)
-					.groupBy(departures.operator)
-			: db
-					.select()
-					.from(operatorDailyStats)
-					.where(eq(operatorDailyStats.date, today)),
-	]);
-
-	let total = 0,
-		cancelled = 0,
-		delayed = 0;
-	let worstLineCancelled: TodayWorst | null = null;
-	let worstLineDelayed: TodayWorst | null = null;
-	for (const r of lineRows) {
-		total += r.total;
-		cancelled += r.cancelled;
-		delayed += r.delayed;
-		if (r.cancelled > (worstLineCancelled?.count ?? 0))
-			worstLineCancelled = { name: r.line, count: r.cancelled };
-		if (r.delayed > (worstLineDelayed?.count ?? 0))
-			worstLineDelayed = { name: r.line, count: r.delayed };
-	}
-
-	let worstStationCancelled: TodayWorst | null = null;
-	let worstStationDelayed: TodayWorst | null = null;
-	for (const r of stationRows) {
-		const name =
-			STATIONS.find((s) => s.id === r.stationId)?.name ?? r.stationId;
-		if (r.cancelled > (worstStationCancelled?.count ?? 0))
-			worstStationCancelled = { name, count: r.cancelled };
-		if (r.delayed > (worstStationDelayed?.count ?? 0))
-			worstStationDelayed = { name, count: r.delayed };
-	}
-
-	let worstOperatorCancelled: TodayWorst | null = null;
-	let worstOperatorDelayed: TodayWorst | null = null;
-	for (const r of opRows) {
-		const opName = r.operator ?? "";
-		if (r.cancelled > (worstOperatorCancelled?.count ?? 0))
-			worstOperatorCancelled = { name: opName, count: r.cancelled };
-		if (r.delayed > (worstOperatorDelayed?.count ?? 0))
-			worstOperatorDelayed = { name: opName, count: r.delayed };
-	}
-
-	return {
-		total,
-		cancelled,
-		delayed,
-		worstLineCancelled,
-		worstLineDelayed,
-		worstStationCancelled,
-		worstStationDelayed,
-		worstOperatorCancelled,
-		worstOperatorDelayed,
-	};
 }
