@@ -118,10 +118,10 @@ const [
 						<div class="text-sm mt-1"><span class="text-danger font-semibold">{worstLineCancelled.count.toLocaleString(lang)}x</span> <span class="text-muted">{t(lang, "home.line")}</span> <span class="font-semibold">{worstLineCancelled.name}</span></div>
 					)}
 					{worstStationCancelled && worstStationCancelled.count > 0 && (
-						<div class="text-sm mt-1 truncate"><span class="text-danger font-semibold">{worstStationCancelled.count.toLocaleString(lang)}x</span> <span class="text-muted">{t(lang, "home.station")}</span> <span class="font-semibold">{worstStationCancelled.name}</span></div>
+						<div class="text-sm mt-1 truncate" title={worstStationCancelled.name}><span class="text-danger font-semibold">{worstStationCancelled.count.toLocaleString(lang)}x</span> <span class="text-muted">{t(lang, "home.station")}</span> <span class="font-semibold">{worstStationCancelled.name}</span></div>
 					)}
 					{worstOperatorCancelled && worstOperatorCancelled.count > 0 && (
-						<div class="text-sm mt-1 truncate"><span class="text-danger font-semibold">{worstOperatorCancelled.count.toLocaleString(lang)}x</span> <span class="text-muted">{t(lang, "home.operator")}</span> <span class="font-semibold">{worstOperatorCancelled.name}</span></div>
+						<div class="text-sm mt-1 truncate" title={worstOperatorCancelled.name}><span class="text-danger font-semibold">{worstOperatorCancelled.count.toLocaleString(lang)}x</span> <span class="text-muted">{t(lang, "home.operator")}</span> <span class="font-semibold">{worstOperatorCancelled.name}</span></div>
 					)}
 					{!worstLineCancelled?.count && <div class="text-2xl font-bold text-success">0</div>}
 				</div>
@@ -131,10 +131,10 @@ const [
 						<div class="text-sm mt-1"><span class="text-warning font-semibold">{worstLineDelayed.count.toLocaleString(lang)}x</span> <span class="text-muted">{t(lang, "home.line")}</span> <span class="font-semibold">{worstLineDelayed.name}</span></div>
 					)}
 					{worstStationDelayed && worstStationDelayed.count > 0 && (
-						<div class="text-sm mt-1 truncate"><span class="text-warning font-semibold">{worstStationDelayed.count.toLocaleString(lang)}x</span> <span class="text-muted">{t(lang, "home.station")}</span> <span class="font-semibold">{worstStationDelayed.name}</span></div>
+						<div class="text-sm mt-1 truncate" title={worstStationDelayed.name}><span class="text-warning font-semibold">{worstStationDelayed.count.toLocaleString(lang)}x</span> <span class="text-muted">{t(lang, "home.station")}</span> <span class="font-semibold">{worstStationDelayed.name}</span></div>
 					)}
 					{worstOperatorDelayed && worstOperatorDelayed.count > 0 && (
-						<div class="text-sm mt-1 truncate"><span class="text-warning font-semibold">{worstOperatorDelayed.count.toLocaleString(lang)}x</span> <span class="text-muted">{t(lang, "home.operator")}</span> <span class="font-semibold">{worstOperatorDelayed.name}</span></div>
+						<div class="text-sm mt-1 truncate" title={worstOperatorDelayed.name}><span class="text-warning font-semibold">{worstOperatorDelayed.count.toLocaleString(lang)}x</span> <span class="text-muted">{t(lang, "home.operator")}</span> <span class="font-semibold">{worstOperatorDelayed.name}</span></div>
 					)}
 					{!worstLineDelayed?.count && <div class="text-2xl font-bold text-success">0</div>}
 				</div>
@@ -163,10 +163,10 @@ const [
 							<div class="text-sm mt-1"><span class="text-danger font-semibold">{today.worstLineCancelled.count}x</span> <span class="text-muted">{t(lang, "home.line")}</span> <span class="font-semibold">{today.worstLineCancelled.name}</span></div>
 						)}
 						{today.worstStationCancelled && today.worstStationCancelled.count > 0 && (
-							<div class="text-sm mt-1 truncate"><span class="text-danger font-semibold">{today.worstStationCancelled.count}x</span> <span class="text-muted">{t(lang, "home.station")}</span> <span class="font-semibold">{today.worstStationCancelled.name}</span></div>
+							<div class="text-sm mt-1 truncate" title={today.worstStationCancelled.name}><span class="text-danger font-semibold">{today.worstStationCancelled.count}x</span> <span class="text-muted">{t(lang, "home.station")}</span> <span class="font-semibold">{today.worstStationCancelled.name}</span></div>
 						)}
 						{today.worstOperatorCancelled && today.worstOperatorCancelled.count > 0 && (
-							<div class="text-sm mt-1 truncate"><span class="text-danger font-semibold">{today.worstOperatorCancelled.count}x</span> <span class="text-muted">{t(lang, "home.operator")}</span> <span class="font-semibold">{today.worstOperatorCancelled.name}</span></div>
+							<div class="text-sm mt-1 truncate" title={today.worstOperatorCancelled.name}><span class="text-danger font-semibold">{today.worstOperatorCancelled.count}x</span> <span class="text-muted">{t(lang, "home.operator")}</span> <span class="font-semibold">{today.worstOperatorCancelled.name}</span></div>
 						)}
 						{!today.worstLineCancelled?.count && <div class="text-2xl font-bold text-success">0</div>}
 					</div>
@@ -176,10 +176,10 @@ const [
 							<div class="text-sm mt-1"><span class="text-warning font-semibold">{today.worstLineDelayed.count}x</span> <span class="text-muted">{t(lang, "home.line")}</span> <span class="font-semibold">{today.worstLineDelayed.name}</span></div>
 						)}
 						{today.worstStationDelayed && today.worstStationDelayed.count > 0 && (
-							<div class="text-sm mt-1 truncate"><span class="text-warning font-semibold">{today.worstStationDelayed.count}x</span> <span class="text-muted">{t(lang, "home.station")}</span> <span class="font-semibold">{today.worstStationDelayed.name}</span></div>
+							<div class="text-sm mt-1 truncate" title={today.worstStationDelayed.name}><span class="text-warning font-semibold">{today.worstStationDelayed.count}x</span> <span class="text-muted">{t(lang, "home.station")}</span> <span class="font-semibold">{today.worstStationDelayed.name}</span></div>
 						)}
 						{today.worstOperatorDelayed && today.worstOperatorDelayed.count > 0 && (
-							<div class="text-sm mt-1 truncate"><span class="text-warning font-semibold">{today.worstOperatorDelayed.count}x</span> <span class="text-muted">{t(lang, "home.operator")}</span> <span class="font-semibold">{today.worstOperatorDelayed.name}</span></div>
+							<div class="text-sm mt-1 truncate" title={today.worstOperatorDelayed.name}><span class="text-warning font-semibold">{today.worstOperatorDelayed.count}x</span> <span class="text-muted">{t(lang, "home.operator")}</span> <span class="font-semibold">{today.worstOperatorDelayed.name}</span></div>
 						)}
 						{!today.worstLineDelayed?.count && <div class="text-2xl font-bold text-success">0</div>}
 					</div>
