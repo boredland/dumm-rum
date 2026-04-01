@@ -71,7 +71,7 @@ const translations = {
 		"table.date": "Datum",
 		"table.total": "Gesamt",
 		"table.cancelled": "Ausfälle",
-		"table.delayed": "Verspätet",
+		"table.delayed": "Verspätungen",
 		"table.th.total": "Σ",
 		"table.th.cancelled": "❌",
 		"table.th.delayed": "⏳",
