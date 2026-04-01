@@ -100,8 +100,14 @@ const delayedCount = departures.filter(
 		<table class="w-full border-collapse">
 			<thead>
 				<tr class="bg-surface-hover border-b border-border">
-					{[t(lang, "table.time"), t(lang, "table.station"), t(lang, "table.direction"), t(lang, "table.status"), t(lang, "table.delay")].map((h) => (
-						<th class="text-left px-4 py-3 text-[0.7rem] uppercase tracking-wide text-muted font-semibold">{h}</th>
+					{[
+						{ label: t(lang, "table.time") },
+						{ label: t(lang, "table.station"), class: "max-sm:hidden" },
+						{ label: t(lang, "table.direction") },
+						{ label: t(lang, "table.status") },
+						{ label: t(lang, "table.delay") },
+					].map((h) => (
+						<th class:list={["text-left px-4 py-3 text-[0.7rem] uppercase tracking-wide text-muted font-semibold", h.class]}>{h.label}</th>
 					))}
 				</tr>
 			</thead>
@@ -122,7 +128,7 @@ const status = d.cancelled ? "cancelled" : (rawDelay !== null && rawDelay >= DEL
 										{time}
 										{rtTime && rtTime !== time && <span class="text-warning"> &rarr; {rtTime}</span>}
 									</td>
-									<td class="px-4 py-2.5 text-sm truncate max-w-[200px]" title={d.stop ?? ""}>{d.stop}</td>
+									<td class="px-4 py-2.5 text-sm truncate max-w-[200px] max-sm:hidden" title={d.stop ?? ""}>{d.stop}</td>
 									<td class="px-4 py-2.5 text-sm truncate max-w-[200px]" title={d.direction}>{d.direction}</td>
 									<td class="px-4 py-2.5 text-sm">
 										{d.cancelled ? (
