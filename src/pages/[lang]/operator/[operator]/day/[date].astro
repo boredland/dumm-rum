@@ -83,7 +83,7 @@ const delayedCount = departures.filter(
 		<table class="w-full border-collapse">
 			<thead>
 				<tr class="bg-surface-hover border-b border-border">
-					{[t(lang, "table.time"), t(lang, "table.line"), t(lang, "table.direction"), t(lang, "table.status"), t(lang, "table.last_checked")].map((h) => (
+					{[t(lang, "table.time"), t(lang, "table.line"), t(lang, "table.direction"), t(lang, "table.status")].map((h) => (
 						<th class="text-left px-4 py-3 text-[0.7rem] uppercase tracking-wide text-muted font-semibold">{h}</th>
 					))}
 				</tr>
@@ -110,12 +110,11 @@ const status = d.cancelled ? "cancelled" : (rawDelay !== null && rawDelay >= DEL
 									<td class="px-4 py-2.5 text-sm">
 										<StatusBadge lang={lang} status={status} delayMin={delayMin} />
 									</td>
-									<td class="px-4 py-2.5 text-sm text-muted"><time datetime={d.fetchedAt}>{d.fetchedAt.slice(0, 16).replace("T", " ")}</time></td>
 								</tr>
 							);
 						})
 					) : (
-						<tr><td colspan="5" class="text-center text-dimmed py-8">{t(lang, "table.no_departures")}</td></tr>
+						<tr><td colspan="4" class="text-center text-dimmed py-8">{t(lang, "table.no_departures")}</td></tr>
 					)
 				}
 			</tbody>

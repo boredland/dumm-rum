@@ -321,8 +321,6 @@ export async function getDayDepartures(db: Db, station: Station, date: string) {
 			line: departures.line,
 			direction: departures.direction,
 			cancelled: departures.cancelled,
-
-			fetchedAt: departures.fetchedAt,
 		})
 		.from(departures)
 		.where(and(eq(departures.stationId, station.id), eq(departures.date, date)))
@@ -720,7 +718,6 @@ export async function getOperatorDayDepartures(
 			direction: departures.direction,
 			cancelled: sql<number>`max(${departures.cancelled})`.as("cancelled"),
 			stop: departures.stop,
-			fetchedAt: sql<string>`max(${departures.fetchedAt})`.as("fetched_at"),
 		})
 		.from(departures)
 		.where(and(eq(departures.operator, operator), eq(departures.date, date)))
