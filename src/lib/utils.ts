@@ -84,6 +84,10 @@ export function trendColor(arrow: string): string {
 	return "";
 }
 
+export function shortStationName(name: string): string {
+	return name.replace(/^Frankfurt \(Main\)\s*/i, "");
+}
+
 export const PLANNED_FREQUENCY_MIN = 15;
 export const DELAY_THRESHOLD_MIN = 7.5;
 

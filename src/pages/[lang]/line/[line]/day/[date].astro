@@ -12,6 +12,7 @@ import {
 	delayMinutes,
 	fmtDate,
 	pct,
+	shortStationName,
 } from "../../../../../lib/utils";
 
 const lang = langFromParams(Astro.params);
@@ -111,7 +112,6 @@ const delayedCount = departures.filter(
 					departures.length > 0 ? (
 						departures.map((d) => {
 							const time = d.time.slice(0, 5);
-							const rtTime = d.rtTime?.slice(0, 5) ?? null;
 							const rawDelay = d.rtTime && d.rtDate
 								? delayMinutes(d.date, d.time, d.rtDate, d.rtTime)
 								: null;
@@ -121,10 +121,9 @@ const status = d.cancelled ? "cancelled" : (rawDelay !== null && rawDelay >= DEL
 								<tr data-status={status} data-direction={d.direction} data-time={time} class="border-b border-border-dim last:border-b-0 hover:bg-surface-hover">
 									<td class="px-4 py-2.5 text-sm tabular-nums">
 										{time}
-										{rtTime && rtTime !== time && <span class="text-warning"> &rarr; {rtTime}</span>}
 									</td>
-									<td class="px-4 py-2.5 text-sm truncate max-w-[100px]" title={d.stop ?? ""}>{d.stop}</td>
-									<td class="px-4 py-2.5 text-sm truncate max-w-[100px]" title={d.direction}>{d.direction}</td>
+									<td class="px-4 py-2.5 text-sm truncate max-w-[100px]" title={d.stop ?? ""}>{shortStationName(d.stop ?? "")}</td>
+									<td class="px-4 py-2.5 text-sm truncate max-w-[100px]" title={d.direction}>{shortStationName(d.direction)}</td>
 									<td class="px-4 py-2.5 text-sm">
 										<StatusBadge lang={lang} status={status} delayMin={delayMin} />
 									</td>
