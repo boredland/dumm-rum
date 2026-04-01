@@ -105,7 +105,7 @@ const todayStats = days.find((d) => d.date === today);
 		<table class="w-full border-collapse">
 			<thead>
 				<tr class="bg-surface-hover border-b border-border">
-					{[t(lang, "table.date"), t(lang, "table.th.total"), t(lang, "table.th.cancelled"), t(lang, "table.th.delayed"), t(lang, "table.avg_delay"), t(lang, "table.rate")].map((h) => (
+					{[t(lang, "table.date"), t(lang, "table.th.total"), t(lang, "table.th.cancelled"), t(lang, "table.th.delayed"), t(lang, "table.avg_delay"), t(lang, "table.otp")].map((h) => (
 						<th class="text-left px-4 py-3 text-[0.7rem] uppercase tracking-wide text-muted font-semibold">{h}</th>
 					))}
 				</tr>
@@ -115,7 +115,6 @@ const todayStats = days.find((d) => d.date === today);
 					days.length > 0 ? (
 						days.map((d) => {
 							const issues = d.cancelled + d.delayed;
-							const rate = pct(issues, d.total);
 							return (
 								<tr class="border-b border-border-dim last:border-b-0 hover:bg-surface-hover">
 									<td class="px-4 py-2.5 text-sm tabular-nums">
@@ -139,7 +138,7 @@ const todayStats = days.find((d) => d.date === today);
 										)}
 									</td>
 									<td class="px-4 py-2.5 text-sm tabular-nums">{fmtDelay(d.avgDelay)}</td>
-									<td class="px-4 py-2.5 text-sm tabular-nums">{rate}%</td>
+									<td class="px-4 py-2.5 text-sm tabular-nums">{pct(d.total - issues, d.total)}%</td>
 								</tr>
 							);
 						})
