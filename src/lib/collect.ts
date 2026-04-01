@@ -128,7 +128,12 @@ async function collectDepartures(
 					},
 				});
 		} catch (e) {
-			console.error(`Batch insert failed for ${station.slug}:`, e);
+			const cause = e instanceof Error ? e.cause : undefined;
+			console.error(
+				`Batch insert failed for ${station.slug}:`,
+				e,
+				...(cause ? ["\nCause:", cause] : []),
+			);
 		}
 	}
 
