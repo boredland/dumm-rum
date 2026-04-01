@@ -112,7 +112,7 @@ const todayStats = stats.days.find((d) => d.date === today);
 		<table class="w-full border-collapse">
 			<thead>
 				<tr class="bg-surface-hover border-b border-border">
-					{[t(lang, "table.date"), t(lang, "table.total"), t(lang, "table.cancelled"), t(lang, "table.delayed"), t(lang, "table.avg_delay"), t(lang, "table.rate")].map((h) => (
+					{[t(lang, "table.date"), t(lang, "table.th.total"), t(lang, "table.th.cancelled"), t(lang, "table.th.delayed"), t(lang, "table.avg_delay"), t(lang, "table.rate")].map((h) => (
 						<th class="text-left px-4 py-3 text-[0.7rem] uppercase tracking-wide text-muted font-semibold">{h}</th>
 					))}
 				</tr>
