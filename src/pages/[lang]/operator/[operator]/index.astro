@@ -105,7 +105,7 @@ const todayStats = days.find((d) => d.date === today);
 		<table class="w-full border-collapse">
 			<thead>
 				<tr class="bg-surface-hover border-b border-border">
-					{[t(lang, "table.date"), t(lang, "table.th.total"), t(lang, "table.th.cancelled"), t(lang, "table.th.delayed"), t(lang, "table.avg_delay"), t(lang, "table.otp")].map((h) => (
+					{[t(lang, "table.date"), t(lang, "table.th.total"), t(lang, "table.th.cancelled"), t(lang, "table.th.delayed"), t(lang, "table.otp")].map((h) => (
 						<th class="text-left px-2 sm:px-4 py-3 text-[0.7rem] uppercase tracking-wide text-muted font-semibold">{h}</th>
 					))}
 				</tr>
@@ -136,14 +136,14 @@ const todayStats = days.find((d) => d.date === today);
 										) : (
 											<span class="inline-block px-2 py-0.5 rounded-full text-xs font-semibold bg-success/10 text-success">0</span>
 										)}
+										{d.avgDelay !== null && d.avgDelay > 0 && <span class="text-xs text-muted ml-1">{fmtDelay(d.avgDelay)}</span>}
 									</td>
-									<td class="px-2 sm:px-4 py-2.5 text-sm tabular-nums">{fmtDelay(d.avgDelay)}</td>
 									<td class="px-2 sm:px-4 py-2.5 text-sm tabular-nums">{pct(d.total - issues, d.total)}%</td>
 								</tr>
 							);
 						})
 					) : (
-						<tr><td colspan="6" class="text-center text-dimmed py-8">{t(lang, "table.no_data")}</td></tr>
+						<tr><td colspan="5" class="text-center text-dimmed py-8">{t(lang, "table.no_data")}</td></tr>
 					)
 				}
 			</tbody>
