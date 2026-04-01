@@ -1,6 +1,7 @@
 ---
 import { env } from "cloudflare:workers";
 import DepartureFilter from "../../../../components/DepartureFilter.astro";
+import StatusBadge from "../../../../components/StatusBadge.astro";
 import { createDb } from "../../../../db/client";
 import Layout from "../../../../layouts/Layout.astro";
 import { langFromParams, t } from "../../../../lib/i18n";
@@ -118,18 +119,7 @@ const status = d.cancelled ? "cancelled" : (rawDelay !== null && rawDelay >= DEL
 									<td class="px-4 py-2.5 text-sm"><a href={`/${lang}/line/${encodeURIComponent(d.line)}`} class="text-link no-underline hover:underline">{d.line}</a></td>
 									<td class="px-4 py-2.5 text-sm">{d.direction}</td>
 									<td class="px-4 py-2.5 text-sm">
-										{d.cancelled ? (
-											<span class="inline-block px-2 py-0.5 rounded-full text-xs font-semibold bg-danger/15 text-danger">{t(lang, "status.cancelled")}</span>
-										) : status === "delayed" ? (
-											<span class="inline-block px-2 py-0.5 rounded-full text-xs font-semibold bg-warning/15 text-warning">{t(lang, "status.delayed")}</span>
-										) : (
-											<span class="inline-block px-2 py-0.5 rounded-full text-xs font-semibold bg-success/10 text-success">{t(lang, "status.ok")}</span>
-										)}
-										{delayMin !== null && delayMin !== 0 && (
-											<span class={`text-xs ml-1 ${delayMin > 0 ? "text-warning" : "text-success"}`}>
-												{delayMin > 0 ? "+" : ""}{delayMin}m
-											</span>
-										)}
+										<StatusBadge lang={lang} status={status} delayMin={delayMin} />
 									</td>
 									<td class="px-4 py-2.5 text-sm text-muted"><time datetime={d.fetchedAt}>{d.fetchedAt.slice(0, 16).replace("T", " ")}</time></td>
 								</tr>
