@@ -99,9 +99,9 @@ const translations = {
 		"filter.issues": "Ausfälle & Verspätungen",
 		"filter.on_time": "Pünktlich",
 
-		"status.cancelled": "ausgefallen",
-		"status.delayed": "verspätet",
-		"status.ok": "ok",
+		"status.cancelled": "❌",
+		"status.delayed": "⏳",
+		"status.ok": "✅",
 		"status.on_time": "p\u00fcnktlich",
 	},
 	en: {
@@ -201,9 +201,9 @@ const translations = {
 		"filter.issues": "Cancelled & delayed",
 		"filter.on_time": "On time",
 
-		"status.cancelled": "cancelled",
-		"status.delayed": "delayed",
-		"status.ok": "ok",
+		"status.cancelled": "❌",
+		"status.delayed": "⏳",
+		"status.ok": "✅",
 		"status.on_time": "on time",
 	},
 } as const;
