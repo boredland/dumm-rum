@@ -20,7 +20,14 @@ import {
 
 const db = createDb(env.DB);
 const lang = langFromParams(Astro.params);
-const station = findStation(Astro.params.station!);
+const SLUG_REDIRECTS: Record<string, string> = {
+	"hauptbahnhof-suedseite": "hauptbahnhof",
+};
+const slug = Astro.params.station!;
+const redirectSlug = SLUG_REDIRECTS[slug];
+if (redirectSlug)
+	return Astro.redirect(`/${lang}/${redirectSlug}${Astro.url.search}`, 301);
+const station = findStation(slug);
 if (!station) return new Response("Not found", { status: 404 });
 
 const filter = parseFilter(Astro.url);
