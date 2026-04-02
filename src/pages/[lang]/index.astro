@@ -96,25 +96,31 @@ const [
 		const score = onTimeRate(cancelledAll, delayedAll, totalAll);
 		const color = score < 80 ? "text-danger" : score < 90 ? "text-warning" : "text-success";
 
-		type Worst = { name: string; count: number };
+		type Worst = { name: string; count: number; rate: number };
+		function isWorse(count: number, total: number, current: Worst | null): boolean {
+			if (count === 0) return false;
+			const rate = total > 0 ? count / total : 0;
+			if (!current) return true;
+			return rate > current.rate || (rate === current.rate && count > current.count);
+		}
 		let worstLineCancelled: Worst | null = null;
 		let worstLineDelayed: Worst | null = null;
 		for (const l of lines) {
-			if (l.cancelled > (worstLineCancelled?.count ?? 0)) worstLineCancelled = { name: l.line, count: l.cancelled };
-			if (l.delayed > (worstLineDelayed?.count ?? 0)) worstLineDelayed = { name: l.line, count: l.delayed };
+			if (isWorse(l.cancelled, l.total, worstLineCancelled)) worstLineCancelled = { name: l.line, count: l.cancelled, rate: l.total > 0 ? l.cancelled / l.total : 0 };
+			if (isWorse(l.delayed, l.total, worstLineDelayed)) worstLineDelayed = { name: l.line, count: l.delayed, rate: l.total > 0 ? l.delayed / l.total : 0 };
 		}
 		let worstStationCancelled: Worst | null = null;
 		let worstStationDelayed: Worst | null = null;
 		for (const [id, st] of stationStats) {
 			const name = STATIONS.find((s) => s.id === id)?.name ?? id;
-			if (st.cancelled > (worstStationCancelled?.count ?? 0)) worstStationCancelled = { name, count: st.cancelled };
-			if (st.delayed > (worstStationDelayed?.count ?? 0)) worstStationDelayed = { name, count: st.delayed };
+			if (isWorse(st.cancelled, st.total, worstStationCancelled)) worstStationCancelled = { name, count: st.cancelled, rate: st.total > 0 ? st.cancelled / st.total : 0 };
+			if (isWorse(st.delayed, st.total, worstStationDelayed)) worstStationDelayed = { name, count: st.delayed, rate: st.total > 0 ? st.delayed / st.total : 0 };
 		}
 		let worstOperatorCancelled: Worst | null = null;
 		let worstOperatorDelayed: Worst | null = null;
 		for (const op of operators) {
-			if (op.cancelled > (worstOperatorCancelled?.count ?? 0)) worstOperatorCancelled = { name: op.operator, count: op.cancelled };
-			if (op.delayed > (worstOperatorDelayed?.count ?? 0)) worstOperatorDelayed = { name: op.operator, count: op.delayed };
+			if (isWorse(op.cancelled, op.total, worstOperatorCancelled)) worstOperatorCancelled = { name: op.operator, count: op.cancelled, rate: op.total > 0 ? op.cancelled / op.total : 0 };
+			if (isWorse(op.delayed, op.total, worstOperatorDelayed)) worstOperatorDelayed = { name: op.operator, count: op.delayed, rate: op.total > 0 ? op.delayed / op.total : 0 };
 		}
 
 		return (
@@ -130,26 +136,26 @@ const [
 				<div class="bg-surface border border-border rounded-xl p-5">
 					<div class="text-[0.7rem] uppercase tracking-wide text-muted mb-1">{t(lang, "home.most_cancellations")}</div>
 					{worstLineCancelled && worstLineCancelled.count > 0 && (
-						<div class="text-sm mt-1"><span class="text-danger font-semibold">{worstLineCancelled.count.toLocaleString(lang)}x</span> <span class="text-muted">{t(lang, "home.line")}</span> <span class="font-semibold">{worstLineCancelled.name}</span></div>
+						<div class="text-sm mt-1"><span class="text-danger font-semibold">{(worstLineCancelled.rate * 100).toFixed(1)}%</span> <span class="text-muted">{t(lang, "home.line")}</span> <span class="font-semibold">{worstLineCancelled.name}</span></div>
 					)}
 					{worstStationCancelled && worstStationCancelled.count > 0 && (
-						<div class="text-sm mt-1 truncate" title={worstStationCancelled.name}><span class="text-danger font-semibold">{worstStationCancelled.count.toLocaleString(lang)}x</span> <span class="text-muted">{t(lang, "home.station")}</span> <span class="font-semibold">{worstStationCancelled.name}</span></div>
+						<div class="text-sm mt-1 truncate" title={worstStationCancelled.name}><span class="text-danger font-semibold">{(worstStationCancelled.rate * 100).toFixed(1)}%</span> <span class="text-muted">{t(lang, "home.station")}</span> <span class="font-semibold">{worstStationCancelled.name}</span></div>
 					)}
 					{worstOperatorCancelled && worstOperatorCancelled.count > 0 && (
-						<div class="text-sm mt-1 truncate" title={worstOperatorCancelled.name}><span class="text-danger font-semibold">{worstOperatorCancelled.count.toLocaleString(lang)}x</span> <span class="text-muted">{t(lang, "home.operator")}</span> <span class="font-semibold">{worstOperatorCancelled.name}</span></div>
+						<div class="text-sm mt-1 truncate" title={worstOperatorCancelled.name}><span class="text-danger font-semibold">{(worstOperatorCancelled.rate * 100).toFixed(1)}%</span> <span class="text-muted">{t(lang, "home.operator")}</span> <span class="font-semibold">{worstOperatorCancelled.name}</span></div>
 					)}
 					{!worstLineCancelled?.count && <div class="text-2xl font-bold text-success">0</div>}
 				</div>
 				<div class="bg-surface border border-border rounded-xl p-5">
 					<div class="text-[0.7rem] uppercase tracking-wide text-muted mb-1">{t(lang, "home.most_delays")}</div>
 					{worstLineDelayed && worstLineDelayed.count > 0 && (
-						<div class="text-sm mt-1"><span class="text-warning font-semibold">{worstLineDelayed.count.toLocaleString(lang)}x</span> <span class="text-muted">{t(lang, "home.line")}</span> <span class="font-semibold">{worstLineDelayed.name}</span></div>
+						<div class="text-sm mt-1"><span class="text-warning font-semibold">{(worstLineDelayed.rate * 100).toFixed(1)}%</span> <span class="text-muted">{t(lang, "home.line")}</span> <span class="font-semibold">{worstLineDelayed.name}</span></div>
 					)}
 					{worstStationDelayed && worstStationDelayed.count > 0 && (
-						<div class="text-sm mt-1 truncate" title={worstStationDelayed.name}><span class="text-warning font-semibold">{worstStationDelayed.count.toLocaleString(lang)}x</span> <span class="text-muted">{t(lang, "home.station")}</span> <span class="font-semibold">{worstStationDelayed.name}</span></div>
+						<div class="text-sm mt-1 truncate" title={worstStationDelayed.name}><span class="text-warning font-semibold">{(worstStationDelayed.rate * 100).toFixed(1)}%</span> <span class="text-muted">{t(lang, "home.station")}</span> <span class="font-semibold">{worstStationDelayed.name}</span></div>
 					)}
 					{worstOperatorDelayed && worstOperatorDelayed.count > 0 && (
-						<div class="text-sm mt-1 truncate" title={worstOperatorDelayed.name}><span class="text-warning font-semibold">{worstOperatorDelayed.count.toLocaleString(lang)}x</span> <span class="text-muted">{t(lang, "home.operator")}</span> <span class="font-semibold">{worstOperatorDelayed.name}</span></div>
+						<div class="text-sm mt-1 truncate" title={worstOperatorDelayed.name}><span class="text-warning font-semibold">{(worstOperatorDelayed.rate * 100).toFixed(1)}%</span> <span class="text-muted">{t(lang, "home.operator")}</span> <span class="font-semibold">{worstOperatorDelayed.name}</span></div>
 					)}
 					{!worstLineDelayed?.count && <div class="text-2xl font-bold text-success">0</div>}
 				</div>
