@@ -85,7 +85,9 @@ export function trendColor(arrow: string): string {
 }
 
 export function shortStationName(name: string): string {
-	return name.replace(/^Frankfurt \(Main\)\s*/i, "FFM ");
+	return name
+		.replace(/^Frankfurt \(Main\)\s*/i, "FFM ")
+		.replace(/Hauptbahnhof/g, "Hbf");
 }
 
 export const PLANNED_FREQUENCY_MIN = 15;
