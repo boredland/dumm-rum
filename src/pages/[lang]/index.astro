@@ -61,13 +61,16 @@ const [
 		</p>
 		{oldestDate && (
 			<p class="text-muted text-xs mt-1">
-				hier für dich yannick 😘: tracking since {new Date(oldestDate).toLocaleDateString(lang, { year: "numeric", month: "long", day: "numeric" })}
+				{t(lang, "stat.since")} {new Date(oldestDate).toLocaleDateString(lang, { year: "numeric", month: "long", day: "numeric" })}
 			</p>
 		)}
 		{haiku && (
-			<blockquote class="mt-3 pl-4 border-l-[3px] border-border italic text-haiku whitespace-pre-line">
-				{haiku}
-			</blockquote>
+			<div class="mt-3">
+				<h2 class="text-xs font-medium text-muted uppercase tracking-wide mb-1">{t(lang, "haiku.heading")}</h2>
+				<blockquote class="pl-4 border-l-[3px] border-border italic text-haiku whitespace-pre-line">
+					{haiku}
+				</blockquote>
+			</div>
 		)}
 	</header>
 

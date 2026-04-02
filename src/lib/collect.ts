@@ -119,10 +119,13 @@ async function collectDepartures(
 						reachable: sql`CASE WHEN ${excluded(departures.cancelled)} THEN 0 ELSE ${excluded(departures.reachable)} END`,
 						notified: sql`CASE WHEN ${departures.notified} = 1 AND (
 							${excluded(departures.cancelled)} != ${departures.cancelled}
-							OR ABS(
-								COALESCE((strftime('%s', ${coalesce(excluded(departures.rtDate), sql`''`)} || ' ' || ${coalesce(excluded(departures.rtTime), sql`''`)}) - strftime('%s', ${departures.date} || ' ' || ${departures.time})) / 60.0, 0)
-								- COALESCE((strftime('%s', ${coalesce(departures.rtDate, sql`''`)} || ' ' || ${coalesce(departures.rtTime, sql`''`)}) - strftime('%s', ${departures.date} || ' ' || ${departures.time})) / 60.0, 0)
-							) >= 5
+							OR (
+								${excluded(departures.rtTime)} IS NOT NULL AND ${excluded(departures.rtDate)} IS NOT NULL
+								AND ABS(
+									(strftime('%s', ${excluded(departures.rtDate)} || ' ' || ${excluded(departures.rtTime)}) - strftime('%s', ${departures.date} || ' ' || ${departures.time})) / 60.0
+									- COALESCE((strftime('%s', ${departures.rtDate} || ' ' || ${departures.rtTime}) - strftime('%s', ${departures.date} || ' ' || ${departures.time})) / 60.0, 0)
+								) >= 5
+							)
 						) THEN 0 ELSE ${departures.notified} END`,
 						fetchedAt: sql`CASE WHEN
 							${coalesce(excluded(departures.rtDate), sql`''`)} != ${coalesce(departures.rtDate, sql`''`)}

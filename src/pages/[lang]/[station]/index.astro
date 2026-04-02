@@ -71,9 +71,12 @@ const todayStats = stats.days.find((d) => d.date === today);
 		</p>
 		{
 			stats.haiku && (
-				<blockquote class="mt-3 pl-4 border-l-[3px] border-border italic text-haiku whitespace-pre-line">
-					{stats.haiku}
-				</blockquote>
+				<div class="mt-3">
+					<h2 class="text-xs font-medium text-muted uppercase tracking-wide mb-1">{t(lang, "haiku.heading")}</h2>
+					<blockquote class="pl-4 border-l-[3px] border-border italic text-haiku whitespace-pre-line">
+						{stats.haiku}
+					</blockquote>
+				</div>
 			)
 		}
 	</header>
