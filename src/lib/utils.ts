@@ -85,7 +85,7 @@ export function trendColor(arrow: string): string {
 }
 
 export function shortStationName(name: string): string {
-	return name.replace(/^Frankfurt \(Main\)\s*/i, "");
+	return name.replace(/^Frankfurt \(Main\)\s*/i, "FFM ");
 }
 
 export const PLANNED_FREQUENCY_MIN = 15;

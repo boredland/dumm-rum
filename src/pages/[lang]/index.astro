@@ -20,6 +20,7 @@ import {
 	onTimeRate,
 	pct,
 	scoreBorderColor,
+	shortStationName,
 	todayBerlin,
 	trendArrow,
 	trendColor,
@@ -112,7 +113,7 @@ const [
 		let worstStationCancelled: Worst | null = null;
 		let worstStationDelayed: Worst | null = null;
 		for (const [id, st] of stationStats) {
-			const name = STATIONS.find((s) => s.id === id)?.name ?? id;
+			const name = shortStationName(STATIONS.find((s) => s.id === id)?.name ?? id);
 			if (isWorse(st.cancelled, st.total, worstStationCancelled)) worstStationCancelled = { name, count: st.cancelled, rate: st.total > 0 ? st.cancelled / st.total : 0 };
 			if (isWorse(st.delayed, st.total, worstStationDelayed)) worstStationDelayed = { name, count: st.delayed, rate: st.total > 0 ? st.delayed / st.total : 0 };
 		}
@@ -176,7 +177,7 @@ const [
 		}
 		let wsc: Worst | null = null, wsd: Worst | null = null;
 		for (const [id, st] of stationStats) {
-			const name = STATIONS.find((s) => s.id === id)?.name ?? id;
+			const name = shortStationName(STATIONS.find((s) => s.id === id)?.name ?? id);
 			if (st.todayCancelled > (wsc?.count ?? 0)) wsc = { name, count: st.todayCancelled };
 			if (st.todayDelayed > (wsd?.count ?? 0)) wsd = { name, count: st.todayDelayed };
 		}
@@ -304,7 +305,7 @@ const [
 				return (
 					<a
 						href={`/${lang}/${s.slug}${Astro.url.search}`}
-						data-search={s.name.toLowerCase()}
+						data-search={shortStationName(s.name).toLowerCase()}
 						data-categories={(st?.categories ?? []).join(",")}
 						class:list={[
 							"bg-surface border rounded-xl p-5 no-underline hover:bg-surface-hover transition-colors",
@@ -315,7 +316,7 @@ const [
 							{categoryIcons(st?.categories ?? [])}
 						</div>
 						<div class="text-lg font-bold text-emphasis">
-							{s.name}
+							{shortStationName(s.name)}
 						</div>
 						{st && st.total > 0 && (
 							<>

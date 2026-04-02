@@ -14,6 +14,7 @@ import {
 	fmtTimestamp,
 	onTimeRate,
 	pct,
+	shortStationName,
 	todayBerlin,
 } from "../../../lib/utils";
 
@@ -35,7 +36,7 @@ const score = onTimeRate(totalCancelled, totalDelayed, totalDep);
 const todayStats = stats.days.find((d) => d.date === today);
 ---
 
-<Layout title={station.name} lang={lang}>
+<Layout title={shortStationName(station.name)} lang={lang}>
 	<a
 		href={`/${lang}`}
 		class="inline-flex items-center gap-1 text-muted text-sm mb-6 hover:text-link no-underline"
@@ -46,7 +47,7 @@ const todayStats = stats.days.find((d) => d.date === today);
 	<header class="mb-6">
 		<h1 class="text-2xl font-bold text-emphasis flex items-center gap-2">
 			{categoryIcons(categories)}
-			{station.name}
+			{shortStationName(station.name)}
 		</h1>
 		<p class="text-muted text-sm mt-1">
 			{totalDep > 0 && <>{`${t(lang, "stat.reliability")}: ${score}% \u2014 `}</>}

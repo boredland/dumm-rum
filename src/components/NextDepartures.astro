@@ -5,6 +5,7 @@ import type { Lang } from "../lib/i18n";
 import { t } from "../lib/i18n";
 import { getNextDepartures } from "../lib/queries";
 import { findStation } from "../lib/stations";
+import { shortStationName } from "../lib/utils";
 
 interface Props {
 	stationSlug: string;
@@ -32,7 +33,7 @@ const nextDeps = await getNextDepartures(db, station);
 					return (
 						<div class="bg-surface border border-border rounded-xl p-5">
 							<div class="text-[0.7rem] uppercase tracking-wide text-muted mb-1">
-								{d.direction}
+								{shortStationName(d.direction)}
 							</div>
 							<div class="text-2xl font-bold tabular-nums">
 								{time}

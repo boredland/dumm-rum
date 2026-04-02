@@ -94,7 +94,7 @@ const delayedCount = departures.filter(
 		<div data-direction-filter class="flex flex-wrap gap-2 mb-3">
 			<button data-dir="" class="px-3 py-1 rounded-full text-xs font-medium cursor-pointer transition-colors select-none bg-surface-hover text-emphasis">{lang === "de" ? "Alle Richtungen" : "All directions"}</button>
 			{destinations.map((dir) => (
-				<button data-dir={dir} class="px-3 py-1 rounded-full text-xs font-medium cursor-pointer transition-colors select-none text-muted">{dir}</button>
+				<button data-dir={dir} class="px-3 py-1 rounded-full text-xs font-medium cursor-pointer transition-colors select-none text-muted">{shortStationName(dir)}</button>
 			))}
 		</div>
 	)}
