@@ -55,12 +55,16 @@ async function collectDepartures(
 		return 0;
 	}
 
+	const stationExcludes = station.excludeCategories
+		? new Set(station.excludeCategories)
+		: null;
 	const deps = (data.Departure ?? []).filter(
 		(d: Departure) =>
 			d.ProductAtStop?.line &&
 			d.ProductAtStop?.num &&
 			!EXCLUDE_CATEGORIES.has(d.ProductAtStop?.catOut ?? "") &&
-			!/N$/.test(d.ProductAtStop!.line!),
+			!stationExcludes?.has(d.ProductAtStop?.catOut ?? "") &&
+			!/N$/.test(d.ProductAtStop?.line ?? ""),
 	);
 	if (deps.length === 0) return 0;
 

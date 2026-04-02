@@ -122,7 +122,7 @@ export async function getStats(
 
 export const avgDelaySql = sql<
 	number | null
->`AVG(CASE WHEN ${departures.cancelled} = 1 THEN ${PLANNED_FREQUENCY_MIN} WHEN ${departures.rtTime} IS NOT NULL THEN (strftime('%s', ${departures.rtDate} || ' ' || ${departures.rtTime}) - strftime('%s', ${departures.date} || ' ' || ${departures.time})) / 60.0 END)`;
+>`AVG(CASE WHEN ${departures.cancelled} = 1 THEN ${PLANNED_FREQUENCY_MIN} WHEN ${departures.rtTime} IS NOT NULL THEN MIN((strftime('%s', ${departures.rtDate} || ' ' || ${departures.rtTime}) - strftime('%s', ${departures.date} || ' ' || ${departures.time})) / 60.0, ${PLANNED_FREQUENCY_MIN}) END)`;
 
 export const delayedSql = sql<number>`SUM(CASE WHEN ${departures.cancelled} = 0 AND ${departures.rtTime} IS NOT NULL AND (strftime('%s', ${departures.rtDate} || ' ' || ${departures.rtTime}) - strftime('%s', ${departures.date} || ' ' || ${departures.time})) / 60.0 >= ${DELAY_THRESHOLD_MIN} THEN 1 ELSE 0 END)`;
 
