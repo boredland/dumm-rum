@@ -80,14 +80,11 @@ async function collectDepartures(
 			rtTime: dep.rtTime ?? null,
 			line: p.line!,
 			direction: dep.direction ?? "",
-			journeyStatus: dep.JourneyStatus ?? "P",
 			cancelled: dep.cancelled ? 1 : 0,
 			operator: p.operator ?? null,
 			category: p.catOut ?? null,
 			journeyNum: p.num!,
-			reachable: dep.reachable ? 1 : 0,
 			stop: dep.stop ?? null,
-			stopExtId: dep.stopExtId ?? null,
 			notified: 0,
 			fetchedAt: now,
 		};
@@ -115,12 +112,10 @@ async function collectDepartures(
 					set: {
 						rtDate: coalesce(excluded(departures.rtDate), departures.rtDate),
 						rtTime: coalesce(excluded(departures.rtTime), departures.rtTime),
-						journeyStatus: excluded(departures.journeyStatus),
 						cancelled: max(
 							departures.cancelled,
 							excluded(departures.cancelled),
 						),
-						reachable: sql`CASE WHEN ${excluded(departures.cancelled)} THEN 0 ELSE ${excluded(departures.reachable)} END`,
 						notified: sql`CASE WHEN ${departures.notified} = 1 AND (
 							MAX(${excluded(departures.cancelled)}, ${departures.cancelled}) != ${departures.cancelled}
 							OR (
