@@ -626,7 +626,31 @@ export async function getOperatorDayDepartures(
 		.orderBy(sql`time`, departures.line, departures.direction);
 }
 
-export async function getOldestDate(db: Db): Promise<string | null> {
+export async function getOldestDate(
+	db: Db,
+	entity?: { station?: string; line?: string; operator?: string },
+): Promise<string | null> {
+	if (entity?.station) {
+		const rows = await db
+			.select({ date: sql<string>`MIN(${stationDailyStats.date})` })
+			.from(stationDailyStats)
+			.where(eq(stationDailyStats.stationId, entity.station));
+		return rows[0]?.date ?? null;
+	}
+	if (entity?.line) {
+		const rows = await db
+			.select({ date: sql<string>`MIN(${departures.date})` })
+			.from(departures)
+			.where(eq(departures.line, entity.line));
+		return rows[0]?.date ?? null;
+	}
+	if (entity?.operator) {
+		const rows = await db
+			.select({ date: sql<string>`MIN(${departures.date})` })
+			.from(departures)
+			.where(eq(departures.operator, entity.operator));
+		return rows[0]?.date ?? null;
+	}
 	const rows = await db
 		.select({ date: sql<string>`MIN(${stationDailyStats.date})` })
 		.from(stationDailyStats);

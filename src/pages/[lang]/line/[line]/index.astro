@@ -20,7 +20,7 @@ const { coreOnly, days: daysFilter } = filter;
 
 const [{ days, operators, categories }, oldestDate] = await Promise.all([
 	getLineStats(db, line, filter),
-	getOldestDate(db),
+	getOldestDate(db, { line }),
 ]);
 
 const totalDepartures = days.reduce((s, d) => s + d.total, 0);

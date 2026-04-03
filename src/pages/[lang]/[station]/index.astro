@@ -32,7 +32,7 @@ const filter = parseFilter(Astro.url);
 const { coreOnly, days: daysFilter } = filter;
 const [stats, oldestDate] = await Promise.all([
 	getStats(db, station, filter),
-	getOldestDate(db),
+	getOldestDate(db, { station: station.id }),
 ]);
 const categories = stats.categories;
 
