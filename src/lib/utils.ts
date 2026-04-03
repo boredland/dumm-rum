@@ -82,7 +82,3 @@ export function scoreBorderColor(otp: number): string {
 			? "border-warning"
 			: "border-success";
 }
-
-export function scoreBgColor(otp: number): string {
-	return otp < 80 ? "bg-danger" : otp < 90 ? "bg-warning" : "bg-success";
-}

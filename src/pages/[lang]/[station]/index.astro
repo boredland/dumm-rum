@@ -2,7 +2,6 @@
 import { env } from "cloudflare:workers";
 import HoursToggle from "../../../components/HoursToggle.astro";
 import NextDepartures from "../../../components/NextDepartures.astro";
-import WeekdayChart from "../../../components/WeekdayChart.astro";
 import { createDb } from "../../../db/client";
 import Layout from "../../../layouts/Layout.astro";
 import { langFromParams, t } from "../../../lib/i18n";
@@ -15,7 +14,6 @@ import {
 	onTimeRate,
 	pct,
 	shortStationName,
-	todayBerlin,
 } from "../../../lib/utils";
 
 const db = createDb(env.DB);
@@ -35,12 +33,10 @@ const { coreOnly, days: daysFilter } = filter;
 const stats = await getStats(db, station, filter);
 const categories = stats.categories;
 
-const today = todayBerlin();
 const totalCancelled = stats.days.reduce((s, d) => s + d.cancelled, 0);
 const totalDelayed = stats.days.reduce((s, d) => s + d.delayed, 0);
 const totalDep = stats.days.reduce((s, d) => s + d.total, 0);
 const score = onTimeRate(totalCancelled, totalDelayed, totalDep);
-const todayStats = stats.days.find((d) => d.date === today);
 ---
 
 <Layout title={shortStationName(station.name)} lang={lang}>
@@ -57,7 +53,6 @@ const todayStats = stats.days.find((d) => d.date === today);
 			{shortStationName(station.name)}
 		</h1>
 		<p class="text-muted text-sm mt-1">
-			{totalDep > 0 && <>{`${t(lang, "stat.reliability")}: ${score}% \u2014 `}</>}
 			{stats.days.length > 0 && (
 				<>
 					{`${t(lang, "stat.since")} `}<time datetime={stats.days[stats.days.length - 1].date}>{fmtDate(stats.days[stats.days.length - 1].date, lang)}</time>
@@ -84,39 +79,28 @@ const todayStats = stats.days.find((d) => d.date === today);
 	<HoursToggle basePath={`/${lang}/${station.slug}`} coreOnly={coreOnly} daysFilter={daysFilter} lang={lang} />
 
 	<div class="grid grid-cols-3 gap-4 mb-8 max-sm:grid-cols-1">
-				<div class="bg-surface border border-border rounded-xl p-5">
-					<div class="text-[0.7rem] uppercase tracking-wide text-muted mb-1">{t(lang, "stat.cancelled")} {t(lang, "stat.avg_per_day").toLowerCase()}</div>
-					<div class:list={["text-4xl font-bold tabular-nums", totalCancelled > 0 ? "text-danger" : "text-success"]}>
-						{stats.days.length > 0 ? (totalCancelled / stats.days.length).toFixed(1) : "0"}
-					</div>
-					<div class="text-sm text-muted mt-1">{pct(totalCancelled, totalDep)}% {t(lang, "stat.rate")}</div>
-				</div>
-				<div class="bg-surface border border-border rounded-xl p-5">
-					<div class="text-[0.7rem] uppercase tracking-wide text-muted mb-1">{t(lang, "table.delayed")} {t(lang, "stat.avg_per_day").toLowerCase()}</div>
-					<div class:list={["text-4xl font-bold tabular-nums", totalDelayed > 0 ? "text-warning" : "text-success"]}>
-						{stats.days.length > 0 ? (totalDelayed / stats.days.length).toFixed(1) : "0"}
-					</div>
-					<div class="text-sm text-muted mt-1">{pct(totalDelayed, totalDep)}% {t(lang, "stat.rate")}</div>
-				</div>
-				<div class="bg-surface border border-border rounded-xl p-5">
-					<div class="text-[0.7rem] uppercase tracking-wide text-muted mb-1">{t(lang, "stat.today")}</div>
-					{todayStats ? (
-						<div class="text-sm tabular-nums mt-1">
-							<span class:list={[todayStats.cancelled > 0 ? "text-danger" : "text-success"]}>{todayStats.cancelled} {t(lang, "stat.cancelled")}</span>
-							{" / "}
-							<span class:list={[todayStats.delayed > 0 ? "text-warning" : "text-success"]}>{todayStats.delayed} {t(lang, "table.delayed").toLowerCase()}</span>
-							<div class="text-muted mt-1">{t(lang, "stat.of_departures", { total: todayStats.total })}</div>
-						</div>
-					) : (
-						<div class="text-2xl font-bold tabular-nums text-muted">&mdash;</div>
-					)}
-				</div>
+		<div class="bg-surface border border-border rounded-xl p-5">
+			<div class="text-[0.7rem] uppercase tracking-wide text-muted mb-1">{t(lang, "stat.departures")}</div>
+			<div class="text-4xl font-bold tabular-nums">{totalDep.toLocaleString(lang)}</div>
+			<div class="text-sm text-muted mt-1">{t(lang, "stat.reliability")}: {score}%</div>
 		</div>
+		<div class="bg-surface border border-border rounded-xl p-5">
+			<div class="text-[0.7rem] uppercase tracking-wide text-muted mb-1">{t(lang, "stat.cancelled")}</div>
+			<div class:list={["text-4xl font-bold tabular-nums", totalCancelled > 0 ? "text-danger" : "text-success"]}>
+				{totalCancelled}
+			</div>
+			<div class="text-sm text-muted mt-1">{pct(totalCancelled, totalDep)}% {t(lang, "stat.rate")}</div>
+		</div>
+		<div class="bg-surface border border-border rounded-xl p-5">
+			<div class="text-[0.7rem] uppercase tracking-wide text-muted mb-1">{t(lang, "table.delayed")}</div>
+			<div class:list={["text-4xl font-bold tabular-nums", totalDelayed > 0 ? "text-warning" : "text-success"]}>
+				{totalDelayed}
+			</div>
+			<div class="text-sm text-muted mt-1">{pct(totalDelayed, totalDep)}% {t(lang, "stat.rate")}</div>
+		</div>
+	</div>
 
 	<NextDepartures server:defer stationSlug={station.slug} lang={lang} />
-
-	<p class="text-xs uppercase tracking-wide text-muted font-semibold mb-3">{t(lang, "section.weekday_pattern")}</p>
-	<WeekdayChart days={stats.days} lang={lang} />
 
 	<p class="text-xs uppercase tracking-wide text-muted font-semibold mb-3">{t(lang, "section.daily_breakdown")}</p>
 	<div class="bg-surface border border-border rounded-xl overflow-hidden">
