@@ -160,7 +160,7 @@ const [stationStats, operators, lines, oldestDate, haiku] = await Promise.all([
 		<kbd class="absolute right-3 top-1/2 -translate-y-1/2 text-[0.6rem] text-dimmed bg-surface-hover border border-border-dim rounded px-1.5 py-0.5 pointer-events-none">Ctrl K</kbd>
 	</div>
 
-	<details class="group mb-8">
+	<details id="sec-lines" class="group mb-8">
 		<summary class="text-xs uppercase tracking-wide text-muted font-semibold mb-3 cursor-pointer select-none">
 			{t(lang, "home.lines")}
 		</summary>
@@ -199,7 +199,7 @@ const [stationStats, operators, lines, oldestDate, haiku] = await Promise.all([
 		</div>
 	</details>
 
-	<details class="group mb-8">
+	<details id="sec-stations" class="group mb-8">
 		<summary class="text-xs uppercase tracking-wide text-muted font-semibold mb-3 cursor-pointer select-none">
 			{t(lang, "home.stations")}
 		</summary>
@@ -248,7 +248,7 @@ const [stationStats, operators, lines, oldestDate, haiku] = await Promise.all([
 	</div>
 	</details>
 
-	<details class="group mb-8">
+	<details id="sec-operators" class="group mb-8">
 		<summary class="text-xs uppercase tracking-wide text-muted font-semibold mb-3 cursor-pointer select-none">
 			{t(lang, "home.operators")}
 		</summary>
@@ -294,5 +294,22 @@ const [stationStats, operators, lines, oldestDate, haiku] = await Promise.all([
 		</div>
 	</details>
 
-
+	<script>
+		const ids = ["sec-lines", "sec-stations", "sec-operators"];
+		const key = "dummrum:open-sections";
+		const saved = new Set(JSON.parse(localStorage.getItem(key) ?? "[]"));
+		for (const id of ids) {
+			const el = document.getElementById(id) as HTMLDetailsElement | null;
+			if (!el) continue;
+			if (saved.has(id)) el.open = true;
+			el.addEventListener("toggle", () => {
+				const open: string[] = [];
+				for (const id of ids) {
+					const d = document.getElementById(id) as HTMLDetailsElement | null;
+					if (d?.open) open.push(id);
+				}
+				localStorage.setItem(key, JSON.stringify(open));
+			});
+		}
+	</script>
 </Layout>
