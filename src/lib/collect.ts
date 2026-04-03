@@ -69,36 +69,39 @@ async function collectDepartures(
 	if (deps.length === 0) return 0;
 
 	const now = new Date().toISOString();
-	const BATCH_SIZE = 5;
 
-	for (let i = 0; i < deps.length; i += BATCH_SIZE) {
-		const batch = deps.slice(i, i + BATCH_SIZE);
+	const toRow = (dep: Departure) => {
+		const p = dep.ProductAtStop!;
+		return {
+			stationId: station.id,
+			date: dep.date,
+			time: dep.time,
+			rtDate: dep.rtDate ?? null,
+			rtTime: dep.rtTime ?? null,
+			line: p.line!,
+			direction: dep.direction ?? "",
+			journeyStatus: dep.JourneyStatus ?? "P",
+			cancelled: dep.cancelled ? 1 : 0,
+			operator: p.operator ?? null,
+			category: p.catOut ?? null,
+			journeyNum: p.num!,
+			reachable: dep.reachable ? 1 : 0,
+			stop: dep.stop ?? null,
+			stopExtId: dep.stopExtId ?? null,
+			notified: 0,
+			fetchedAt: now,
+		};
+	};
+	const D1_MAX_PARAMS = 100;
+	const colCount = Object.keys(toRow(deps[0])).length;
+	const batchSize = Math.max(1, Math.floor(D1_MAX_PARAMS / colCount));
+
+	for (let i = 0; i < deps.length; i += batchSize) {
+		const batch = deps.slice(i, i + batchSize);
 		try {
 			await db
 				.insert(departures)
-				.values(
-					batch.map((dep: Departure) => {
-						const p = dep.ProductAtStop!;
-						return {
-							stationId: station.id,
-							date: dep.date,
-							time: dep.time,
-							rtDate: dep.rtDate ?? null,
-							rtTime: dep.rtTime ?? null,
-							line: p.line!,
-							direction: dep.direction ?? "",
-							journeyStatus: dep.JourneyStatus ?? "P",
-							cancelled: dep.cancelled ? 1 : 0,
-							operator: p.operator ?? null,
-							category: p.catOut ?? null,
-							journeyNum: p.num!,
-							reachable: dep.reachable ? 1 : 0,
-							stop: dep.stop ?? null,
-							stopExtId: dep.stopExtId ?? null,
-							fetchedAt: now,
-						};
-					}),
-				)
+				.values(batch.map(toRow))
 				.onConflictDoUpdate({
 					target: [
 						departures.stationId,
