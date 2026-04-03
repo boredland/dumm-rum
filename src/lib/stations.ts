@@ -42,6 +42,11 @@ export const STATIONS: Station[] = [
 		slug: "bornheim-mitte",
 	},
 	{
+		id: "3001446",
+		name: "Frankfurt (Main) Preungesheim",
+		slug: "preungesheim",
+	},
+	{
 		id: "3001586",
 		name: "Frankfurt (Main) Draisbornstraße",
 		slug: "draisbornstrasse",
