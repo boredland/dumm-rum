@@ -168,6 +168,7 @@ const [
 	})()}
 
 	{(() => {
+		if (daysFilter === "today") return null;
 		let todayTotal = 0, todayCancelled = 0, todayDelayed = 0;
 		for (const l of lines) { todayTotal += l.todayTotal; todayCancelled += l.todayCancelled; todayDelayed += l.todayDelayed; }
 		if (todayTotal === 0) return null;
