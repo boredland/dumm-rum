@@ -68,7 +68,6 @@ function categoryCondition(category?: string) {
 
 export interface Stats {
 	days: DayStats[];
-	avgCancelledPerDay: number;
 	lastChange: string | null;
 	haiku: string | null;
 	categories: string[];
@@ -115,12 +114,8 @@ export async function getStats(
 			),
 	]);
 
-	const totalCancelled = dayRows.reduce((s, d) => s + d.cancelled, 0);
-
 	return {
 		days: dayRows,
-		avgCancelledPerDay:
-			dayRows.length > 0 ? totalCancelled / dayRows.length : 0,
 		lastChange: lastChangeRows[0]?.fetchedAt ?? null,
 		haiku: haikuRows[0]?.haiku ?? null,
 		categories: catRows.map((r) => r.category!),
@@ -182,12 +177,8 @@ async function getStatsFallback(
 			),
 	]);
 
-	const totalCancelled = dayRows.reduce((s, d) => s + d.cancelled, 0);
-
 	return {
 		days: dayRows,
-		avgCancelledPerDay:
-			dayRows.length > 0 ? totalCancelled / dayRows.length : 0,
 		lastChange: lastChangeRows[0]?.fetchedAt ?? null,
 		haiku: haikuRows[0]?.haiku ?? null,
 		categories: catRows.map((r) => r.category!),
@@ -271,16 +262,19 @@ export async function getStationSummaries(
 	}
 
 	return new Map(
-		stations.map((s) => [
-			s.id,
-			{
-				cancelled: statsMap.get(s.id)?.cancelled ?? 0,
-				delayed: statsMap.get(s.id)?.delayed ?? 0,
-				total: statsMap.get(s.id)?.total ?? 0,
-				avgDelay: statsMap.get(s.id)?.avgDelay ?? null,
-				categories: catMap.get(s.id) ?? [],
-			},
-		]),
+		stations.map((s) => {
+			const st = statsMap.get(s.id);
+			return [
+				s.id,
+				{
+					cancelled: st?.cancelled ?? 0,
+					delayed: st?.delayed ?? 0,
+					total: st?.total ?? 0,
+					avgDelay: st?.avgDelay ?? null,
+					categories: catMap.get(s.id) ?? [],
+				},
+			];
+		}),
 	);
 }
 

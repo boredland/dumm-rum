@@ -91,6 +91,7 @@ const translations = {
 			"Über Verspätungen & Ausfälle per Telegram benachrichtigen",
 
 		"filter.all": "Alle",
+		"filter.all_directions": "Alle Richtungen",
 		"filter.issues": "Ausfälle & Verspätungen",
 		"filter.on_time": "Pünktlich",
 
@@ -188,6 +189,7 @@ const translations = {
 			"Get notified about delays & cancellations via Telegram",
 
 		"filter.all": "All",
+		"filter.all_directions": "All directions",
 		"filter.issues": "Cancelled & delayed",
 		"filter.on_time": "On time",
 

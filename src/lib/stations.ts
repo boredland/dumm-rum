@@ -73,6 +73,10 @@ export function findStation(slug: string): Station | undefined {
 	return STATIONS.find((s) => s.slug === slug);
 }
 
+export const SLUG_REDIRECTS: Record<string, string> = {
+	"hauptbahnhof-suedseite": "hauptbahnhof",
+};
+
 export function categoryIcons(categories: string[]): string {
 	const icons: string[] = [];
 	if (categories.some((c) => ["ICE", "IC", "EC"].includes(c))) icons.push("🚄");

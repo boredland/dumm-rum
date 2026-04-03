@@ -2,11 +2,7 @@ import { env } from "cloudflare:workers";
 import type { APIRoute } from "astro";
 import { createDb } from "../../../../db/client";
 import { getStats, parseFilter } from "../../../../lib/queries";
-import { findStation } from "../../../../lib/stations";
-
-const SLUG_REDIRECTS: Record<string, string> = {
-	"hauptbahnhof-suedseite": "hauptbahnhof",
-};
+import { findStation, SLUG_REDIRECTS } from "../../../../lib/stations";
 
 export const GET: APIRoute = async ({ params, url, redirect }) => {
 	const slug = params.station!;

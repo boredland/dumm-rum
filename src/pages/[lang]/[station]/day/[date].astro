@@ -6,7 +6,7 @@ import { createDb } from "../../../../db/client";
 import Layout from "../../../../layouts/Layout.astro";
 import { langFromParams, t } from "../../../../lib/i18n";
 import { getDayDepartures, getHaiku } from "../../../../lib/queries";
-import { findStation } from "../../../../lib/stations";
+import { findStation, SLUG_REDIRECTS } from "../../../../lib/stations";
 import {
 	DELAY_THRESHOLD_MIN,
 	delayMinutes,
@@ -18,9 +18,6 @@ import {
 } from "../../../../lib/utils";
 
 const lang = langFromParams(Astro.params);
-const SLUG_REDIRECTS: Record<string, string> = {
-	"hauptbahnhof-suedseite": "hauptbahnhof",
-};
 const slug = Astro.params.station!;
 const redirectSlug = SLUG_REDIRECTS[slug];
 if (redirectSlug)
