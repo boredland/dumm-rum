@@ -124,7 +124,7 @@ const score = onTimeRate(totalCancelled, totalDelayed, totalDep);
 								<tr class="border-b border-border-dim last:border-b-0 hover:bg-surface-hover">
 									<td class="px-2 sm:px-4 py-2.5 text-sm tabular-nums">
 										<a href={`/${lang}/${station.slug}/day/${d.date}${Astro.url.search}`} class="text-link no-underline hover:underline">
-											<time datetime={d.date}>{fmtDate(d.date, lang)}{d.date === today ? ` (${t(lang, "table.today")})` : ""}</time>
+											<time datetime={d.date}>{fmtDate(d.date, lang)}</time>
 										</a>
 									</td>
 									<td class="px-2 sm:px-4 py-2.5 text-sm tabular-nums">{d.total}</td>
