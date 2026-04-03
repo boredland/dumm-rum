@@ -91,10 +91,10 @@ const [
 
 	{(() => {
 		let totalAll = 0, cancelledAll = 0, delayedAll = 0;
-		for (const [, st] of stationStats) {
-			totalAll += st.total;
-			cancelledAll += st.cancelled;
-			delayedAll += st.delayed;
+		for (const l of lines) {
+			totalAll += l.total;
+			cancelledAll += l.cancelled;
+			delayedAll += l.delayed;
 		}
 		if (totalAll === 0) return null;
 		const score = onTimeRate(cancelledAll, delayedAll, totalAll);
