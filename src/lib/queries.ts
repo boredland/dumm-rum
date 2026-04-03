@@ -10,7 +10,6 @@ import {
 import type { Station } from "./stations";
 import {
 	DELAY_THRESHOLD_MIN,
-	nowBerlin,
 	PLANNED_FREQUENCY_MIN,
 	todayBerlin,
 } from "./utils";
@@ -313,27 +312,6 @@ export async function getHaiku(
 		.limit(1);
 	if (!rows[0]) return null;
 	return (lang === "de" ? rows[0].haikuDe : null) ?? rows[0].haiku;
-}
-
-export async function getNextDepartures(db: Db, station: Station) {
-	return db
-		.select({
-			time: sql<string>`MIN(${departures.time})`.as("time"),
-			rtTime: departures.rtTime,
-			direction: departures.direction,
-			line: departures.line,
-		})
-		.from(departures)
-		.where(
-			and(
-				eq(departures.stationId, station.id),
-				eq(departures.date, todayBerlin()),
-				eq(departures.cancelled, 0),
-				gte(departures.time, nowBerlin().format("HH:mm:ss")),
-			),
-		)
-		.groupBy(departures.direction)
-		.orderBy(sql`time`);
 }
 
 export interface OperatorSummary {
