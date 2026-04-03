@@ -118,7 +118,7 @@ async function collectDepartures(
 						),
 						reachable: sql`CASE WHEN ${excluded(departures.cancelled)} THEN 0 ELSE ${excluded(departures.reachable)} END`,
 						notified: sql`CASE WHEN ${departures.notified} = 1 AND (
-							${excluded(departures.cancelled)} != ${departures.cancelled}
+							MAX(${excluded(departures.cancelled)}, ${departures.cancelled}) != ${departures.cancelled}
 							OR (
 								${excluded(departures.rtTime)} IS NOT NULL AND ${excluded(departures.rtDate)} IS NOT NULL
 								AND ABS(
