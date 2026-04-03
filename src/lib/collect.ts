@@ -69,7 +69,7 @@ async function collectDepartures(
 	if (deps.length === 0) return 0;
 
 	const now = new Date().toISOString();
-	const BATCH_SIZE = 20;
+	const BATCH_SIZE = 5;
 
 	for (let i = 0; i < deps.length; i += BATCH_SIZE) {
 		const batch = deps.slice(i, i + BATCH_SIZE);
