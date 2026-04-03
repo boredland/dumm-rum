@@ -66,24 +66,6 @@ export function onTimeRate(
 	return Math.round(((total - cancelled - delayed) / total) * 100);
 }
 
-export function trendArrow(
-	current: { cancelled: number; delayed: number; total: number },
-	prev: { cancelled: number; delayed: number; total: number },
-): string {
-	if (prev.total === 0 || current.total === 0) return "";
-	const currentIssues = (current.cancelled + current.delayed) / current.total;
-	const prevIssues = (prev.cancelled + prev.delayed) / prev.total;
-	const diff = currentIssues - prevIssues;
-	if (Math.abs(diff) < 0.005) return "";
-	return diff > 0 ? "\u2191" : "\u2193";
-}
-
-export function trendColor(arrow: string): string {
-	if (arrow === "\u2191") return "text-danger";
-	if (arrow === "\u2193") return "text-success";
-	return "";
-}
-
 export function shortStationName(name: string): string {
 	return name
 		.replace(/^Frankfurt \(Main\)\s*/i, "FFM ")

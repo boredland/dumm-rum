@@ -7,12 +7,9 @@ import { langFromParams, t } from "../../lib/i18n";
 import {
 	getHaiku,
 	getLineSummaries,
-	getLineTrends,
 	getOldestDate,
 	getOperatorSummaries,
-	getOperatorTrends,
 	getStationSummaries,
-	getStationTrends,
 	parseFilter,
 } from "../../lib/queries";
 import { categoryIcons, STATIONS } from "../../lib/stations";
@@ -22,30 +19,16 @@ import {
 	scoreBorderColor,
 	shortStationName,
 	todayBerlin,
-	trendArrow,
-	trendColor,
 } from "../../lib/utils";
 
 const db = createDb(env.DB);
 const lang = langFromParams(Astro.params);
 const filter = parseFilter(Astro.url);
 const { coreOnly, days: daysFilter, category } = filter;
-const [
-	stationStats,
-	operators,
-	lines,
-	stationTrends,
-	operatorTrends,
-	lineTrends,
-	oldestDate,
-	haiku,
-] = await Promise.all([
+const [stationStats, operators, lines, oldestDate, haiku] = await Promise.all([
 	getStationSummaries(db, STATIONS, filter),
 	getOperatorSummaries(db, filter),
 	getLineSummaries(db, filter),
-	getStationTrends(db),
-	getOperatorTrends(db),
-	getLineTrends(db),
 	getOldestDate(db),
 	getHaiku(db, todayBerlin(), lang),
 ]);
@@ -188,8 +171,6 @@ const [
 					const scoreB = onTimeRate(b.cancelled, b.delayed, b.total);
 					return scoreA - scoreB || a.line.localeCompare(b.line, undefined, { numeric: true });
 				}).map((l) => {
-					const tr = lineTrends.get(l.line);
-					const arrow = tr ? trendArrow(tr, { cancelled: tr.prevCancelled, delayed: tr.prevDelayed, total: tr.prevTotal }) : "";
 					const borderColor = scoreBorderColor(onTimeRate(l.cancelled, l.delayed, l.total));
 					return (
 						<a
@@ -209,7 +190,6 @@ const [
 							{l.total > 0 && (
 								<div class="text-xs text-muted mt-1">
 									{t(lang, "stat.reliability")}: {onTimeRate(l.cancelled, l.delayed, l.total)}%
-									{arrow && <span class={trendColor(arrow)}> {arrow}</span>}
 								</div>
 							)}
 						</a>
@@ -233,8 +213,6 @@ const [
 				return scoreA - scoreB || a.name.localeCompare(b.name);
 			}).map((s) => {
 				const st = stationStats.get(s.id);
-				const tr = stationTrends.get(s.id);
-				const arrow = tr ? trendArrow(tr, { cancelled: tr.prevCancelled, delayed: tr.prevDelayed, total: tr.prevTotal }) : "";
 				const score = st ? onTimeRate(st.cancelled, st.delayed, st.total) : 100;
 				const borderColor = scoreBorderColor(score);
 				return (
@@ -260,7 +238,6 @@ const [
 								</div>
 								<div class="text-xs text-muted mt-1">
 									{t(lang, "stat.reliability")}: {onTimeRate(st.cancelled, st.delayed, st.total)}%
-									{arrow && <span class={trendColor(arrow)}> {arrow}</span>}
 								</div>
 							</>
 						)}
@@ -282,8 +259,6 @@ const [
 					const scoreB = onTimeRate(b.cancelled, b.delayed, b.total);
 					return scoreA - scoreB || a.operator.localeCompare(b.operator);
 				}).map((op) => {
-					const tr = operatorTrends.get(op.operator);
-					const arrow = tr ? trendArrow(tr, { cancelled: tr.prevCancelled, delayed: tr.prevDelayed, total: tr.prevTotal }) : "";
 					const borderColor = scoreBorderColor(onTimeRate(op.cancelled, op.delayed, op.total));
 					return (
 						<a
@@ -310,7 +285,6 @@ const [
 							{op.total > 0 && (
 								<div class="text-xs text-muted mt-1">
 									{t(lang, "stat.reliability")}: {onTimeRate(op.cancelled, op.delayed, op.total)}%
-									{arrow && <span class={trendColor(arrow)}> {arrow}</span>}
 								</div>
 							)}
 						</a>
