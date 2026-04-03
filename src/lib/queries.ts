@@ -17,7 +17,7 @@ import {
 
 const CORE_HOURS = sql`((${departures.time} >= '06:00:00' AND ${departures.time} < '09:00:00') OR (${departures.time} >= '16:00:00' AND ${departures.time} < '19:00:00'))`;
 
-export type DaysFilter = "" | "today" | "weekdays" | "weekends";
+export type DaysFilter = "" | "all" | "today" | "weekdays" | "weekends";
 
 function daysCondition(dateCol: unknown, filter: DaysFilter = "") {
 	if (filter === "today")
@@ -29,16 +29,22 @@ function daysCondition(dateCol: unknown, filter: DaysFilter = "") {
 	return undefined;
 }
 
-const validDays = new Set<DaysFilter>(["", "today", "weekdays", "weekends"]);
+const validDays = new Set<DaysFilter>([
+	"",
+	"all",
+	"today",
+	"weekdays",
+	"weekends",
+]);
 
 const validCategories = new Set(["U-Bahn", "S", "Tram", "Bus", "RE,RB"]);
 
 export function parseFilter(url: URL): QueryFilter {
-	const days = url.searchParams.get("days") ?? "";
+	const days = url.searchParams.get("days") ?? "today";
 	const cat = url.searchParams.get("cat") ?? "";
 	return {
 		coreOnly: url.searchParams.get("hours") === "core",
-		days: validDays.has(days as DaysFilter) ? (days as DaysFilter) : "",
+		days: validDays.has(days as DaysFilter) ? (days as DaysFilter) : "today",
 		category: validCategories.has(cat) ? cat : "",
 	};
 }

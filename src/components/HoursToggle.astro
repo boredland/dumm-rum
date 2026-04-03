@@ -69,10 +69,10 @@ const categories = [
 
 	<div class="flex gap-2 items-center">
 		<a
-			href={buildHref({ days: "" })}
+			href={buildHref({ days: "all" })}
 			class:list={[
 				pill,
-				!daysFilter
+				daysFilter === "all" || daysFilter === ""
 					? "bg-link/10 text-link"
 					: "bg-link/10 text-link opacity-50",
 			]}
