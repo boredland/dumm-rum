@@ -201,9 +201,6 @@ export interface StationSummary {
 	total: number;
 	avgDelay: number | null;
 	categories: string[];
-	todayCancelled: number;
-	todayDelayed: number;
-	todayTotal: number;
 }
 
 export async function getStationSummaries(
@@ -211,7 +208,6 @@ export async function getStationSummaries(
 	stations: Station[],
 	filter: QueryFilter = {},
 ): Promise<Map<string, StationSummary>> {
-	const today = todayBerlin();
 	const depDaysCond = daysCondition(departures.date, filter.days);
 	const statsDaysCond = daysCondition(stationDailyStats.date, filter.days);
 	const catCond = categoryCondition(filter.category);
@@ -226,18 +222,6 @@ export async function getStationSummaries(
 						delayed: delayedSql.as("delayed"),
 						total: count().as("total"),
 						avgDelay: avgDelaySql.as("avg_delay"),
-						todayCancelled:
-							sql<number>`SUM(CASE WHEN ${departures.date} = ${today} THEN ${departures.cancelled} ELSE 0 END)`.as(
-								"today_cancelled",
-							),
-						todayDelayed:
-							sql<number>`SUM(CASE WHEN ${departures.date} = ${today} AND ${departures.cancelled} = 0 AND ${departures.rtTime} IS NOT NULL AND (strftime('%s', ${departures.rtDate} || ' ' || ${departures.rtTime}) - strftime('%s', ${departures.date} || ' ' || ${departures.time})) / 60.0 >= ${DELAY_THRESHOLD_MIN} THEN 1 ELSE 0 END)`.as(
-								"today_delayed",
-							),
-						todayTotal:
-							sql<number>`SUM(CASE WHEN ${departures.date} = ${today} THEN 1 ELSE 0 END)`.as(
-								"today_total",
-							),
 					})
 					.from(departures)
 					.where(
@@ -255,18 +239,6 @@ export async function getStationSummaries(
 						>`SUM(${stationDailyStats.avgDelay} * ${stationDailyStats.total}) / NULLIF(SUM(CASE WHEN ${stationDailyStats.avgDelay} IS NOT NULL THEN ${stationDailyStats.total} END), 0)`.as(
 							"avg_delay",
 						),
-						todayCancelled:
-							sql<number>`SUM(CASE WHEN ${stationDailyStats.date} = ${today} THEN ${stationDailyStats.cancelled} ELSE 0 END)`.as(
-								"today_cancelled",
-							),
-						todayDelayed:
-							sql<number>`SUM(CASE WHEN ${stationDailyStats.date} = ${today} THEN ${stationDailyStats.delayed} ELSE 0 END)`.as(
-								"today_delayed",
-							),
-						todayTotal:
-							sql<number>`SUM(CASE WHEN ${stationDailyStats.date} = ${today} THEN ${stationDailyStats.total} ELSE 0 END)`.as(
-								"today_total",
-							),
 					})
 					.from(stationDailyStats)
 					.where(statsDaysCond)
@@ -288,9 +260,6 @@ export async function getStationSummaries(
 				delayed: Number(r.delayed ?? 0),
 				total: Number(r.total ?? 0),
 				avgDelay: r.avgDelay,
-				todayCancelled: Number(r.todayCancelled ?? 0),
-				todayDelayed: Number(r.todayDelayed ?? 0),
-				todayTotal: Number(r.todayTotal ?? 0),
 			},
 		]),
 	);
@@ -311,9 +280,6 @@ export async function getStationSummaries(
 				total: statsMap.get(s.id)?.total ?? 0,
 				avgDelay: statsMap.get(s.id)?.avgDelay ?? null,
 				categories: catMap.get(s.id) ?? [],
-				todayCancelled: statsMap.get(s.id)?.todayCancelled ?? 0,
-				todayDelayed: statsMap.get(s.id)?.todayDelayed ?? 0,
-				todayTotal: statsMap.get(s.id)?.todayTotal ?? 0,
 			},
 		]),
 	);
@@ -378,16 +344,12 @@ export interface OperatorSummary {
 	cancelled: number;
 	delayed: number;
 	avgDelay: number | null;
-	todayCancelled: number;
-	todayDelayed: number;
-	todayTotal: number;
 }
 
 export async function getOperatorSummaries(
 	db: Db,
 	filter: QueryFilter = {},
 ): Promise<OperatorSummary[]> {
-	const today = todayBerlin();
 	const depDaysCond = daysCondition(departures.date, filter.days);
 	const opDaysCond = daysCondition(operatorDailyStats.date, filter.days);
 	const catCond = categoryCondition(filter.category);
@@ -402,18 +364,6 @@ export async function getOperatorSummaries(
 						cancelled: cancelledDistinctSql.as("cancelled"),
 						delayed: delayedDistinctSql.as("delayed"),
 						avgDelay: avgDelaySql.as("avg_delay"),
-						todayCancelled:
-							sql<number>`COUNT(DISTINCT CASE WHEN ${departures.date} = ${today} AND ${departures.cancelled} = 1 THEN ${departures.journeyNum} END)`.as(
-								"today_cancelled",
-							),
-						todayDelayed:
-							sql<number>`COUNT(DISTINCT CASE WHEN ${departures.date} = ${today} AND ${departures.cancelled} = 0 AND ${departures.rtTime} IS NOT NULL AND (strftime('%s', ${departures.rtDate} || ' ' || ${departures.rtTime}) - strftime('%s', ${departures.date} || ' ' || ${departures.time})) / 60.0 >= ${DELAY_THRESHOLD_MIN} THEN ${departures.journeyNum} END)`.as(
-								"today_delayed",
-							),
-						todayTotal:
-							sql<number>`COUNT(DISTINCT CASE WHEN ${departures.date} = ${today} THEN ${departures.journeyNum} END)`.as(
-								"today_total",
-							),
 					})
 					.from(departures)
 					.where(
@@ -436,18 +386,6 @@ export async function getOperatorSummaries(
 						>`SUM(${operatorDailyStats.avgDelay} * ${operatorDailyStats.total}) / NULLIF(SUM(CASE WHEN ${operatorDailyStats.avgDelay} IS NOT NULL THEN ${operatorDailyStats.total} END), 0)`.as(
 							"avg_delay",
 						),
-						todayCancelled:
-							sql<number>`SUM(CASE WHEN ${operatorDailyStats.date} = ${today} THEN ${operatorDailyStats.cancelled} ELSE 0 END)`.as(
-								"today_cancelled",
-							),
-						todayDelayed:
-							sql<number>`SUM(CASE WHEN ${operatorDailyStats.date} = ${today} THEN ${operatorDailyStats.delayed} ELSE 0 END)`.as(
-								"today_delayed",
-							),
-						todayTotal:
-							sql<number>`SUM(CASE WHEN ${operatorDailyStats.date} = ${today} THEN ${operatorDailyStats.total} ELSE 0 END)`.as(
-								"today_total",
-							),
 					})
 					.from(operatorDailyStats)
 					.where(opDaysCond)
@@ -484,9 +422,6 @@ export async function getOperatorSummaries(
 		cancelled: Number(r.cancelled ?? 0),
 		delayed: Number(r.delayed ?? 0),
 		avgDelay: r.avgDelay,
-		todayCancelled: Number(r.todayCancelled ?? 0),
-		todayDelayed: Number(r.todayDelayed ?? 0),
-		todayTotal: Number(r.todayTotal ?? 0),
 	}));
 }
 
@@ -499,16 +434,12 @@ export interface LineSummary {
 	cancelled: number;
 	delayed: number;
 	avgDelay: number | null;
-	todayCancelled: number;
-	todayDelayed: number;
-	todayTotal: number;
 }
 
 export async function getLineSummaries(
 	db: Db,
 	filter: QueryFilter = {},
 ): Promise<LineSummary[]> {
-	const today = todayBerlin();
 	const daysCond = daysCondition(departures.date, filter.days);
 	const catCond = categoryCondition(filter.category);
 	const conditions = [isNotNull(departures.operator)];
@@ -531,18 +462,6 @@ export async function getLineSummaries(
 			cancelled: cancelledDistinctSql.as("cancelled"),
 			delayed: delayedDistinctSql.as("delayed"),
 			avgDelay: avgDelaySql.as("avg_delay"),
-			todayCancelled:
-				sql<number>`COUNT(DISTINCT CASE WHEN ${departures.date} = ${today} AND ${departures.cancelled} = 1 THEN ${departures.journeyNum} END)`.as(
-					"today_cancelled",
-				),
-			todayDelayed:
-				sql<number>`COUNT(DISTINCT CASE WHEN ${departures.date} = ${today} AND ${departures.cancelled} = 0 AND ${departures.rtTime} IS NOT NULL AND (strftime('%s', ${departures.rtDate} || ' ' || ${departures.rtTime}) - strftime('%s', ${departures.date} || ' ' || ${departures.time})) / 60.0 >= ${DELAY_THRESHOLD_MIN} THEN ${departures.journeyNum} END)`.as(
-					"today_delayed",
-				),
-			todayTotal:
-				sql<number>`COUNT(DISTINCT CASE WHEN ${departures.date} = ${today} THEN ${departures.journeyNum} END)`.as(
-					"today_total",
-				),
 		})
 		.from(departures)
 		.where(and(...conditions))
@@ -558,9 +477,6 @@ export async function getLineSummaries(
 		cancelled: r.cancelled,
 		delayed: r.delayed,
 		avgDelay: r.avgDelay,
-		todayCancelled: r.todayCancelled,
-		todayDelayed: r.todayDelayed,
-		todayTotal: r.todayTotal,
 	}));
 }
 
