@@ -17,9 +17,11 @@ import {
 
 const CORE_HOURS = sql`((${departures.time} >= '06:00:00' AND ${departures.time} < '09:00:00') OR (${departures.time} >= '16:00:00' AND ${departures.time} < '19:00:00'))`;
 
-export type DaysFilter = "" | "weekdays" | "weekends";
+export type DaysFilter = "" | "today" | "weekdays" | "weekends";
 
 function daysCondition(dateCol: unknown, filter: DaysFilter = "") {
+	if (filter === "today")
+		return eq(dateCol as typeof departures.date, todayBerlin());
 	if (filter === "weekdays")
 		return sql`strftime('%w', ${dateCol}) NOT IN ('0', '6')`;
 	if (filter === "weekends")
@@ -27,7 +29,7 @@ function daysCondition(dateCol: unknown, filter: DaysFilter = "") {
 	return undefined;
 }
 
-const validDays = new Set<DaysFilter>(["", "weekdays", "weekends"]);
+const validDays = new Set<DaysFilter>(["", "today", "weekdays", "weekends"]);
 
 const validCategories = new Set(["U-Bahn", "S", "Tram", "Bus", "RE,RB"]);
 

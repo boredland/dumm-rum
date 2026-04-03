@@ -80,6 +80,17 @@ const categories = [
 			{t(lang, "days.all")}
 		</a>
 		<a
+			href={buildHref({ days: "today" })}
+			class:list={[
+				pill,
+				daysFilter === "today"
+					? "bg-link/10 text-link"
+					: "bg-link/10 text-link opacity-50",
+			]}
+		>
+			{t(lang, "days.today")}
+		</a>
+		<a
 			href={buildHref({ days: "weekdays" })}
 			class:list={[
 				pill,

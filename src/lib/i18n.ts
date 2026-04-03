@@ -41,6 +41,7 @@ const translations = {
 		"hours.core_range": "6\u20139 & 16\u201319 (HVZ)",
 
 		"days.all": "Alle Tage",
+		"days.today": "Heute",
 		"days.weekdays": "Werktage",
 		"days.weekends": "Wochenende",
 
@@ -141,6 +142,7 @@ const translations = {
 		"hours.core_range": "6\u20139 & 16\u201319 (HVZ)",
 
 		"days.all": "All days",
+		"days.today": "Today",
 		"days.weekdays": "Weekdays",
 		"days.weekends": "Weekends",
 
