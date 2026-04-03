@@ -17,7 +17,7 @@ const desc =
 		: "Cancellation & delay tracker for Frankfurt public transport");
 const canonicalUrl = new URL(
 	Astro.url.pathname,
-	Astro.site ?? "https://dummrum.jonas-strassel.de",
+	Astro.site ?? "https://dummrum.de",
 );
 const otherLang = lang === "de" ? "en" : "de";
 const otherPath = Astro.url.pathname.replace(`/${lang}`, `/${otherLang}`);

@@ -2,7 +2,7 @@
 
 Wissen, ob man dumm rumsteht. Public transport cancellation and delay tracker for Frankfurt (Main).
 
-**Live:** https://dummrum.jonas-strassel.de
+**Live:** https://dummrum.de
 
 ## Setup
 
