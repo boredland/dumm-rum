@@ -29,7 +29,6 @@ Live at https://dummrum.jonas-strassel.de
 - Edge caching via middleware (`s-maxage=300, stale-while-revalidate=60`) matches the 5-min cron interval
 - **Materialized daily stats**: `station_daily_stats` and `operator_daily_stats` tables are populated by the cron after each collection run — page queries read pre-computed rows instead of aggregating raw departures
 - Core hours mode (`?hours=core`) falls back to raw departures aggregation since it's not materialized
-- The "next departures" section on station pages is a **server island** (`server:defer`) so the cached page shell loads instantly
 - `RMV_API_KEY` supports multiple comma-separated keys — each station picks a random key per cron run to distribute load
 - Transport type icons (🚇🚋🚌) are derived from the `category` column in departure data, not hardcoded per station
 
@@ -46,9 +45,9 @@ src/
 │   ├── schema.ts                 # Drizzle schema (departures, haikus, daily stats)
 │   └── client.ts                 # createDb(d1) wrapper
 ├── components/
-│   ├── HoursToggle.astro         # All hours / core hours filter toggle
-│   ├── NextDepartures.astro      # Server island for live next departures
-│   └── CancellationChart.astro   # SVG bar chart of daily cancellation rates
+│   ├── HoursToggle.astro         # Hours / days / category filter toggles
+│   ├── DepartureFilter.astro     # Client-side status filter for departure tables
+│   └── StatusBadge.astro         # Departure status badge (cancelled/delayed/ok)
 ├── lib/
 │   ├── stations.ts               # Station config array (STATIONS) and helpers
 │   ├── queries.ts                # All DB query functions (reads materialized stats)
@@ -94,7 +93,7 @@ npm run db:generate   # Generate migration + sync to migrations/
 npm run db:migrate    # Apply to remote D1
 ```
 
-The deploy script runs migrations automatically before deploying.
+**Important:** Migrations in `migrations/` are applied automatically on every deploy (via `npx wrangler d1 migrations apply` in the deploy command). Do NOT apply migrations manually with `wrangler d1 execute --file` — use `wrangler d1 migrations apply --remote` instead, so the migration is recorded in the `d1_migrations` table and won't be re-run on deploy.
 
 ## RMV HAFAS API reference
 
