@@ -1,4 +1,4 @@
-# DummRum
+# 🚏 DummRum
 
 Wissen, ob man dumm rumsteht. Public transport cancellation and delay tracker for Frankfurt (Main).
 
@@ -64,25 +64,25 @@ All tracked stations are defined in `src/lib/stations.ts`. To add a new one:
 
 ## Methodology
 
-A cron trigger runs every 3 minutes and fetches the RMV HAFAS realtime feed for two stations per invocation, rotating through all tracked stations. With 10 stations, each station is updated approximately every 15 minutes. ICE/IC/EC long-distance trains are excluded. From this data:
+A cron trigger runs every 3 minutes and fetches the RMV HAFAS realtime feed for three stations per invocation, rotating through all tracked stations. ICE/IC/EC long-distance trains are excluded. From this data:
 
 - **Cancellation rate** = cancelled departures / total departures
 - **Delayed departures** = departures with delay ≥7.5 minutes (50% of assumed average 15-minute trip time within Frankfurt)
 - **Average delay** = mean of (actual departure time - scheduled time) across all departures with realtime data. For cancelled departures, the planned frequency is used as the assumed wait time. Uses full datetime comparison to correctly handle cross-midnight departures.
 - **On-time performance (OTP)** = % of departures neither cancelled nor delayed — [a standard metric in public transport](https://en.wikipedia.org/wiki/On-time_performance)
-- **Trend arrows** compare this week's cancellation rate vs the previous week
 
 ## How it works
 
 - A Cloudflare cron trigger (`*/3 * * * *`) calls the `scheduled` handler in `src/worker.ts` every 3 minutes
-- Each invocation processes two stations, rotating via a KV-stored index — this keeps CPU usage within the Workers free plan limit
+- Each invocation processes three stations, rotating through all tracked stations
 - After collection, daily statistics are materialized into `station_daily_stats` and `operator_daily_stats` tables for fast page loads
 - It also generates one haiku per day using Cloudflare Workers AI
 - Astro SSR pages read from materialized stats tables with edge caching (`s-maxage=300, stale-while-revalidate=300`)
-- The "next departures" section loads as a server island for instant page shells
 - Client-side navigation via Astro View Transitions for smooth page transitions
+- Telegram bot (@rumsteh_bot) sends alerts for cancellations and delays ≥7.5 min on subscribed lines
 - Routes are prefixed with `/de/` or `/en/` — auto-detected from `Accept-Language`
 - Light/dark theme follows system preference via CSS `light-dark()`
 - Installable as a PWA via web app manifest
-- Per-station, per-operator, and per-line detail pages with daily breakdowns, weekday patterns, and cancellation charts
+- Per-station, per-operator, and per-line detail pages with daily breakdowns
+- Filters for time of day (all/core hours), day type (today/weekdays/weekends), and transport category
 - A JSON API is available at `/{lang}/{station}/api/stats` for each station
