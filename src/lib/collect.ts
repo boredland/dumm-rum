@@ -92,6 +92,7 @@ async function collectDepartures(
 			fetchedAt: now,
 		};
 	};
+	// https://developers.cloudflare.com/d1/platform/limits/
 	const D1_MAX_PARAMS = 100;
 	const colCount = Object.keys(toRow(deps[0])).length;
 	const batchSize = Math.max(1, Math.floor(D1_MAX_PARAMS / colCount));
