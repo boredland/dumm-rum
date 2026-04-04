@@ -4,5 +4,6 @@ declare namespace Cloudflare {
 		AI: Ai;
 		RMV_API_KEY: string;
 		TELEGRAM_BOT_TOKEN: string;
+		SITE_URL?: string;
 	}
 }
