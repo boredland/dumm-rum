@@ -1,5 +1,6 @@
 ---
 import { env } from "cloudflare:workers";
+import { all } from "better-all";
 import DepartureFilter from "../../../../../components/DepartureFilter.astro";
 import StatusBadge from "../../../../../components/StatusBadge.astro";
 import { createDb } from "../../../../../db/client";
@@ -20,10 +21,10 @@ const line = decodeURIComponent(Astro.params.line!);
 const date = Astro.params.date!;
 
 const db = createDb(env.DB);
-const [departures, haiku] = await Promise.all([
-	getLineDayDepartures(db, line, date),
-	getHaiku(db, date, lang),
-]);
+const { departures, haiku } = await all({
+	departures: () => getLineDayDepartures(db, line, date),
+	haiku: () => getHaiku(db, date, lang),
+});
 
 const cancelledCount = departures.filter((d) => d.cancelled).length;
 const categories = [

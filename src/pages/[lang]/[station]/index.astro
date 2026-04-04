@@ -1,5 +1,6 @@
 ---
 import { env } from "cloudflare:workers";
+import { all } from "better-all";
 import HoursToggle from "../../../components/HoursToggle.astro";
 import { createDb } from "../../../db/client";
 import Layout from "../../../layouts/Layout.astro";
@@ -30,10 +31,10 @@ if (!station) return new Response("Not found", { status: 404 });
 
 const filter = parseFilter(Astro.url);
 const { coreOnly, days: daysFilter } = filter;
-const [stats, oldestDate] = await Promise.all([
-	getStats(db, station, filter),
-	getOldestDate(db, { station: station.id }),
-]);
+const { stats, oldestDate } = await all({
+	stats: () => getStats(db, station, filter),
+	oldestDate: () => getOldestDate(db, { station: station.id }),
+});
 const categories = stats.categories;
 
 const totalCancelled = stats.days.reduce((s, d) => s + d.cancelled, 0);

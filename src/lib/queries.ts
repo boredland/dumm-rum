@@ -4,6 +4,7 @@ import type { Db } from "../db/client";
 import {
 	departures,
 	haikus,
+	lineDailyStats,
 	operatorDailyStats,
 	stationDailyStats,
 } from "../db/schema";
@@ -422,42 +423,85 @@ export async function getLineSummaries(
 	db: Db,
 	filter: QueryFilter = {},
 ): Promise<LineSummary[]> {
-	const daysCond = daysCondition(departures.date, filter.days);
 	const catCond = categoryCondition(filter.category);
-	const conditions = [isNotNull(departures.operator)];
-	if (filter.coreOnly) conditions.push(CORE_HOURS);
-	if (daysCond) conditions.push(daysCond);
-	if (catCond) conditions.push(catCond);
+	const useDepartures = filter.coreOnly || !!catCond;
 
+	if (useDepartures) {
+		const daysCond = daysCondition(departures.date, filter.days);
+		const conditions = [isNotNull(departures.operator)];
+		if (filter.coreOnly) conditions.push(CORE_HOURS);
+		if (daysCond) conditions.push(daysCond);
+		if (catCond) conditions.push(catCond);
+
+		const rows = await db
+			.select({
+				line: departures.line,
+				category: departures.category,
+				operators:
+					sql<string>`GROUP_CONCAT(DISTINCT ${departures.operator})`.as(
+						"operators",
+					),
+				destinations:
+					sql<string>`GROUP_CONCAT(DISTINCT ${departures.direction})`.as(
+						"destinations",
+					),
+				total: totalDistinctSql.as("total"),
+				cancelled: cancelledDistinctSql.as("cancelled"),
+				delayed: delayedDistinctSql.as("delayed"),
+				avgDelay: avgDelaySql.as("avg_delay"),
+			})
+			.from(departures)
+			.where(and(...conditions))
+			.groupBy(departures.line, departures.category)
+			.orderBy(departures.category, departures.line);
+
+		return rows.map((r) => ({
+			line: r.line,
+			category: r.category ?? "Bus",
+			operators: r.operators ? r.operators.split(",") : [],
+			destinations: r.destinations ? r.destinations.split(",") : [],
+			total: r.total,
+			cancelled: r.cancelled,
+			delayed: r.delayed,
+			avgDelay: r.avgDelay,
+		}));
+	}
+
+	const daysCond = daysCondition(lineDailyStats.date, filter.days);
 	const rows = await db
 		.select({
-			line: departures.line,
-			category: departures.category,
-			operators: sql<string>`GROUP_CONCAT(DISTINCT ${departures.operator})`.as(
-				"operators",
-			),
+			line: lineDailyStats.line,
+			category: lineDailyStats.category,
+			operators:
+				sql<string>`GROUP_CONCAT(DISTINCT ${lineDailyStats.operators})`.as(
+					"operators",
+				),
 			destinations:
-				sql<string>`GROUP_CONCAT(DISTINCT ${departures.direction})`.as(
+				sql<string>`GROUP_CONCAT(DISTINCT ${lineDailyStats.destinations})`.as(
 					"destinations",
 				),
-			total: totalDistinctSql.as("total"),
-			cancelled: cancelledDistinctSql.as("cancelled"),
-			delayed: delayedDistinctSql.as("delayed"),
-			avgDelay: avgDelaySql.as("avg_delay"),
+			total: sum(lineDailyStats.total).as("total"),
+			cancelled: sum(lineDailyStats.cancelled).as("cancelled"),
+			delayed: sum(lineDailyStats.delayed).as("delayed"),
+			avgDelay: sql<
+				number | null
+			>`SUM(${lineDailyStats.avgDelay} * ${lineDailyStats.total}) / NULLIF(SUM(CASE WHEN ${lineDailyStats.avgDelay} IS NOT NULL THEN ${lineDailyStats.total} END), 0)`.as(
+				"avg_delay",
+			),
 		})
-		.from(departures)
-		.where(and(...conditions))
-		.groupBy(departures.line, departures.category)
-		.orderBy(departures.category, departures.line);
+		.from(lineDailyStats)
+		.where(daysCond)
+		.groupBy(lineDailyStats.line, lineDailyStats.category)
+		.orderBy(lineDailyStats.category, lineDailyStats.line);
 
 	return rows.map((r) => ({
 		line: r.line,
 		category: r.category ?? "Bus",
 		operators: r.operators ? r.operators.split(",") : [],
 		destinations: r.destinations ? r.destinations.split(",") : [],
-		total: r.total,
-		cancelled: r.cancelled,
-		delayed: r.delayed,
+		total: Number(r.total ?? 0),
+		cancelled: Number(r.cancelled ?? 0),
+		delayed: Number(r.delayed ?? 0),
 		avgDelay: r.avgDelay,
 	}));
 }
@@ -479,44 +523,75 @@ export async function getLineStats(
 	operators: string[];
 	categories: string[];
 }> {
-	const daysCond = daysCondition(departures.date, filter.days);
-	const conditions = [eq(departures.line, line)];
-	if (filter.coreOnly) conditions.push(CORE_HOURS);
+	if (filter.coreOnly) {
+		const daysCond = daysCondition(departures.date, filter.days);
+		const conditions = [eq(departures.line, line)];
+		conditions.push(CORE_HOURS);
+		if (daysCond) conditions.push(daysCond);
+
+		const [dayRows, opRows, catRows] = await Promise.all([
+			db
+				.select({
+					date: departures.date,
+					total: totalDistinctSql.as("total"),
+					cancelled: cancelledDistinctSql.as("cancelled"),
+					delayed: delayedDistinctSql.as("delayed"),
+					avgDelay: avgDelaySql.as("avg_delay"),
+				})
+				.from(departures)
+				.where(and(...conditions))
+				.groupBy(departures.date)
+				.orderBy(desc(departures.date)),
+			db
+				.selectDistinct({ operator: departures.operator })
+				.from(departures)
+				.where(and(eq(departures.line, line), isNotNull(departures.operator))),
+			db
+				.selectDistinct({ category: departures.category })
+				.from(departures)
+				.where(and(eq(departures.line, line), isNotNull(departures.category))),
+		]);
+
+		return {
+			days: dayRows.map((d) => ({
+				date: d.date,
+				total: d.total,
+				cancelled: d.cancelled,
+				delayed: d.delayed,
+				avgDelay: d.avgDelay,
+			})),
+			operators: opRows.map((r) => r.operator!),
+			categories: catRows.map((r) => r.category!),
+		};
+	}
+
+	const daysCond = daysCondition(lineDailyStats.date, filter.days);
+	const conditions = [eq(lineDailyStats.line, line)];
 	if (daysCond) conditions.push(daysCond);
 
-	const [dayRows, opRows, catRows] = await Promise.all([
-		db
-			.select({
-				date: departures.date,
-				total: totalDistinctSql.as("total"),
-				cancelled: cancelledDistinctSql.as("cancelled"),
-				delayed: delayedDistinctSql.as("delayed"),
-				avgDelay: avgDelaySql.as("avg_delay"),
-			})
-			.from(departures)
-			.where(and(...conditions))
-			.groupBy(departures.date)
-			.orderBy(desc(departures.date)),
-		db
-			.selectDistinct({ operator: departures.operator })
-			.from(departures)
-			.where(and(eq(departures.line, line), isNotNull(departures.operator))),
-		db
-			.selectDistinct({ category: departures.category })
-			.from(departures)
-			.where(and(eq(departures.line, line), isNotNull(departures.category))),
-	]);
+	const rows = await db
+		.select()
+		.from(lineDailyStats)
+		.where(and(...conditions))
+		.orderBy(desc(lineDailyStats.date));
+
+	const operators = new Set<string>();
+	const categories = new Set<string>();
+	for (const r of rows) {
+		if (r.operators) for (const op of r.operators.split(",")) operators.add(op);
+		if (r.category) categories.add(r.category);
+	}
 
 	return {
-		days: dayRows.map((d) => ({
+		days: rows.map((d) => ({
 			date: d.date,
 			total: d.total,
 			cancelled: d.cancelled,
 			delayed: d.delayed,
 			avgDelay: d.avgDelay,
 		})),
-		operators: opRows.map((r) => r.operator!),
-		categories: catRows.map((r) => r.category!),
+		operators: [...operators],
+		categories: [...categories],
 	};
 }
 
@@ -649,9 +724,9 @@ export async function getOldestDate(
 	}
 	if (entity?.line) {
 		const rows = await db
-			.select({ date: sql<string>`MIN(${departures.date})` })
-			.from(departures)
-			.where(eq(departures.line, entity.line));
+			.select({ date: sql<string>`MIN(${lineDailyStats.date})` })
+			.from(lineDailyStats)
+			.where(eq(lineDailyStats.line, entity.line));
 		return rows[0]?.date ?? null;
 	}
 	if (entity?.operator) {

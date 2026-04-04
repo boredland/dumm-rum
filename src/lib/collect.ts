@@ -4,6 +4,7 @@ import { coalesce, excluded, max } from "../db/helpers";
 import {
 	departures,
 	haikus,
+	lineDailyStats,
 	operatorDailyStats,
 	stationDailyStats,
 } from "../db/schema";
@@ -270,27 +271,29 @@ async function materializeStationStats(db: Db, date: string): Promise<void> {
 		.where(eq(departures.date, date))
 		.groupBy(departures.stationId);
 
-	for (const row of rows) {
-		await db
-			.insert(stationDailyStats)
-			.values({
-				stationId: row.stationId,
-				date,
-				total: row.total,
-				cancelled: row.cancelled,
-				delayed: row.delayed,
-				avgDelay: row.avgDelay,
-			})
-			.onConflictDoUpdate({
-				target: [stationDailyStats.stationId, stationDailyStats.date],
-				set: {
+	await Promise.all(
+		rows.map((row) =>
+			db
+				.insert(stationDailyStats)
+				.values({
+					stationId: row.stationId,
+					date,
 					total: row.total,
 					cancelled: row.cancelled,
 					delayed: row.delayed,
 					avgDelay: row.avgDelay,
-				},
-			});
-	}
+				})
+				.onConflictDoUpdate({
+					target: [stationDailyStats.stationId, stationDailyStats.date],
+					set: {
+						total: row.total,
+						cancelled: row.cancelled,
+						delayed: row.delayed,
+						avgDelay: row.avgDelay,
+					},
+				}),
+		),
+	);
 }
 
 async function materializeOperatorStats(db: Db, date: string): Promise<void> {
@@ -306,27 +309,81 @@ async function materializeOperatorStats(db: Db, date: string): Promise<void> {
 		.where(and(eq(departures.date, date), isNotNull(departures.operator)))
 		.groupBy(departures.operator);
 
-	for (const row of rows) {
-		await db
-			.insert(operatorDailyStats)
-			.values({
-				operator: row.operator!,
-				date,
-				total: row.total,
-				cancelled: row.cancelled,
-				delayed: row.delayed,
-				avgDelay: row.avgDelay,
-			})
-			.onConflictDoUpdate({
-				target: [operatorDailyStats.operator, operatorDailyStats.date],
-				set: {
+	await Promise.all(
+		rows.map((row) =>
+			db
+				.insert(operatorDailyStats)
+				.values({
+					operator: row.operator!,
+					date,
 					total: row.total,
 					cancelled: row.cancelled,
 					delayed: row.delayed,
 					avgDelay: row.avgDelay,
-				},
-			});
-	}
+				})
+				.onConflictDoUpdate({
+					target: [operatorDailyStats.operator, operatorDailyStats.date],
+					set: {
+						total: row.total,
+						cancelled: row.cancelled,
+						delayed: row.delayed,
+						avgDelay: row.avgDelay,
+					},
+				}),
+		),
+	);
+}
+
+async function materializeLineStats(db: Db, date: string): Promise<void> {
+	const rows = await db
+		.select({
+			line: departures.line,
+			category: departures.category,
+			total: totalDistinctSql.as("total"),
+			cancelled: cancelledDistinctSql.as("cancelled"),
+			delayed: delayedDistinctSql.as("delayed"),
+			avgDelay: avgDelaySql.as("avg_delay"),
+			operators: sql<string>`GROUP_CONCAT(DISTINCT ${departures.operator})`.as(
+				"operators",
+			),
+			destinations:
+				sql<string>`GROUP_CONCAT(DISTINCT ${departures.direction})`.as(
+					"destinations",
+				),
+		})
+		.from(departures)
+		.where(and(eq(departures.date, date), isNotNull(departures.operator)))
+		.groupBy(departures.line, departures.category);
+
+	await Promise.all(
+		rows.map((row) =>
+			db
+				.insert(lineDailyStats)
+				.values({
+					line: row.line,
+					date,
+					total: row.total,
+					cancelled: row.cancelled,
+					delayed: row.delayed,
+					avgDelay: row.avgDelay,
+					category: row.category,
+					operators: row.operators,
+					destinations: row.destinations,
+				})
+				.onConflictDoUpdate({
+					target: [lineDailyStats.line, lineDailyStats.date],
+					set: {
+						total: row.total,
+						cancelled: row.cancelled,
+						delayed: row.delayed,
+						avgDelay: row.avgDelay,
+						category: row.category,
+						operators: row.operators,
+						destinations: row.destinations,
+					},
+				}),
+		),
+	);
 }
 
 function pickKey(apiKeys: string): string {
@@ -368,6 +425,7 @@ export async function runCollection(
 	await Promise.all([
 		materializeStationStats(db, today),
 		materializeOperatorStats(db, today),
+		materializeLineStats(db, today),
 	]);
 
 	if (telegramToken) {

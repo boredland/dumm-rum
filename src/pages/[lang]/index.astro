@@ -1,5 +1,6 @@
 ---
 import { env } from "cloudflare:workers";
+import { all } from "better-all";
 import HoursToggle from "../../components/HoursToggle.astro";
 import { createDb } from "../../db/client";
 import Layout from "../../layouts/Layout.astro";
@@ -25,13 +26,13 @@ const db = createDb(env.DB);
 const lang = langFromParams(Astro.params);
 const filter = parseFilter(Astro.url);
 const { coreOnly, days: daysFilter, category } = filter;
-const [stationStats, operators, lines, oldestDate, haiku] = await Promise.all([
-	getStationSummaries(db, STATIONS, filter),
-	getOperatorSummaries(db, filter),
-	getLineSummaries(db, filter),
-	getOldestDate(db),
-	getHaiku(db, todayBerlin(), lang),
-]);
+const { stationStats, operators, lines, oldestDate, haiku } = await all({
+	stationStats: () => getStationSummaries(db, STATIONS, filter),
+	operators: () => getOperatorSummaries(db, filter),
+	lines: () => getLineSummaries(db, filter),
+	oldestDate: () => getOldestDate(db),
+	haiku: () => getHaiku(db, todayBerlin(), lang),
+});
 ---
 
 <Layout title={t(lang, "home.title")} lang={lang}>

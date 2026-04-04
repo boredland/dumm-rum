@@ -1,5 +1,6 @@
 ---
 import { env } from "cloudflare:workers";
+import { all } from "better-all";
 import DepartureFilter from "../../../../components/DepartureFilter.astro";
 import StatusBadge from "../../../../components/StatusBadge.astro";
 import { createDb } from "../../../../db/client";
@@ -30,10 +31,10 @@ if (!station) return new Response("Not found", { status: 404 });
 
 const db = createDb(env.DB);
 const date = Astro.params.date!;
-const [departures, haiku] = await Promise.all([
-	getDayDepartures(db, station, date),
-	getHaiku(db, date, lang),
-]);
+const { departures, haiku } = await all({
+	departures: () => getDayDepartures(db, station, date),
+	haiku: () => getHaiku(db, date, lang),
+});
 
 const isToday = date === todayBerlin();
 const nowTime = nowBerlin().format("HH:mm:ss");

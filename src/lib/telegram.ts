@@ -1,4 +1,4 @@
-import { and, eq, inArray, isNotNull } from "drizzle-orm";
+import { and, eq, gte, inArray, isNotNull, sql } from "drizzle-orm";
 import type { Db } from "../db/client";
 import { departures, telegramSubscriptions } from "../db/schema";
 import { nowBerlin } from "./utils";
@@ -98,7 +98,13 @@ async function fetchDirections(db: Db, line: string) {
 	return db
 		.selectDistinct({ direction: departures.direction })
 		.from(departures)
-		.where(and(eq(departures.line, line), isNotNull(departures.direction)));
+		.where(
+			and(
+				eq(departures.line, line),
+				isNotNull(departures.direction),
+				gte(departures.date, sql`date('now', '-7 days')`),
+			),
+		);
 }
 
 export async function handleTelegramWebhook(

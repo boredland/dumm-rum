@@ -76,6 +76,25 @@ export const operatorDailyStats = sqliteTable(
 	],
 );
 
+export const lineDailyStats = sqliteTable(
+	"line_daily_stats",
+	{
+		line: text().notNull(),
+		date: text().notNull(),
+		total: integer().notNull().default(0),
+		cancelled: integer().notNull().default(0),
+		delayed: integer().notNull().default(0),
+		avgDelay: real("avg_delay"),
+		category: text(),
+		operators: text(),
+		destinations: text(),
+	},
+	(t) => [
+		primaryKey({ columns: [t.line, t.date] }),
+		index("idx_line_daily_stats_date").on(t.date),
+	],
+);
+
 export const telegramSubscriptions = sqliteTable(
 	"telegram_subscriptions",
 	{

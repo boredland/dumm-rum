@@ -1,5 +1,6 @@
 ---
 import { env } from "cloudflare:workers";
+import { all } from "better-all";
 import HoursToggle from "../../../../components/HoursToggle.astro";
 import { createDb } from "../../../../db/client";
 import Layout from "../../../../layouts/Layout.astro";
@@ -18,10 +19,11 @@ const line = decodeURIComponent(Astro.params.line!);
 const filter = parseFilter(Astro.url);
 const { coreOnly, days: daysFilter } = filter;
 
-const [{ days, operators, categories }, oldestDate] = await Promise.all([
-	getLineStats(db, line, filter),
-	getOldestDate(db, { line }),
-]);
+const { lineStats, oldestDate } = await all({
+	lineStats: () => getLineStats(db, line, filter),
+	oldestDate: () => getOldestDate(db, { line }),
+});
+const { days, operators, categories } = lineStats;
 
 const totalDepartures = days.reduce((s, d) => s + d.total, 0);
 const totalCancelled = days.reduce((s, d) => s + d.cancelled, 0);

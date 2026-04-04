@@ -20,14 +20,18 @@ Live at https://dummrum.de
 - **Biome** for linting/formatting, **Knip** for unused code detection, **tsgo** (`@typescript/native-preview`) for type checking
 - **Lefthook** pre-commit hook runs all three checks
 
+## Concurrency
+
+Use `better-all` (`import { all } from "better-all"`) instead of `Promise.all` for parallel async work in page frontmatter and other orchestration code. It takes an object of `() => Promise<T>` thunks and returns named results, which is clearer than positional destructuring.
+
 ## Key architecture decisions
 
 - `vite` is pinned to `^7.3.1` via `overrides` in package.json to work around a version split bug between Astro's bundled vite and `@tailwindcss/vite` (see withastro/astro#16029)
 - `src/worker.ts` is a custom Cloudflare Worker entrypoint that delegates `fetch` to Astro's handler and adds a `scheduled` handler for cron-triggered data collection
 - `wrangler.toml` points `main` to `./src/worker.ts` — the adapter builds around this
 - All pages are server-rendered (`output: "server"`) since they query D1 on every request
-- Edge caching via middleware (`s-maxage=300, stale-while-revalidate=60`) matches the 5-min cron interval
-- **Materialized daily stats**: `station_daily_stats` and `operator_daily_stats` tables are populated by the cron after each collection run — page queries read pre-computed rows instead of aggregating raw departures
+- Edge caching via Cloudflare Cache API in `src/worker.ts` (5-min TTL), warmed after each cron collection run
+- **Materialized daily stats**: `station_daily_stats`, `operator_daily_stats`, and `line_daily_stats` tables are populated by the cron after each collection run — page queries read pre-computed rows instead of aggregating raw departures
 - Core hours mode (`?hours=core`) falls back to raw departures aggregation since it's not materialized
 - `RMV_API_KEY` supports multiple comma-separated keys — each station picks a random key per cron run to distribute load
 - Transport type icons (🚇🚋🚌) are derived from the `category` column in departure data, not hardcoded per station
