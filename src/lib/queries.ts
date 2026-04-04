@@ -741,3 +741,23 @@ export async function getOldestDate(
 		.from(stationDailyStats);
 	return rows[0]?.date ?? null;
 }
+
+export async function getStationLineMap(
+	db: Db,
+): Promise<Map<string, string[]>> {
+	const rows = await db
+		.selectDistinct({
+			stationId: departures.stationId,
+			line: departures.line,
+		})
+		.from(departures)
+		.where(gte(departures.date, sql`date('now', '-7 days')`));
+
+	const map = new Map<string, string[]>();
+	for (const r of rows) {
+		const lines = map.get(r.stationId) ?? [];
+		lines.push(r.line);
+		map.set(r.stationId, lines);
+	}
+	return map;
+}

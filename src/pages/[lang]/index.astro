@@ -10,6 +10,7 @@ import {
 	getLineSummaries,
 	getOldestDate,
 	getOperatorSummaries,
+	getStationLineMap,
 	getStationSummaries,
 	parseFilter,
 } from "../../lib/queries";
@@ -26,13 +27,24 @@ const db = createDb(env.DB);
 const lang = langFromParams(Astro.params);
 const filter = parseFilter(Astro.url);
 const { coreOnly, days: daysFilter, category } = filter;
-const { stationStats, operators, lines, oldestDate, haiku } = await all({
-	stationStats: () => getStationSummaries(db, STATIONS, filter),
-	operators: () => getOperatorSummaries(db, filter),
-	lines: () => getLineSummaries(db, filter),
-	oldestDate: () => getOldestDate(db),
-	haiku: () => getHaiku(db, todayBerlin(), lang),
-});
+const { stationStats, operators, lines, oldestDate, haiku, stationLines } =
+	await all({
+		stationStats: () => getStationSummaries(db, STATIONS, filter),
+		operators: () => getOperatorSummaries(db, filter),
+		lines: () => getLineSummaries(db, filter),
+		oldestDate: () => getOldestDate(db),
+		haiku: () => getHaiku(db, todayBerlin(), lang),
+		stationLines: () => getStationLineMap(db),
+	});
+
+const lineStations = new Map<string, string[]>();
+for (const s of STATIONS) {
+	for (const l of stationLines.get(s.id) ?? []) {
+		const stations = lineStations.get(l) ?? [];
+		stations.push(shortStationName(s.name));
+		lineStations.set(l, stations);
+	}
+}
 ---
 
 <Layout title={t(lang, "home.title")} lang={lang}>
@@ -176,7 +188,7 @@ const { stationStats, operators, lines, oldestDate, haiku } = await all({
 					return (
 						<a
 							href={`/${lang}/line/${encodeURIComponent(l.line)}${Astro.url.search}`}
-							data-search={`${l.line} ${l.category} ${l.operators.join(" ")} ${l.destinations.join(" ")}`.toLowerCase()}
+							data-search={`${l.line} ${l.category} ${l.operators.join(" ")} ${l.destinations.join(" ")} ${(lineStations.get(l.line) ?? []).join(" ")}`.toLowerCase()}
 						data-categories={l.category}
 							class:list={[
 								"bg-surface border rounded-xl p-4 no-underline hover:bg-surface-hover transition-colors",
@@ -219,7 +231,7 @@ const { stationStats, operators, lines, oldestDate, haiku } = await all({
 				return (
 					<a
 						href={`/${lang}/${s.slug}${Astro.url.search}`}
-						data-search={shortStationName(s.name).toLowerCase()}
+						data-search={`${shortStationName(s.name)} ${(stationLines.get(s.id) ?? []).join(" ")}`.toLowerCase()}
 						data-categories={(st?.categories ?? []).join(",")}
 						class:list={[
 							"bg-surface border rounded-xl p-5 no-underline hover:bg-surface-hover transition-colors",
