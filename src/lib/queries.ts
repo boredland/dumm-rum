@@ -239,7 +239,12 @@ export async function getStationSummaries(
 				category: departures.category,
 			})
 			.from(departures)
-			.where(isNotNull(departures.category)),
+			.where(
+				and(
+					isNotNull(departures.category),
+					gte(departures.date, sql`date('now', '-30 days')`),
+				),
+			),
 	]);
 
 	const statsMap = new Map(
@@ -369,7 +374,12 @@ export async function getOperatorSummaries(
 				category: departures.category,
 			})
 			.from(departures)
-			.where(isNotNull(departures.operator))
+			.where(
+				and(
+					isNotNull(departures.operator),
+					gte(departures.date, sql`date('now', '-30 days')`),
+				),
+			)
 			.orderBy(departures.operator, departures.line),
 	]);
 

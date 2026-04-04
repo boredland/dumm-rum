@@ -30,7 +30,6 @@ export const departures = sqliteTable(
 	(t) => [
 		unique().on(t.stationId, t.date, t.time, t.line, t.direction, t.journeyNum),
 		index("idx_departures_station_date").on(t.stationId, t.date),
-		index("idx_departures_next").on(t.stationId, t.date, t.cancelled, t.time),
 		index("idx_departures_station_fetched").on(t.stationId, t.fetchedAt),
 		index("idx_departures_operator_date").on(t.operator, t.date),
 		index("idx_departures_date").on(t.date),

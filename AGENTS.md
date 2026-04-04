@@ -95,6 +95,10 @@ npm run db:migrate    # Apply to remote D1
 
 **Important:** Migrations in `migrations/` are applied automatically on every deploy (via `npx wrangler d1 migrations apply` in the deploy command). Do NOT apply migrations manually with `wrangler d1 execute --file` — use `wrangler d1 migrations apply --remote` instead, so the migration is recorded in the `d1_migrations` table and won't be re-run on deploy.
 
+### Indexes
+
+When adding, removing, or modifying queries in `src/lib/queries.ts` or `src/lib/collect.ts`, always check that the `departures` table indexes in `src/db/schema.ts` cover the new query's WHERE/GROUP BY/ORDER BY columns. D1 has a 100-parameter limit per query — keep indexes lean. Remove indexes that no longer match any query pattern to avoid write overhead. Unbounded DISTINCT or GROUP BY queries on `departures` should be scoped to recent data (e.g. last 30 days) to avoid full table scans as data grows.
+
 ## RMV HAFAS API reference
 
 Base URL: `https://www.rmv.de/hapi`
