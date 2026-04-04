@@ -247,7 +247,7 @@ for (const s of STATIONS) {
 						{(stationLines.get(s.id) ?? []).length > 0 && (
 							<div class="text-xs text-muted truncate" title={(stationLines.get(s.id) ?? []).join(", ")}>{(stationLines.get(s.id) ?? []).join(", ")}</div>
 						)}
-						{st && st.total > 0 && (
+						{st && st.total > 0 ? (
 							<>
 								<div class="text-sm text-muted mt-1">
 									{pct(st.cancelled, st.total)}% {t(lang, "home.cancelled")} &middot; {pct(st.delayed, st.total)}% {t(lang, "home.delayed")}
@@ -256,6 +256,8 @@ for (const s of STATIONS) {
 									{t(lang, "stat.reliability")}: {onTimeRate(st.cancelled, st.delayed, st.total)}%
 								</div>
 							</>
+						) : (
+							<div class="text-sm text-dimmed mt-1">{t(lang, "table.no_data")}</div>
 						)}
 					</a>
 				);
