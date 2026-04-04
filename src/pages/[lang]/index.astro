@@ -244,6 +244,9 @@ for (const s of STATIONS) {
 						<div class="text-lg font-bold text-emphasis">
 							{shortStationName(s.name)}
 						</div>
+						{(stationLines.get(s.id) ?? []).length > 0 && (
+							<div class="text-xs text-muted truncate" title={(stationLines.get(s.id) ?? []).join(", ")}>{(stationLines.get(s.id) ?? []).join(", ")}</div>
+						)}
 						{st && st.total > 0 && (
 							<>
 								<div class="text-sm text-muted mt-1">
