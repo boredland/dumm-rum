@@ -4,6 +4,10 @@
 
 Run `npm run generate:api` to update the HAFAS API types from the live OpenAPI spec.
 
+## Self-correction
+
+When you discover that something works differently than you assumed (e.g. a Cloudflare or SQLite behavior, an Astro convention, a Drizzle ORM quirk), update this file with the correct information so future sessions don't repeat the mistake. Examples: D1's 100 param limit, `ALTER TABLE DROP COLUMN` rebuilding constraints, Workers not honoring `s-maxage` without the Cache API.
+
 ## Project overview
 
 DummRum is a public transport cancellation and delay tracker for Frankfurt (Main) stations. It collects departure data from the RMV HAFAS API every 5 minutes via a Cloudflare cron trigger, stores it in a D1 database, materializes daily statistics, and serves an Astro SSR frontend with German/English i18n showing per-station and per-operator statistics, charts, and per-day breakdowns.
