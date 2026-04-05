@@ -101,7 +101,9 @@ npm run db:generate   # Generate migration + sync to migrations/
 npm run db:migrate    # Apply to remote D1
 ```
 
-**Important:** Migrations in `migrations/` are applied automatically on every deploy (via `npx wrangler d1 migrations apply` in the deploy command). Do NOT apply migrations manually with `wrangler d1 execute --file` — use `wrangler d1 migrations apply --remote` instead, so the migration is recorded in the `d1_migrations` table and won't be re-run on deploy.
+**Important:** Always use `npm run db:generate` after changing `src/db/schema.ts` — never write migration SQL by hand. Drizzle Kit generates correct migrations that match the schema. Hand-written migrations risk schema/DB drift (e.g. `ALTER TABLE DROP COLUMN` silently rebuilding constraints incorrectly).
+
+Migrations in `migrations/` are applied automatically on every deploy. To apply manually, use `npm run db:migrate` (not `wrangler d1 execute --file`), so the migration is recorded in the `d1_migrations` table and won't be re-run on deploy.
 
 ### Indexes
 
