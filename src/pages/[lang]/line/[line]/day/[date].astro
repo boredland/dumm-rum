@@ -27,6 +27,7 @@ const { departures, haiku } = await all({
 });
 
 const cancelledCount = departures.filter((d) => d.cancelled).length;
+const ghostCount = departures.filter((d) => d.ghost && !d.cancelled).length;
 const categories = [
 	...new Set(departures.map((d) => d.category).filter(Boolean)),
 ];
@@ -70,7 +71,7 @@ const delayedCount = departures.filter(
 		</a>
 	</header>
 
-	<div class="grid grid-cols-[repeat(auto-fit,minmax(160px,1fr))] gap-4 mb-8 max-sm:grid-cols-2">
+	<div class="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-8">
 		<div class="bg-surface border border-border rounded-xl p-5">
 			<div class="text-[0.7rem] uppercase tracking-wide text-muted mb-1">{t(lang, "stat.departures")}</div>
 			<div class="text-4xl font-bold tabular-nums">{departures.length}</div>
@@ -81,6 +82,13 @@ const delayedCount = departures.filter(
 				{cancelledCount}
 			</div>
 			<div class="text-sm text-muted mt-1">{pct(cancelledCount, departures.length)}%</div>
+		</div>
+		<div class="bg-surface border border-border rounded-xl p-5">
+			<div class="text-[0.7rem] uppercase tracking-wide text-muted mb-1">👻 {t(lang, "stat.ghost")}</div>
+			<div class:list={["text-4xl font-bold tabular-nums", ghostCount > 0 ? "text-purple-400" : "text-success"]}>
+				{ghostCount}
+			</div>
+			<div class="text-sm text-muted mt-1">{pct(ghostCount, departures.length)}%</div>
 		</div>
 		<div class="bg-surface border border-border rounded-xl p-5">
 			<div class="text-[0.7rem] uppercase tracking-wide text-muted mb-1">{t(lang, "table.delayed")}</div>
@@ -120,7 +128,7 @@ const delayedCount = departures.filter(
 								? delayMinutes(d.date, d.time, d.rtDate, d.rtTime)
 								: null;
 							const delayMin = rawDelay !== null ? Math.round(rawDelay) : null;
-const status = d.cancelled ? "cancelled" : (rawDelay !== null && rawDelay >= DELAY_THRESHOLD_MIN) ? "delayed" : "ok";
+const status = d.cancelled ? "cancelled" : d.ghost ? "ghost" : (rawDelay !== null && rawDelay >= DELAY_THRESHOLD_MIN) ? "delayed" : "ok";
 							return (
 								<tr data-status={status} data-direction={d.direction} data-time={time} class="border-b border-border-dim last:border-b-0 hover:bg-surface-hover">
 									<td class="px-4 py-2.5 text-sm tabular-nums">

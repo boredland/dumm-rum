@@ -10,6 +10,8 @@ const translations = {
 			"Alle 3 Minuten fragen wir die RMV-Echtzeitdaten f\u00fcr zwei Haltestellen ab (ca. alle 15 Minuten pro Haltestelle) und speichern Abfahrten, Ausf\u00e4lle und Versp\u00e4tungen.",
 		"home.methodology_cancellation":
 			"Die Ausfallquote ist der Anteil der ausgefallenen Abfahrten an der Gesamtzahl.",
+		"home.methodology_ghost":
+			"Geisterfahrten (👻) sind geplante Abfahrten, die nie Echtzeitdaten erhalten haben. Laut RMV ist das Fehlen von Echtzeitdaten \u201eein sehr starkes Indiz, dass dieser Bus mit hoher Wahrscheinlichkeit ausfallen wird\u201c \u2014 das System empfängt keine Live-Position, weil schlicht kein Bus auf dieser Fahrt unterwegs ist. Diese werden getrennt von bestätigten Ausfällen erfasst.",
 		"home.methodology_delay":
 			"Die Durchschnittsverspätung vergleicht die tatsächliche Abfahrtszeit mit der geplanten \u2014 bei Ausfällen wird der geplante Takt als Wartezeit angenommen.",
 		"home.methodology_delayed":
@@ -54,6 +56,7 @@ const translations = {
 		"stat.of_departures": "von {total} Abfahrten",
 		"stat.avg_per_day": "\u00d8 / Tag",
 		"stat.cancelled": "ausgefallen",
+		"stat.ghost": "Geisterfahrten",
 		"stat.rate": "Quote",
 		"stat.since": "Erfassung seit",
 		"haiku.heading": "Haiku des Tages",
@@ -72,6 +75,7 @@ const translations = {
 		"table.delayed": "Verspätungen",
 		"table.th.total": "Σ",
 		"table.th.cancelled": "❌",
+		"table.th.ghost": "👻",
 		"table.th.delayed": "⏳",
 		"table.otp": "💯",
 		"table.time": "Zeit",
@@ -95,7 +99,10 @@ const translations = {
 		"filter.issues": "Ausfälle & Verspätungen",
 		"filter.on_time": "Pünktlich",
 
+		"home.ghost": "Geisterfahrten",
+
 		"status.cancelled": "❌",
+		"status.ghost": "👻",
 		"status.delayed": "⏳",
 		"status.ok": "✅",
 		"status.on_time": "p\u00fcnktlich",
@@ -108,6 +115,8 @@ const translations = {
 			"Every 3 minutes we poll the RMV realtime feed for two stations (approximately every 15 minutes per station) and store departures, cancellations, and delays.",
 		"home.methodology_cancellation":
 			"The cancellation rate is the share of cancelled departures out of the total.",
+		"home.methodology_ghost":
+			"Ghost departures (👻) are scheduled trips that never received realtime data. According to RMV, the absence of realtime data is \u201ca very strong indicator that the bus will very likely not run\u201d \u2014 the system cannot receive a live position because there simply is no bus on that route. These are tracked separately from confirmed cancellations.",
 		"home.methodology_delay":
 			"Average delay compares actual departure time to the scheduled time \u2014 for cancellations, we assume the wait equals the planned frequency.",
 		"home.methodology_delayed":
@@ -152,6 +161,7 @@ const translations = {
 		"stat.of_departures": "of {total} departures",
 		"stat.avg_per_day": "Avg / day",
 		"stat.cancelled": "cancelled",
+		"stat.ghost": "ghost departures",
 		"stat.rate": "rate",
 		"stat.since": "tracking since",
 		"haiku.heading": "Haiku of the day",
@@ -170,6 +180,7 @@ const translations = {
 		"table.delayed": "Delayed",
 		"table.th.total": "Σ",
 		"table.th.cancelled": "❌",
+		"table.th.ghost": "👻",
 		"table.th.delayed": "⏳",
 		"table.otp": "💯",
 		"table.time": "Time",
@@ -193,7 +204,10 @@ const translations = {
 		"filter.issues": "Cancelled & delayed",
 		"filter.on_time": "On time",
 
+		"home.ghost": "ghost departures",
+
 		"status.cancelled": "❌",
+		"status.ghost": "👻",
 		"status.delayed": "⏳",
 		"status.ok": "✅",
 		"status.on_time": "on time",

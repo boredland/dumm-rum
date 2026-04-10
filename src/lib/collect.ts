@@ -15,6 +15,8 @@ import {
 	cancelledDistinctSql,
 	delayedDistinctSql,
 	delayedSql,
+	ghostDistinctSql,
+	ghostSql,
 	totalDistinctSql,
 } from "./queries";
 import type { Station } from "./stations";
@@ -117,6 +119,7 @@ async function collectDepartures(
 							departures.cancelled,
 							excluded(departures.cancelled),
 						),
+						ghost: sql`CASE WHEN ${excluded(departures.rtTime)} IS NOT NULL THEN 0 ELSE ${departures.ghost} END`,
 						notified: sql`CASE WHEN ${departures.notified} = 1 AND (
 							MAX(${excluded(departures.cancelled)}, ${departures.cancelled}) != ${departures.cancelled}
 							OR (
@@ -264,6 +267,7 @@ async function materializeStationStats(db: Db, date: string): Promise<void> {
 			stationId: departures.stationId,
 			total: count().as("total"),
 			cancelled: sql<number>`SUM(${departures.cancelled})`.as("cancelled"),
+			ghost: ghostSql.as("ghost"),
 			delayed: delayedSql.as("delayed"),
 			avgDelay: avgDelaySql.as("avg_delay"),
 		})
@@ -280,6 +284,7 @@ async function materializeStationStats(db: Db, date: string): Promise<void> {
 					date,
 					total: row.total,
 					cancelled: row.cancelled,
+					ghost: row.ghost,
 					delayed: row.delayed,
 					avgDelay: row.avgDelay,
 				})
@@ -288,6 +293,7 @@ async function materializeStationStats(db: Db, date: string): Promise<void> {
 					set: {
 						total: row.total,
 						cancelled: row.cancelled,
+						ghost: row.ghost,
 						delayed: row.delayed,
 						avgDelay: row.avgDelay,
 					},
@@ -302,6 +308,7 @@ async function materializeOperatorStats(db: Db, date: string): Promise<void> {
 			operator: departures.operator,
 			total: totalDistinctSql.as("total"),
 			cancelled: cancelledDistinctSql.as("cancelled"),
+			ghost: ghostDistinctSql.as("ghost"),
 			delayed: delayedDistinctSql.as("delayed"),
 			avgDelay: avgDelaySql.as("avg_delay"),
 		})
@@ -318,6 +325,7 @@ async function materializeOperatorStats(db: Db, date: string): Promise<void> {
 					date,
 					total: row.total,
 					cancelled: row.cancelled,
+					ghost: row.ghost,
 					delayed: row.delayed,
 					avgDelay: row.avgDelay,
 				})
@@ -326,6 +334,7 @@ async function materializeOperatorStats(db: Db, date: string): Promise<void> {
 					set: {
 						total: row.total,
 						cancelled: row.cancelled,
+						ghost: row.ghost,
 						delayed: row.delayed,
 						avgDelay: row.avgDelay,
 					},
@@ -341,6 +350,7 @@ async function materializeLineStats(db: Db, date: string): Promise<void> {
 			category: departures.category,
 			total: totalDistinctSql.as("total"),
 			cancelled: cancelledDistinctSql.as("cancelled"),
+			ghost: ghostDistinctSql.as("ghost"),
 			delayed: delayedDistinctSql.as("delayed"),
 			avgDelay: avgDelaySql.as("avg_delay"),
 			operators: sql<string>`GROUP_CONCAT(DISTINCT ${departures.operator})`.as(
@@ -364,6 +374,7 @@ async function materializeLineStats(db: Db, date: string): Promise<void> {
 					date,
 					total: row.total,
 					cancelled: row.cancelled,
+					ghost: row.ghost,
 					delayed: row.delayed,
 					avgDelay: row.avgDelay,
 					category: row.category,
@@ -375,6 +386,7 @@ async function materializeLineStats(db: Db, date: string): Promise<void> {
 					set: {
 						total: row.total,
 						cancelled: row.cancelled,
+						ghost: row.ghost,
 						delayed: row.delayed,
 						avgDelay: row.avgDelay,
 						category: row.category,
@@ -422,6 +434,20 @@ export async function runCollection(
 	await generateDailyHaiku(db, ai);
 
 	const today = todayBerlin();
+	const cutoff = nowBerlin().subtract(15, "minute").format("HH:mm");
+	await db
+		.update(departures)
+		.set({ ghost: 1, notified: 0 })
+		.where(
+			and(
+				eq(departures.date, today),
+				eq(departures.cancelled, 0),
+				eq(departures.ghost, 0),
+				sql`${departures.rtTime} IS NULL`,
+				sql`${departures.time} < ${cutoff}`,
+			),
+		);
+
 	await Promise.all([
 		materializeStationStats(db, today),
 		materializeOperatorStats(db, today),
@@ -437,6 +463,7 @@ export async function runCollection(
 					direction: departures.direction,
 					time: departures.time,
 					cancelled: departures.cancelled,
+					ghost: departures.ghost,
 					rtDate: departures.rtDate,
 					rtTime: departures.rtTime,
 					date: departures.date,
@@ -450,6 +477,7 @@ export async function runCollection(
 						eq(departures.notified, 0),
 						or(
 							eq(departures.cancelled, 1),
+							eq(departures.ghost, 1),
 							sql`CASE WHEN ${departures.rtTime} IS NOT NULL AND ${departures.rtDate} IS NOT NULL THEN (strftime('%s', ${departures.rtDate} || ' ' || ${departures.rtTime}) - strftime('%s', ${departures.date} || ' ' || ${departures.time})) / 60.0 ELSE 0 END >= ${DELAY_THRESHOLD_MIN}`,
 						),
 					),
@@ -462,14 +490,18 @@ export async function runCollection(
 					.sort((a, b) => {
 						const scoreA = a.cancelled
 							? Infinity
-							: a.rtTime && a.rtDate
-								? Math.abs(delayMinutes(a.date, a.time, a.rtDate, a.rtTime))
-								: 0;
+							: a.ghost
+								? 1000
+								: a.rtTime && a.rtDate
+									? Math.abs(delayMinutes(a.date, a.time, a.rtDate, a.rtTime))
+									: 0;
 						const scoreB = b.cancelled
 							? Infinity
-							: b.rtTime && b.rtDate
-								? Math.abs(delayMinutes(b.date, b.time, b.rtDate, b.rtTime))
-								: 0;
+							: b.ghost
+								? 1000
+								: b.rtTime && b.rtDate
+									? Math.abs(delayMinutes(b.date, b.time, b.rtDate, b.rtTime))
+									: 0;
 						return scoreB - scoreA;
 					})
 					.filter((d) => {
@@ -489,6 +521,7 @@ export async function runCollection(
 						time: d.time,
 						stop: d.stop ?? "",
 						cancelled: !!d.cancelled,
+						ghost: !!d.ghost,
 						delayMin:
 							d.rtTime && d.rtDate
 								? Math.round(delayMinutes(d.date, d.time, d.rtDate, d.rtTime))

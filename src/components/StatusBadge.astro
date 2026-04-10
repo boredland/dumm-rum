@@ -4,7 +4,7 @@ import { t } from "../lib/i18n";
 
 interface Props {
 	lang: Lang;
-	status: "cancelled" | "delayed" | "ok";
+	status: "cancelled" | "ghost" | "delayed" | "ok";
 	delayMin?: number | null;
 }
 
@@ -14,6 +14,10 @@ const badge = {
 	cancelled: {
 		bg: "bg-danger/15 text-danger",
 		key: "status.cancelled" as const,
+	},
+	ghost: {
+		bg: "bg-purple-500/15 text-purple-400",
+		key: "status.ghost" as const,
 	},
 	delayed: { bg: "bg-warning/15 text-warning", key: "status.delayed" as const },
 	ok: { bg: "bg-success/10 text-success", key: "status.ok" as const },

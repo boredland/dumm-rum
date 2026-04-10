@@ -192,7 +192,7 @@ const otherPath = Astro.url.pathname.replace(`/${lang}`, `/${otherLang}`);
 							const s = row.dataset.status;
 							const statusMatch =
 								activeStatus === "all" ||
-								(activeStatus === "issues" && (s === "cancelled" || s === "delayed")) ||
+								(activeStatus === "issues" && (s === "cancelled" || s === "ghost" || s === "delayed")) ||
 								(activeStatus === "on_time" && s === "ok");
 							const dirMatch = !activeDir || row.dataset.direction === activeDir;
 							const hoursMatch = !activeHours || (row.dataset.time && isCoreHour(row.dataset.time));

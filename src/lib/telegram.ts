@@ -19,14 +19,20 @@ function detectLang(code?: string): Lang {
 
 const ALERT_LABELS: Record<
 	Lang,
-	{ title: string; cancelled: string; delay: string }
+	{ title: string; cancelled: string; ghost: string; delay: string }
 > = {
 	de: {
 		title: "DummRum Meldung",
 		cancelled: "ausgefallen",
+		ghost: "Geisterfahrt",
 		delay: "Verspätung",
 	},
-	en: { title: "DummRum Alert", cancelled: "cancelled", delay: "delay" },
+	en: {
+		title: "DummRum Alert",
+		cancelled: "cancelled",
+		ghost: "ghost departure",
+		delay: "delay",
+	},
 };
 
 async function sendMessage(
@@ -421,6 +427,7 @@ interface Issue {
 	time: string;
 	stop: string;
 	cancelled: boolean;
+	ghost: boolean;
 	delayMin: number | null;
 }
 
@@ -477,7 +484,9 @@ export async function notifySubscribers(
 			const labels = ALERT_LABELS[entry.lang];
 			const status = issue.cancelled
 				? `❌ ${labels.cancelled}`
-				: `⏱ +${issue.delayMin} min ${labels.delay}`;
+				: issue.ghost
+					? `👻 ${labels.ghost}`
+					: `⏱ +${issue.delayMin} min ${labels.delay}`;
 			const stopInfo = issue.stop ? ` @ ${issue.stop}` : "";
 			entry.msgs.push(
 				`<b>${issue.line}</b> ${issue.time.slice(0, 5)} → ${issue.direction}${stopInfo}: ${status}`,

@@ -129,8 +129,11 @@ export const avgDelaySql = sql<
 
 export const delayedSql = sql<number>`SUM(CASE WHEN ${departures.cancelled} = 0 AND ${departures.rtTime} IS NOT NULL AND (strftime('%s', ${departures.rtDate} || ' ' || ${departures.rtTime}) - strftime('%s', ${departures.date} || ' ' || ${departures.time})) / 60.0 >= ${DELAY_THRESHOLD_MIN} THEN 1 ELSE 0 END)`;
 
+export const ghostSql = sql<number>`SUM(${departures.ghost})`;
+
 export const totalDistinctSql = sql<number>`COUNT(DISTINCT ${departures.journeyNum})`;
 export const cancelledDistinctSql = sql<number>`COUNT(DISTINCT CASE WHEN ${departures.cancelled} = 1 THEN ${departures.journeyNum} END)`;
+export const ghostDistinctSql = sql<number>`COUNT(DISTINCT CASE WHEN ${departures.ghost} = 1 THEN ${departures.journeyNum} END)`;
 export const delayedDistinctSql = sql<number>`COUNT(DISTINCT CASE WHEN ${departures.cancelled} = 0 AND ${departures.rtTime} IS NOT NULL AND (strftime('%s', ${departures.rtDate} || ' ' || ${departures.rtTime}) - strftime('%s', ${departures.date} || ' ' || ${departures.time})) / 60.0 >= ${DELAY_THRESHOLD_MIN} THEN ${departures.journeyNum} END)`;
 
 async function getStatsFallback(
@@ -149,6 +152,7 @@ async function getStatsFallback(
 				date: departures.date,
 				total: count().as("total"),
 				cancelled: sql<number>`SUM(${departures.cancelled})`.as("cancelled"),
+				ghost: ghostSql.as("ghost"),
 				delayed: delayedSql.as("delayed"),
 				avgDelay: avgDelaySql.as("avg_delay"),
 			})
@@ -188,6 +192,7 @@ async function getStatsFallback(
 
 export interface StationSummary {
 	cancelled: number;
+	ghost: number;
 	delayed: number;
 	total: number;
 	avgDelay: number | null;
@@ -210,6 +215,7 @@ export async function getStationSummaries(
 					.select({
 						stationId: departures.stationId,
 						cancelled: sum(departures.cancelled).as("cancelled"),
+						ghost: ghostSql.as("ghost"),
 						delayed: delayedSql.as("delayed"),
 						total: count().as("total"),
 						avgDelay: avgDelaySql.as("avg_delay"),
@@ -223,6 +229,7 @@ export async function getStationSummaries(
 					.select({
 						stationId: stationDailyStats.stationId,
 						cancelled: sum(stationDailyStats.cancelled).as("cancelled"),
+						ghost: sum(stationDailyStats.ghost).as("ghost"),
 						delayed: sum(stationDailyStats.delayed).as("delayed"),
 						total: sum(stationDailyStats.total).as("total"),
 						avgDelay: sql<
@@ -253,6 +260,7 @@ export async function getStationSummaries(
 			r.stationId,
 			{
 				cancelled: Number(r.cancelled ?? 0),
+				ghost: Number(r.ghost ?? 0),
 				delayed: Number(r.delayed ?? 0),
 				total: Number(r.total ?? 0),
 				avgDelay: r.avgDelay,
@@ -274,6 +282,7 @@ export async function getStationSummaries(
 				s.id,
 				{
 					cancelled: st?.cancelled ?? 0,
+					ghost: st?.ghost ?? 0,
 					delayed: st?.delayed ?? 0,
 					total: st?.total ?? 0,
 					avgDelay: st?.avgDelay ?? null,
@@ -294,6 +303,7 @@ export async function getDayDepartures(db: Db, station: Station, date: string) {
 			line: departures.line,
 			direction: departures.direction,
 			cancelled: departures.cancelled,
+			ghost: departures.ghost,
 		})
 		.from(departures)
 		.where(and(eq(departures.stationId, station.id), eq(departures.date, date)))
@@ -320,6 +330,7 @@ export interface OperatorSummary {
 	categories: string[];
 	total: number;
 	cancelled: number;
+	ghost: number;
 	delayed: number;
 	avgDelay: number | null;
 }
@@ -340,6 +351,7 @@ export async function getOperatorSummaries(
 						operator: departures.operator,
 						total: totalDistinctSql.as("total"),
 						cancelled: cancelledDistinctSql.as("cancelled"),
+						ghost: ghostDistinctSql.as("ghost"),
 						delayed: delayedDistinctSql.as("delayed"),
 						avgDelay: avgDelaySql.as("avg_delay"),
 					})
@@ -358,6 +370,7 @@ export async function getOperatorSummaries(
 						operator: operatorDailyStats.operator,
 						total: sum(operatorDailyStats.total).as("total"),
 						cancelled: sum(operatorDailyStats.cancelled).as("cancelled"),
+						ghost: sum(operatorDailyStats.ghost).as("ghost"),
 						delayed: sum(operatorDailyStats.delayed).as("delayed"),
 						avgDelay: sql<
 							number | null
@@ -403,6 +416,7 @@ export async function getOperatorSummaries(
 		categories: [...(catMap.get(r.operator!) ?? [])],
 		total: Number(r.total ?? 0),
 		cancelled: Number(r.cancelled ?? 0),
+		ghost: Number(r.ghost ?? 0),
 		delayed: Number(r.delayed ?? 0),
 		avgDelay: r.avgDelay,
 	}));
@@ -415,6 +429,7 @@ export interface LineSummary {
 	destinations: string[];
 	total: number;
 	cancelled: number;
+	ghost: number;
 	delayed: number;
 	avgDelay: number | null;
 }
@@ -447,6 +462,7 @@ export async function getLineSummaries(
 					),
 				total: totalDistinctSql.as("total"),
 				cancelled: cancelledDistinctSql.as("cancelled"),
+				ghost: ghostDistinctSql.as("ghost"),
 				delayed: delayedDistinctSql.as("delayed"),
 				avgDelay: avgDelaySql.as("avg_delay"),
 			})
@@ -462,6 +478,7 @@ export async function getLineSummaries(
 			destinations: r.destinations ? r.destinations.split(",") : [],
 			total: r.total,
 			cancelled: r.cancelled,
+			ghost: r.ghost,
 			delayed: r.delayed,
 			avgDelay: r.avgDelay,
 		}));
@@ -482,6 +499,7 @@ export async function getLineSummaries(
 				),
 			total: sum(lineDailyStats.total).as("total"),
 			cancelled: sum(lineDailyStats.cancelled).as("cancelled"),
+			ghost: sum(lineDailyStats.ghost).as("ghost"),
 			delayed: sum(lineDailyStats.delayed).as("delayed"),
 			avgDelay: sql<
 				number | null
@@ -501,6 +519,7 @@ export async function getLineSummaries(
 		destinations: r.destinations ? r.destinations.split(",") : [],
 		total: Number(r.total ?? 0),
 		cancelled: Number(r.cancelled ?? 0),
+		ghost: Number(r.ghost ?? 0),
 		delayed: Number(r.delayed ?? 0),
 		avgDelay: r.avgDelay,
 	}));
@@ -510,6 +529,7 @@ export interface LineDayStats {
 	date: string;
 	total: number;
 	cancelled: number;
+	ghost: number;
 	delayed: number;
 	avgDelay: number | null;
 }
@@ -535,6 +555,7 @@ export async function getLineStats(
 					date: departures.date,
 					total: totalDistinctSql.as("total"),
 					cancelled: cancelledDistinctSql.as("cancelled"),
+					ghost: ghostDistinctSql.as("ghost"),
 					delayed: delayedDistinctSql.as("delayed"),
 					avgDelay: avgDelaySql.as("avg_delay"),
 				})
@@ -557,6 +578,7 @@ export async function getLineStats(
 				date: d.date,
 				total: d.total,
 				cancelled: d.cancelled,
+				ghost: d.ghost,
 				delayed: d.delayed,
 				avgDelay: d.avgDelay,
 			})),
@@ -587,6 +609,7 @@ export async function getLineStats(
 			date: d.date,
 			total: d.total,
 			cancelled: d.cancelled,
+			ghost: d.ghost,
 			delayed: d.delayed,
 			avgDelay: d.avgDelay,
 		})),
@@ -604,6 +627,7 @@ export async function getLineDayDepartures(db: Db, line: string, date: string) {
 			rtTime: departures.rtTime,
 			direction: departures.direction,
 			cancelled: sql<number>`max(${departures.cancelled})`.as("cancelled"),
+			ghost: sql<number>`max(${departures.ghost})`.as("ghost"),
 			operator: departures.operator,
 			category: departures.category,
 			stop: departures.stop,
@@ -641,6 +665,7 @@ export async function getOperatorStats(
 						date: departures.date,
 						total: totalDistinctSql.as("total"),
 						cancelled: cancelledDistinctSql.as("cancelled"),
+						ghost: ghostDistinctSql.as("ghost"),
 						delayed: delayedDistinctSql.as("delayed"),
 						avgDelay: avgDelaySql.as("avg_delay"),
 					})
@@ -673,6 +698,7 @@ export async function getOperatorStats(
 		date: d.date,
 		total: Number(d.total),
 		cancelled: Number(d.cancelled),
+		ghost: Number(d.ghost ?? 0),
 		delayed: Number(d.delayed),
 		avgDelay: d.avgDelay,
 	}));
@@ -698,6 +724,7 @@ export async function getOperatorDayDepartures(
 			category: departures.category,
 			direction: departures.direction,
 			cancelled: sql<number>`max(${departures.cancelled})`.as("cancelled"),
+			ghost: sql<number>`max(${departures.ghost})`.as("ghost"),
 			stop: departures.stop,
 		})
 		.from(departures)
