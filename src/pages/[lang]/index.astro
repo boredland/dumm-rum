@@ -106,27 +106,33 @@ for (const s of STATIONS) {
 			return rate > current.rate || (rate === current.rate && count > current.count);
 		}
 		let worstLineCancelled: Worst | null = null;
+		let worstLineGhost: Worst | null = null;
 		let worstLineDelayed: Worst | null = null;
 		for (const l of lines) {
 			if (isWorse(l.cancelled, l.total, worstLineCancelled)) worstLineCancelled = { name: l.line, count: l.cancelled, rate: l.total > 0 ? l.cancelled / l.total : 0 };
+			if (isWorse(l.ghost, l.total, worstLineGhost)) worstLineGhost = { name: l.line, count: l.ghost, rate: l.total > 0 ? l.ghost / l.total : 0 };
 			if (isWorse(l.delayed, l.total, worstLineDelayed)) worstLineDelayed = { name: l.line, count: l.delayed, rate: l.total > 0 ? l.delayed / l.total : 0 };
 		}
 		let worstStationCancelled: Worst | null = null;
+		let worstStationGhost: Worst | null = null;
 		let worstStationDelayed: Worst | null = null;
 		for (const [id, st] of stationStats) {
 			const name = shortStationName(STATIONS.find((s) => s.id === id)?.name ?? id);
 			if (isWorse(st.cancelled, st.total, worstStationCancelled)) worstStationCancelled = { name, count: st.cancelled, rate: st.total > 0 ? st.cancelled / st.total : 0 };
+			if (isWorse(st.ghost, st.total, worstStationGhost)) worstStationGhost = { name, count: st.ghost, rate: st.total > 0 ? st.ghost / st.total : 0 };
 			if (isWorse(st.delayed, st.total, worstStationDelayed)) worstStationDelayed = { name, count: st.delayed, rate: st.total > 0 ? st.delayed / st.total : 0 };
 		}
 		let worstOperatorCancelled: Worst | null = null;
+		let worstOperatorGhost: Worst | null = null;
 		let worstOperatorDelayed: Worst | null = null;
 		for (const op of operators) {
 			if (isWorse(op.cancelled, op.total, worstOperatorCancelled)) worstOperatorCancelled = { name: op.operator, count: op.cancelled, rate: op.total > 0 ? op.cancelled / op.total : 0 };
+			if (isWorse(op.ghost, op.total, worstOperatorGhost)) worstOperatorGhost = { name: op.operator, count: op.ghost, rate: op.total > 0 ? op.ghost / op.total : 0 };
 			if (isWorse(op.delayed, op.total, worstOperatorDelayed)) worstOperatorDelayed = { name: op.operator, count: op.delayed, rate: op.total > 0 ? op.delayed / op.total : 0 };
 		}
 
 		return (
-			<div class="mb-8 grid grid-cols-3 gap-4 max-sm:grid-cols-1">
+			<div class="mb-8 grid grid-cols-2 sm:grid-cols-4 gap-4">
 				<div class="bg-surface border border-border rounded-xl p-5">
 					<div class="text-[0.7rem] uppercase tracking-wide text-muted mb-1">{t(lang, "home.overall_score")}</div>
 					<div class:list={["text-5xl font-bold tabular-nums", color]}>{score}<span class="text-lg text-muted">%</span></div>
@@ -147,6 +153,19 @@ for (const s of STATIONS) {
 						<div class="text-sm mt-1 truncate" title={worstOperatorCancelled.name}><span class="text-danger font-semibold">{(worstOperatorCancelled.rate * 100).toFixed(1)}%</span> <span class="text-muted">{t(lang, "home.operator")}</span> <span class="font-semibold">{worstOperatorCancelled.name}</span></div>
 					)}
 					{!worstLineCancelled?.count && <div class="text-2xl font-bold text-success">0</div>}
+				</div>
+				<div class="bg-surface border border-border rounded-xl p-5">
+					<div class="text-[0.7rem] uppercase tracking-wide text-muted mb-1">{t(lang, "home.most_ghosts")}</div>
+					{worstLineGhost && worstLineGhost.count > 0 && (
+						<div class="text-sm mt-1"><span class="text-purple-400 font-semibold">{(worstLineGhost.rate * 100).toFixed(1)}%</span> <span class="text-muted">{t(lang, "home.line")}</span> <span class="font-semibold">{worstLineGhost.name}</span></div>
+					)}
+					{worstStationGhost && worstStationGhost.count > 0 && (
+						<div class="text-sm mt-1 truncate" title={worstStationGhost.name}><span class="text-purple-400 font-semibold">{(worstStationGhost.rate * 100).toFixed(1)}%</span> <span class="text-muted">{t(lang, "home.station")}</span> <span class="font-semibold">{worstStationGhost.name}</span></div>
+					)}
+					{worstOperatorGhost && worstOperatorGhost.count > 0 && (
+						<div class="text-sm mt-1 truncate" title={worstOperatorGhost.name}><span class="text-purple-400 font-semibold">{(worstOperatorGhost.rate * 100).toFixed(1)}%</span> <span class="text-muted">{t(lang, "home.operator")}</span> <span class="font-semibold">{worstOperatorGhost.name}</span></div>
+					)}
+					{!worstLineGhost?.count && <div class="text-2xl font-bold text-success">0</div>}
 				</div>
 				<div class="bg-surface border border-border rounded-xl p-5">
 					<div class="text-[0.7rem] uppercase tracking-wide text-muted mb-1">{t(lang, "home.most_delays")}</div>
