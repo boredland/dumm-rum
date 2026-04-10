@@ -96,6 +96,7 @@ for (const s of STATIONS) {
 		}
 		if (totalAll === 0) return null;
 		const score = onTimeRate(cancelledAll, delayedAll, totalAll);
+		const scoreWithGhosts = onTimeRate(cancelledAll + ghostAll, delayedAll, totalAll);
 		const color = score < 80 ? "text-danger" : score < 90 ? "text-warning" : "text-success";
 
 		type Worst = { name: string; count: number; rate: number };
@@ -136,8 +137,8 @@ for (const s of STATIONS) {
 				<div class="bg-surface border border-border rounded-xl p-5">
 					<div class="text-[0.7rem] uppercase tracking-wide text-muted mb-1">{t(lang, "home.overall_score")}</div>
 					<div class:list={["text-5xl font-bold tabular-nums", color]}>{score}<span class="text-lg text-muted">%</span></div>
+					{ghostAll > 0 && <div class="text-sm text-purple-400 mt-1">👻 {scoreWithGhosts}%</div>}
 					<div class="text-sm text-muted mt-1">
-						<div>{pct(cancelledAll, totalAll)}% {t(lang, "home.cancelled")} &middot; {ghostAll > 0 && <>{pct(ghostAll, totalAll)}% 👻 &middot; </>}{pct(delayedAll, totalAll)}% {t(lang, "home.delayed")}</div>
 						<div>{totalAll.toLocaleString(lang)} {t(lang, "stat.departures").toLowerCase()}</div>
 					</div>
 				</div>
@@ -223,7 +224,7 @@ for (const s of STATIONS) {
 							</div>
 							{l.total > 0 && (
 								<div class="text-xs text-muted mt-1">
-									{t(lang, "stat.reliability")}: {onTimeRate(l.cancelled, l.delayed, l.total)}%
+									{t(lang, "stat.reliability")}: {onTimeRate(l.cancelled, l.delayed, l.total)}%{l.ghost > 0 && <span class="text-purple-400"> (👻 {onTimeRate(l.cancelled + l.ghost, l.delayed, l.total)}%)</span>}
 								</div>
 							)}
 						</a>
@@ -274,7 +275,7 @@ for (const s of STATIONS) {
 									{pct(st.cancelled, st.total)}% {t(lang, "home.cancelled")} &middot; {st.ghost > 0 && <>{pct(st.ghost, st.total)}% 👻 &middot; </>}{pct(st.delayed, st.total)}% {t(lang, "home.delayed")}
 								</div>
 								<div class="text-xs text-muted mt-1">
-									{t(lang, "stat.reliability")}: {onTimeRate(st.cancelled, st.delayed, st.total)}%
+									{t(lang, "stat.reliability")}: {onTimeRate(st.cancelled, st.delayed, st.total)}%{st.ghost > 0 && <span class="text-purple-400"> (👻 {onTimeRate(st.cancelled + st.ghost, st.delayed, st.total)}%)</span>}
 								</div>
 							</>
 						) : (
@@ -323,7 +324,7 @@ for (const s of STATIONS) {
 							</div>
 							{op.total > 0 && (
 								<div class="text-xs text-muted mt-1">
-									{t(lang, "stat.reliability")}: {onTimeRate(op.cancelled, op.delayed, op.total)}%
+									{t(lang, "stat.reliability")}: {onTimeRate(op.cancelled, op.delayed, op.total)}%{op.ghost > 0 && <span class="text-purple-400"> (👻 {onTimeRate(op.cancelled + op.ghost, op.delayed, op.total)}%)</span>}
 								</div>
 							)}
 						</a>

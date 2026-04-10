@@ -42,6 +42,11 @@ const totalGhost = stats.days.reduce((s, d) => s + d.ghost, 0);
 const totalDelayed = stats.days.reduce((s, d) => s + d.delayed, 0);
 const totalDep = stats.days.reduce((s, d) => s + d.total, 0);
 const score = onTimeRate(totalCancelled, totalDelayed, totalDep);
+const scoreWithGhosts = onTimeRate(
+	totalCancelled + totalGhost,
+	totalDelayed,
+	totalDep,
+);
 ---
 
 <Layout title={shortStationName(station.name)} lang={lang}>
@@ -87,7 +92,7 @@ const score = onTimeRate(totalCancelled, totalDelayed, totalDep);
 		<div class="bg-surface border border-border rounded-xl p-5">
 			<div class="text-[0.7rem] uppercase tracking-wide text-muted mb-1">{t(lang, "stat.departures")}</div>
 			<div class="text-4xl font-bold tabular-nums">{totalDep.toLocaleString(lang)}</div>
-			<div class="text-sm text-muted mt-1">{t(lang, "stat.reliability")}: {score}%</div>
+			<div class="text-sm text-muted mt-1">{t(lang, "stat.reliability")}: {score}%{totalGhost > 0 && <span class="text-purple-400"> (👻 {scoreWithGhosts}%)</span>}</div>
 		</div>
 		<div class="bg-surface border border-border rounded-xl p-5">
 			<div class="text-[0.7rem] uppercase tracking-wide text-muted mb-1">{t(lang, "stat.cancelled")}</div>
@@ -157,7 +162,7 @@ const score = onTimeRate(totalCancelled, totalDelayed, totalDep);
 										)}
 										{d.avgDelay !== null && d.avgDelay > 0 && <span class="text-xs text-muted ml-1">{fmtDelay(d.avgDelay)}</span>}
 									</td>
-									<td class="px-2 sm:px-4 py-2.5 text-sm tabular-nums">{pct(d.total - issues, d.total)}%</td>
+									<td class="px-2 sm:px-4 py-2.5 text-sm tabular-nums">{pct(d.total - issues, d.total)}%{d.ghost > 0 && <span class="text-purple-400"> ({pct(d.total - issues - d.ghost, d.total)}%)</span>}</td>
 								</tr>
 							);
 						})
