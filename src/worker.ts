@@ -1,9 +1,10 @@
 import { handle } from "@astrojs/cloudflare/handler";
 import { createDb } from "./db/client";
 import { runCollection } from "./lib/collect";
+import { snapshotJourneys } from "./lib/journeyRuns";
 import { STATIONS } from "./lib/stations";
 import { handleTelegramWebhook } from "./lib/telegram";
-import { todayBerlin } from "./lib/utils";
+import { nowBerlin, todayBerlin } from "./lib/utils";
 
 const CACHE_TTL = 300;
 
@@ -55,6 +56,24 @@ export default {
 		ctx: ExecutionContext,
 	) {
 		const db = createDb(env.DB);
+
+		// Once-per-day window: snapshot yesterday's journeys into journey_runs.
+		// The 3-min cron means exactly one tick lands in the [02:00, 02:03) slot.
+		const berlinNow = nowBerlin();
+		if (berlinNow.hour() === 2 && berlinNow.minute() < 3) {
+			const yesterday = berlinNow.subtract(1, "day").format("YYYY-MM-DD");
+			const apiKey = env.RMV_API_KEY.split(",")[0].trim();
+			ctx.waitUntil(
+				snapshotJourneys(db, apiKey, yesterday)
+					.then((r) =>
+						console.log(
+							`journey snapshot for ${yesterday}: discovered=${r.discovered} upserted=${r.upserted} failed=${r.failed}`,
+						),
+					)
+					.catch((e) => console.error("journey snapshot failed:", e)),
+			);
+		}
+
 		const { linesToday, operatorsToday } = await runCollection(
 			db,
 			env.AI,

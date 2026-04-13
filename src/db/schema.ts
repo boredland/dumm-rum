@@ -101,6 +101,37 @@ export const lineDailyStats = sqliteTable(
 	],
 );
 
+export const journeyRuns = sqliteTable(
+	"journey_runs",
+	{
+		journeyRef: text("journey_ref").notNull(),
+		dayOfOperation: text("day_of_operation").notNull(),
+		line: text().notNull(),
+		category: text(),
+		operator: text(),
+		lineId: text("line_id"),
+		originStopId: text("origin_stop_id").notNull(),
+		originName: text("origin_name").notNull(),
+		originDepTime: text("origin_dep_time").notNull(),
+		destStopId: text("dest_stop_id").notNull(),
+		destName: text("dest_name").notNull(),
+		destArrTime: text("dest_arr_time").notNull(),
+		status: text().notNull(),
+		cancelled: integer().notNull().default(0),
+		partCancelled: integer("part_cancelled").notNull().default(0),
+		cancelledStopCount: integer("cancelled_stop_count").notNull().default(0),
+		totalStopCount: integer("total_stop_count").notNull(),
+		wasTracked: integer("was_tracked").notNull().default(0),
+		snapshotAt: text("snapshot_at").notNull(),
+	},
+	(t) => [
+		primaryKey({ columns: [t.journeyRef, t.dayOfOperation] }),
+		index("idx_journey_runs_day").on(t.dayOfOperation),
+		index("idx_journey_runs_line_day").on(t.line, t.dayOfOperation),
+		index("idx_journey_runs_operator_day").on(t.operator, t.dayOfOperation),
+	],
+);
+
 export const telegramSubscriptions = sqliteTable(
 	"telegram_subscriptions",
 	{

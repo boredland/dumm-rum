@@ -158,6 +158,16 @@ dead_letter_queue = "journey-polls-dlq"
 
 **Why not now.** Phase 2 delivers most of the user-visible wins (corridor cancellation, honest OTP, ghost verification). Phase 3 is infrastructure-heavy and only unlocks features that aren't on the roadmap yet.
 
+### Cross-station redundancy (Phase 3 lever)
+
+Measured 2026-04-13: 1,278 unique journeys produce 2,057 `departures` rows — ~60% row-count inflation from journeys that touch multiple tracked stations. Corridor-heavy stations carry most of the duplication (e.g. `3000933` at 81.7% shared, `3000129` at 78.9%, `3001507` at 77.1%, `3001217` at 73.8%).
+
+Under Phase 3, `/journeyDetail.Stops[]` supplies per-stop rt data for every stop on a route — including stations we don't track — so per-station polling becomes redundant for *delay analytics*. What it can't be dropped for:
+- Discovery of `A` (additional) / `S` (substitute) services added mid-day (these only appear on live boards, not in any schedule source)
+- Per-station "next departures" UX if we ever add one
+
+Plausible Phase 3 cadence: hourly discovery poll per station (instead of every 3 min) + journey-primary polling via Queues. Keeps discovery but drops ~95% of redundant polling volume.
+
 ## Open questions to resolve before each phase
 
 **Before 2a:**
