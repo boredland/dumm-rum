@@ -406,12 +406,18 @@ function pickKey(apiKeys: string): string {
 	return keys[Math.floor(Math.random() * keys.length)];
 }
 
+export interface CollectionResult {
+	summary: Record<string, number>;
+	linesToday: string[];
+	operatorsToday: string[];
+}
+
 export async function runCollection(
 	db: Db,
 	ai: Ai,
 	apiKeys: string,
 	telegramToken?: string,
-): Promise<Record<string, number>> {
+): Promise<CollectionResult> {
 	const now = nowBerlin();
 	const slot = Math.floor((now.hour() * 60 + now.minute()) / 3);
 	const idx = (slot * 3) % STATIONS.length;
@@ -453,6 +459,19 @@ export async function runCollection(
 		materializeOperatorStats(db, today),
 		materializeLineStats(db, today),
 	]);
+
+	const [lineRows, operatorRows] = await Promise.all([
+		db
+			.select({ line: lineDailyStats.line })
+			.from(lineDailyStats)
+			.where(eq(lineDailyStats.date, today)),
+		db
+			.select({ operator: operatorDailyStats.operator })
+			.from(operatorDailyStats)
+			.where(eq(operatorDailyStats.date, today)),
+	]);
+	const linesToday = lineRows.map((r) => r.line);
+	const operatorsToday = operatorRows.map((r) => r.operator);
 
 	if (telegramToken) {
 		try {
@@ -538,5 +557,5 @@ export async function runCollection(
 		}
 	}
 
-	return summary;
+	return { summary, linesToday, operatorsToday };
 }

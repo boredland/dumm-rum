@@ -1,7 +1,9 @@
 import { handle } from "@astrojs/cloudflare/handler";
 import { createDb } from "./db/client";
 import { runCollection } from "./lib/collect";
+import { STATIONS } from "./lib/stations";
 import { handleTelegramWebhook } from "./lib/telegram";
+import { todayBerlin } from "./lib/utils";
 
 const CACHE_TTL = 300;
 
@@ -53,13 +55,33 @@ export default {
 		ctx: ExecutionContext,
 	) {
 		const db = createDb(env.DB);
-		await runCollection(db, env.AI, env.RMV_API_KEY, env.TELEGRAM_BOT_TOKEN);
+		const { linesToday, operatorsToday } = await runCollection(
+			db,
+			env.AI,
+			env.RMV_API_KEY,
+			env.TELEGRAM_BOT_TOKEN,
+		);
 
 		const site = env.SITE_URL;
 		if (site) {
+			const today = todayBerlin();
+			const langs = ["de", "en"];
+			const paths: string[] = [""];
+			for (const s of STATIONS) {
+				paths.push(`/${s.slug}`, `/${s.slug}/day/${today}`);
+			}
+			for (const line of linesToday) {
+				const enc = encodeURIComponent(line);
+				paths.push(`/line/${enc}`, `/line/${enc}/day/${today}`);
+			}
+			for (const op of operatorsToday) {
+				const enc = encodeURIComponent(op);
+				paths.push(`/operator/${enc}`, `/operator/${enc}/day/${today}`);
+			}
+			const urls = langs.flatMap((l) => paths.map((p) => `${site}/${l}${p}`));
 			ctx.waitUntil(
 				Promise.all(
-					[`${site}/de`, `${site}/en`].map((url) =>
+					urls.map((url) =>
 						fetch(url, { headers: { "Cache-Purge": "1" } }).catch(() => {}),
 					),
 				),
