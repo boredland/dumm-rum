@@ -133,10 +133,14 @@ async function collectDepartures(
 							excluded(departures.journeyRef),
 							departures.journeyRef,
 						),
-						journeyStatus: coalesce(
-							excluded(departures.journeyStatus),
-							departures.journeyStatus,
-						),
+						// Once RMV has reported a meaningful status (R/A/S), keep it.
+						// After a journey passes, the status fades back to 'P' — we want
+						// to remember that it was tracked / additional / substituted.
+						journeyStatus: sql`CASE
+							WHEN ${departures.journeyStatus} IN ('R','A','S') THEN ${departures.journeyStatus}
+							WHEN ${excluded(departures.journeyStatus)} IN ('R','A','S') THEN ${excluded(departures.journeyStatus)}
+							ELSE COALESCE(${excluded(departures.journeyStatus)}, ${departures.journeyStatus})
+						END`,
 						cancelled: max(
 							departures.cancelled,
 							excluded(departures.cancelled),
