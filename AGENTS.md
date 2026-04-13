@@ -107,7 +107,23 @@ Migrations in `migrations/` are applied automatically on every deploy. To apply 
 
 ### Indexes
 
-When adding, removing, or modifying queries in `src/lib/queries.ts` or `src/lib/collect.ts`, always check that the `departures` table indexes in `src/db/schema.ts` cover the new query's WHERE/GROUP BY/ORDER BY columns. D1 has a 100-parameter limit per query — keep indexes lean. Remove indexes that no longer match any query pattern to avoid write overhead. Unbounded DISTINCT or GROUP BY queries on `departures` should be scoped to recent data (e.g. last 30 days) to avoid full table scans as data grows.
+When adding, removing, or modifying queries in `src/lib/queries.ts` or `src/lib/collect.ts`, always check that the `departures` table indexes in `src/db/schema.ts` cover the new query's WHERE/GROUP BY/ORDER BY columns. Remove indexes that no longer match any query pattern to avoid write overhead. Unbounded DISTINCT or GROUP BY queries on `departures` should be scoped to recent data (e.g. last 30 days) to avoid full table scans as data grows.
+
+### D1's 100-parameter limit
+
+D1 enforces a hard limit of **100 bound parameters per statement** (`D1_ERROR: too many SQL variables`). This bites hardest on multi-row inserts.
+
+**Drizzle binds one parameter per non-autoincrement column on every row, including columns omitted from `.values()` that fall back to a schema default.** So `Object.keys(rowObject).length` undercounts the real param count whenever the schema has columns with defaults that you don't explicitly pass. A 7-row batch that "should" be 7×14=98 params can actually be 7×15=105 and silently fail every cron run — only the trailing partial batch (≤6 rows) gets through.
+
+When batching inserts, derive the per-row param count from the schema, not from the values object:
+
+```ts
+import { getTableColumns } from "drizzle-orm";
+const colCount = Object.keys(getTableColumns(table)).length - 1; // -1 for autoincrement id
+const batchSize = Math.floor(100 / colCount);
+```
+
+This stays correct when columns are added later. If the primary-key shape changes, revisit the `-1`.
 
 ## RMV HAFAS API reference
 

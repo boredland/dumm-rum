@@ -1,4 +1,12 @@
-import { and, count, eq, isNotNull, or, sql } from "drizzle-orm";
+import {
+	and,
+	count,
+	eq,
+	getTableColumns,
+	isNotNull,
+	or,
+	sql,
+} from "drizzle-orm";
 import type { Db } from "../db/client";
 import { coalesce, excluded, max } from "../db/helpers";
 import {
@@ -37,7 +45,7 @@ async function collectDepartures(
 	station: Station,
 ): Promise<number> {
 	const client = createHafasClient(apiKey);
-	const start = nowBerlin().subtract(30, "minute");
+	const start = nowBerlin().subtract(90, "minute");
 
 	const { data, error } = await client.GET("/departureBoard", {
 		params: {
@@ -46,7 +54,7 @@ async function collectDepartures(
 				id: station.id,
 				date: start.format("YYYY-MM-DD"),
 				time: start.format("HH:mm"),
-				duration: 45,
+				duration: 105,
 				maxJourneys: -1,
 				format: "json",
 			},
@@ -88,13 +96,17 @@ async function collectDepartures(
 			category: p.catOut ?? null,
 			journeyNum: p.num!,
 			stop: dep.stop ?? null,
+			ghost: 0,
 			notified: 0,
 			fetchedAt: now,
 		};
 	};
 	// https://developers.cloudflare.com/d1/platform/limits/
+	// Drizzle binds one parameter per non-autoincrement column, including
+	// columns omitted from `.values()` that fall back to a schema default.
+	// Counting `Object.keys(toRow(...))` undercounts and overflows the limit.
 	const D1_MAX_PARAMS = 100;
-	const colCount = Object.keys(toRow(deps[0])).length;
+	const colCount = Object.keys(getTableColumns(departures)).length - 1;
 	const batchSize = Math.max(1, Math.floor(D1_MAX_PARAMS / colCount));
 
 	for (let i = 0; i < deps.length; i += batchSize) {
