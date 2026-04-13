@@ -95,6 +95,8 @@ async function collectDepartures(
 			operator: p.operator ?? null,
 			category: p.catOut ?? null,
 			journeyNum: p.num!,
+			journeyRef: dep.JourneyDetailRef?.ref ?? null,
+			journeyStatus: dep.JourneyStatus ?? null,
 			stop: dep.stop ?? null,
 			ghost: 0,
 			notified: 0,
@@ -127,6 +129,14 @@ async function collectDepartures(
 					set: {
 						rtDate: coalesce(excluded(departures.rtDate), departures.rtDate),
 						rtTime: coalesce(excluded(departures.rtTime), departures.rtTime),
+						journeyRef: coalesce(
+							excluded(departures.journeyRef),
+							departures.journeyRef,
+						),
+						journeyStatus: coalesce(
+							excluded(departures.journeyStatus),
+							departures.journeyStatus,
+						),
 						cancelled: max(
 							departures.cancelled,
 							excluded(departures.cancelled),

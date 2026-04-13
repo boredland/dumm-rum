@@ -23,6 +23,8 @@ export const departures = sqliteTable(
 		operator: text(),
 		category: text(),
 		journeyNum: text("journey_num").notNull(),
+		journeyRef: text("journey_ref"),
+		journeyStatus: text("journey_status"),
 		stop: text(),
 		ghost: integer().notNull().default(0),
 		notified: integer().notNull().default(0),
