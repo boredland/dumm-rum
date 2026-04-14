@@ -182,13 +182,11 @@ async function fetchAndRender() {
 				const m = markers.get(v.id);
 				m.setIcon(getVehicleIcon(cat, sleeping));
 				m.setPopupContent(popupContent(v));
-				m.setTooltipContent(`${v.line} → ${shortName(v.destination)}`);
 				if (visible && !map.hasLayer(m)) m.addTo(map);
 				else if (!visible && map.hasLayer(m)) m.remove();
 			} else {
 				const m = L.marker([v.lat, v.lon], { icon: getVehicleIcon(cat, sleeping) });
 				m.bindPopup(popupContent(v));
-				m.bindTooltip(`${v.line} → ${shortName(v.destination)}`, { direction: "top" });
 				m._vehicleCategory = cat;
 				if (visible) m.addTo(map);
 				markers.set(v.id, m);
