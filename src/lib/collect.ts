@@ -95,7 +95,7 @@ async function discoverJourneys(
 		const p = dep.ProductAtStop!;
 		rows.push({
 			journeyRef: ref,
-			dayOfOperation: today,
+			dayOfOperation: dep.date ?? today,
 			line: p.line!,
 			category: p.catOut ?? null,
 			operator: p.operator ?? null,

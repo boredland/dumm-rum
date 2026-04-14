@@ -8,9 +8,11 @@ import { nowBerlin, todayBerlin } from "../../lib/utils";
 
 export const GET: APIRoute = async () => {
 	const db = createDb(env.DB);
-	const today = todayBerlin();
+	const now = nowBerlin();
+	const today = now.format("YYYY-MM-DD");
+	const yesterday = now.subtract(1, "day").format("YYYY-MM-DD");
 	const cutoff = new Date(Date.now() - 10 * 60 * 1000).toISOString();
-	const nowTime = nowBerlin().format("HH:mm:ss");
+	const nowTime = now.format("HH:mm:ss");
 
 	const [trackedRows, ghostRows] = await Promise.all([
 		db
@@ -38,7 +40,7 @@ export const GET: APIRoute = async () => {
 			)
 			.where(
 				and(
-					eq(journeyRuns.dayOfOperation, today),
+					inArray(journeyRuns.dayOfOperation, [today, yesterday]),
 					eq(journeyRuns.pollState, "polling"),
 					eq(journeyRuns.cancelled, 0),
 					eq(
@@ -65,7 +67,7 @@ export const GET: APIRoute = async () => {
 			.from(journeyRuns)
 			.where(
 				and(
-					eq(journeyRuns.dayOfOperation, today),
+					inArray(journeyRuns.dayOfOperation, [today, yesterday]),
 					eq(journeyRuns.cancelled, 0),
 					eq(journeyRuns.wasTracked, 0),
 					sql`(${journeyRuns.destArrTime} >= ${nowTime} OR ${journeyRuns.destArrTime} = ${journeyRuns.originDepTime})`,
@@ -96,7 +98,7 @@ export const GET: APIRoute = async () => {
 					.from(journeyStops)
 					.where(
 						and(
-							eq(journeyStops.dayOfOperation, today),
+							inArray(journeyStops.dayOfOperation, [today, yesterday]),
 							inArray(journeyStops.journeyRef, allIds),
 							eq(journeyStops.cancelled, 0),
 							isNotNull(journeyStops.lat),
