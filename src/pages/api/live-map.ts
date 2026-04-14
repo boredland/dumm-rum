@@ -8,7 +8,7 @@ import { nowBerlin, todayBerlin } from "../../lib/utils";
 export const GET: APIRoute = async () => {
 	const db = createDb(env.DB);
 	const today = todayBerlin();
-	const cutoff = new Date(Date.now() - 15 * 60 * 1000).toISOString();
+	const cutoff = new Date(Date.now() - 35 * 60 * 1000).toISOString();
 	const nowTime = nowBerlin().format("HH:mm:ss");
 
 	const vehicles = await db
