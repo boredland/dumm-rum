@@ -532,7 +532,7 @@ async function enqueueJourneys(
 		);
 
 	const QUEUE_BATCH_LIMIT = 100;
-	const STAGGER_WINDOW_S = 5400;
+	const STAGGER_WINDOW_S = 60;
 	for (let i = 0; i < candidates.length; i += QUEUE_BATCH_LIMIT) {
 		const batch = candidates.slice(i, i + QUEUE_BATCH_LIMIT);
 		await queue.sendBatch(
