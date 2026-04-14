@@ -205,6 +205,22 @@ Add keys to `src/lib/i18n.ts`:
 - **D1 query cost:** The correlated subquery for "latest position per journey" is fine for the expected ~50-200 active journeys at any time.
 - **Leaflet from CDN:** Avoids bloating the Vite bundle. Leaflet is ~40 KB gzipped. If offline support or tighter integration is needed later, it can be moved to an npm dep.
 
+## Backfill stop coordinates
+
+Stop coordinates (`lat`/`lon`) were added to `journey_stops` on 2026-04-15. New polls fill them automatically. To propagate coords to historical rows, wait for 2-3 poll cycles (~4-6 hours) then run:
+
+```sh
+# Check how many rows already have coordinates
+npx wrangler d1 execute rmv-departures --remote --command \
+  "SELECT COUNT(*) as total, SUM(CASE WHEN lat IS NOT NULL THEN 1 ELSE 0 END) as with_coords FROM journey_stops;"
+
+# Backfill: copy coords from any row that has them to all rows sharing the same stop_id
+npx wrangler d1 execute rmv-departures --remote --command \
+  "UPDATE journey_stops SET lat = (SELECT js2.lat FROM journey_stops js2 WHERE js2.stop_id = journey_stops.stop_id AND js2.lat IS NOT NULL LIMIT 1), lon = (SELECT js2.lon FROM journey_stops js2 WHERE js2.stop_id = journey_stops.stop_id AND js2.lon IS NOT NULL LIMIT 1) WHERE lat IS NULL;"
+```
+
+Safe to run multiple times — only touches rows where `lat IS NULL`.
+
 ## Future enhancements (not in scope)
 
 - **Route polylines:** Store stop lat/lon in `journey_stops`, draw the route line per vehicle
