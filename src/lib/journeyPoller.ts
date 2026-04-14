@@ -187,7 +187,10 @@ async function handlePollResult(
 		dest?.arrTime,
 		dayOfOperation,
 	);
-	const noRtAfterMaxPolls = !hasRtData && pollCount >= 2;
+	const hasDeparted =
+		!origin?.depTime ||
+		nowBerlin().isAfter(berlinTime(dayOfOperation, origin.depTime));
+	const noRtAfterMaxPolls = !hasRtData && pollCount >= 2 && hasDeparted;
 	const maxPollsReached = pollCount >= 15;
 
 	if (pollCount === 0 && line && env.TELEGRAM_BOT_TOKEN) {
