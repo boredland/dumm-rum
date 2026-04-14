@@ -9,9 +9,7 @@ export const GET: APIRoute = async () => {
 	const db = createDb(env.DB);
 	const today = todayBerlin();
 	const cutoff = new Date(Date.now() - 15 * 60 * 1000).toISOString();
-	const now = nowBerlin();
-	const nowTime = now.format("HH:mm:ss");
-	const lookback = now.subtract(10, "minute").format("HH:mm:ss");
+	const nowTime = nowBerlin().format("HH:mm:ss");
 
 	const vehicles = await db
 		.select({
@@ -31,7 +29,7 @@ export const GET: APIRoute = async () => {
 				SELECT js.lat FROM journey_stops js
 				WHERE js.journey_ref = "journey_runs"."journey_ref"
 				AND js.day_of_operation = "journey_runs"."day_of_operation"
-				AND js.dep_time > ${lookback}
+				AND js.dep_time > ${nowTime}
 				AND js.cancelled = 0 AND js.lat IS NOT NULL
 				ORDER BY js.route_idx LIMIT 1
 			)`.as("next_lat"),
@@ -39,7 +37,7 @@ export const GET: APIRoute = async () => {
 				SELECT js.lon FROM journey_stops js
 				WHERE js.journey_ref = "journey_runs"."journey_ref"
 				AND js.day_of_operation = "journey_runs"."day_of_operation"
-				AND js.dep_time > ${lookback}
+				AND js.dep_time > ${nowTime}
 				AND js.cancelled = 0 AND js.lon IS NOT NULL
 				ORDER BY js.route_idx LIMIT 1
 			)`.as("next_lon"),
@@ -54,7 +52,7 @@ export const GET: APIRoute = async () => {
 				SELECT COALESCE(js.rt_arr_time, js.arr_time, js.dep_time) FROM journey_stops js
 				WHERE js.journey_ref = "journey_runs"."journey_ref"
 				AND js.day_of_operation = "journey_runs"."day_of_operation"
-				AND js.dep_time > ${lookback}
+				AND js.dep_time > ${nowTime}
 				AND js.cancelled = 0
 				ORDER BY js.route_idx LIMIT 1
 			)`.as("next_arr_time"),
