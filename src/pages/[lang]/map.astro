@@ -215,8 +215,25 @@ async function fetchAndRender() {
 	}
 }
 
+function fmtTime(t) {
+	if (!t) return "";
+	return t.slice(0, 5);
+}
+
 function popupContent(v) {
-	return `<strong>${v.line}</strong> → ${shortName(v.destination)}<br/>${v.operator || ""}<br/><span style="color:#656d76">Position: ${formatTime(v.reportedAt)}</span>`;
+	const dep = fmtTime(v.originDepTime);
+	const arr = fmtTime(v.destArrTime);
+	const schedule = dep && arr ? `${dep} → ${arr}` : "";
+	const nextArr = fmtTime(v.nextArrTime);
+	const lines = [
+		`<strong>${v.line}</strong> → ${shortName(v.destination)}`,
+		shortName(v.origin),
+		v.operator || "",
+		schedule ? `<span style="color:#656d76">${schedule}</span>` : "",
+		nextArr ? `<span style="color:#656d76">Next stop: ${nextArr}</span>` : "",
+		`<span style="color:#656d76">GPS: ${formatTime(v.reportedAt)}</span>`,
+	].filter(Boolean);
+	return lines.join("<br/>");
 }
 
 function shortName(name) {
