@@ -166,6 +166,8 @@ export const journeyStops = sqliteTable(
 		rtDepTime: text("rt_dep_time"),
 		rtArrTime: text("rt_arr_time"),
 		cancelled: integer().notNull().default(0),
+		lat: real(),
+		lon: real(),
 	},
 	(t) => [
 		primaryKey({ columns: [t.journeyRef, t.dayOfOperation, t.routeIdx] }),

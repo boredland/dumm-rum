@@ -239,6 +239,8 @@ async function upsertJourneyStops(
 					rtDepTime: s.rtDepTime ?? null,
 					rtArrTime: s.rtArrTime ?? null,
 					cancelled: s.cancelled ? 1 : 0,
+					lat: s.lat ?? null,
+					lon: s.lon ?? null,
 				})),
 			)
 			.onConflictDoUpdate({
@@ -257,6 +259,8 @@ async function upsertJourneyStops(
 						journeyStops.rtArrTime,
 					),
 					cancelled: sql`MAX(${journeyStops.cancelled}, ${excluded(journeyStops.cancelled)})`,
+					lat: coalesce(excluded(journeyStops.lat), journeyStops.lat),
+					lon: coalesce(excluded(journeyStops.lon), journeyStops.lon),
 				},
 			});
 	}
