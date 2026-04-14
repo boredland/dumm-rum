@@ -76,6 +76,7 @@ export const GET: APIRoute = async () => {
 				),
 				gte(journeyPositions.capturedAt, cutoff),
 				sql`${journeyRuns.destArrTime} >= ${nowTime}`,
+				sql`${journeyRuns.originDepTime} <= ${nowTime}`,
 			),
 		);
 

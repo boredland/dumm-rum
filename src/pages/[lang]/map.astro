@@ -157,7 +157,7 @@ async function fetchAndRender() {
 		const seen = new Set();
 
 		for (const v of vehicles) {
-			if (!v.nextArrTime) { continue; }
+			if (!v.nextArrTime || !v.lastDepTime) { continue; }
 			seen.add(v.id);
 			const cat = v.category || "Bus";
 			const visible = matchesFilter(cat, activeFilter);
