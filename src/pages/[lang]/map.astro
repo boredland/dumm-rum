@@ -97,6 +97,14 @@ let vehicleState = new Map();
 let fetchInterval;
 let animFrameId;
 
+function updateHash() {
+	if (!map) return;
+	const c = map.getCenter();
+	const z = map.getZoom();
+	const cat = activeFilter === "all" ? "" : `/${encodeURIComponent(activeFilter)}`;
+	history.replaceState(null, "", `#${c.lat.toFixed(5)}/${c.lng.toFixed(5)}/${z}${cat}`);
+}
+
 function initMap() {
 	if (map) {
 		map.remove();
@@ -112,6 +120,10 @@ function initMap() {
 	const initLat = parts.length >= 3 ? +parts[0] : 50.11;
 	const initLon = parts.length >= 3 ? +parts[1] : 8.68;
 	const initZoom = parts.length >= 3 ? +parts[2] : 12;
+	if (parts.length >= 4 && parts[3]) {
+		activeFilter = decodeURIComponent(parts[3]);
+		applyFilter(activeFilter);
+	}
 
 	map = L.map(el, { zoomControl: true }).setView([initLat, initLon], initZoom);
 	const transit = L.tileLayer("https://tile.memomaps.de/tilegen/{z}/{x}/{y}.png", {
@@ -125,11 +137,6 @@ function initMap() {
 	transit.on("tileerror", () => { if (!map.hasLayer(osm)) { transit.remove(); osm.addTo(map); } });
 	transit.addTo(map);
 
-	function updateHash() {
-		const c = map.getCenter();
-		const z = map.getZoom();
-		history.replaceState(null, "", `#${c.lat.toFixed(5)}/${c.lng.toFixed(5)}/${z}`);
-	}
 	map.on("moveend", updateHash);
 	map.on("zoomend", updateHash);
 }
@@ -226,6 +233,7 @@ function applyFilter(cat) {
 	}
 	const countEl = document.getElementById("vehicle-count");
 	if (countEl) countEl.textContent = total === 0 ? noVehiclesText : `${visibleCount} ${vehiclesText}`;
+	if (map) updateHash();
 }
 
 function timeToSeconds(t) {

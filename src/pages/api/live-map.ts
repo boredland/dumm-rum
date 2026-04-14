@@ -29,31 +29,55 @@ export const GET: APIRoute = async () => {
 				SELECT js.lat FROM journey_stops js
 				WHERE js.journey_ref = "journey_runs"."journey_ref"
 				AND js.day_of_operation = "journey_runs"."day_of_operation"
-				AND js.dep_time > ${now}
 				AND js.cancelled = 0 AND js.lat IS NOT NULL
+				AND (js.lat - "journey_positions"."lat") * (js.lat - "journey_positions"."lat") + (js.lon - "journey_positions"."lon") * (js.lon - "journey_positions"."lon") > 0.00001
+				AND js.route_idx > COALESCE((
+					SELECT js2.route_idx FROM journey_stops js2
+					WHERE js2.journey_ref = "journey_runs"."journey_ref"
+					AND js2.day_of_operation = "journey_runs"."day_of_operation"
+					AND js2.lat IS NOT NULL
+					ORDER BY (js2.lat - "journey_positions"."lat") * (js2.lat - "journey_positions"."lat") + (js2.lon - "journey_positions"."lon") * (js2.lon - "journey_positions"."lon")
+					LIMIT 1
+				), -1)
 				ORDER BY js.route_idx LIMIT 1
 			)`.as("next_lat"),
 			nextLon: sql<number | null>`(
 				SELECT js.lon FROM journey_stops js
 				WHERE js.journey_ref = "journey_runs"."journey_ref"
 				AND js.day_of_operation = "journey_runs"."day_of_operation"
-				AND js.dep_time > ${now}
 				AND js.cancelled = 0 AND js.lon IS NOT NULL
+				AND (js.lat - "journey_positions"."lat") * (js.lat - "journey_positions"."lat") + (js.lon - "journey_positions"."lon") * (js.lon - "journey_positions"."lon") > 0.00001
+				AND js.route_idx > COALESCE((
+					SELECT js2.route_idx FROM journey_stops js2
+					WHERE js2.journey_ref = "journey_runs"."journey_ref"
+					AND js2.day_of_operation = "journey_runs"."day_of_operation"
+					AND js2.lat IS NOT NULL
+					ORDER BY (js2.lat - "journey_positions"."lat") * (js2.lat - "journey_positions"."lat") + (js2.lon - "journey_positions"."lon") * (js2.lon - "journey_positions"."lon")
+					LIMIT 1
+				), -1)
 				ORDER BY js.route_idx LIMIT 1
 			)`.as("next_lon"),
 			lastDepTime: sql<string | null>`(
 				SELECT COALESCE(js.rt_dep_time, js.dep_time) FROM journey_stops js
 				WHERE js.journey_ref = "journey_runs"."journey_ref"
 				AND js.day_of_operation = "journey_runs"."day_of_operation"
-				AND js.dep_time <= ${now} AND js.cancelled = 0
-				ORDER BY js.route_idx DESC LIMIT 1
+				AND js.cancelled = 0 AND js.lat IS NOT NULL
+				ORDER BY (js.lat - "journey_positions"."lat") * (js.lat - "journey_positions"."lat") + (js.lon - "journey_positions"."lon") * (js.lon - "journey_positions"."lon")
+				LIMIT 1
 			)`.as("last_dep_time"),
 			nextArrTime: sql<string | null>`(
 				SELECT COALESCE(js.rt_arr_time, js.arr_time, js.dep_time) FROM journey_stops js
 				WHERE js.journey_ref = "journey_runs"."journey_ref"
 				AND js.day_of_operation = "journey_runs"."day_of_operation"
-				AND js.dep_time > ${now}
-				AND js.cancelled = 0
+				AND js.cancelled = 0 AND js.lat IS NOT NULL
+				AND js.route_idx > COALESCE((
+					SELECT js2.route_idx FROM journey_stops js2
+					WHERE js2.journey_ref = "journey_runs"."journey_ref"
+					AND js2.day_of_operation = "journey_runs"."day_of_operation"
+					AND js2.lat IS NOT NULL
+					ORDER BY (js2.lat - "journey_positions"."lat") * (js2.lat - "journey_positions"."lat") + (js2.lon - "journey_positions"."lon") * (js2.lon - "journey_positions"."lon")
+					LIMIT 1
+				), -1)
 				ORDER BY js.route_idx LIMIT 1
 			)`.as("next_arr_time"),
 		})
