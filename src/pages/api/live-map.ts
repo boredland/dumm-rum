@@ -67,7 +67,7 @@ export const GET: APIRoute = async () => {
 			.from(journeyRuns)
 			.where(
 				and(
-					inArray(journeyRuns.dayOfOperation, [today, yesterday]),
+					eq(journeyRuns.dayOfOperation, today),
 					eq(journeyRuns.cancelled, 0),
 					eq(journeyRuns.wasTracked, 0),
 					sql`(${journeyRuns.destArrTime} >= ${nowTime} OR ${journeyRuns.destArrTime} = ${journeyRuns.originDepTime})`,
