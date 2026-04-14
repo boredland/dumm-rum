@@ -1,7 +1,7 @@
 import { and, eq, gte, inArray, isNotNull, or, sql } from "drizzle-orm";
 import type { Db } from "../db/client";
 import {
-	departures,
+	journeyRuns,
 	journeyStops,
 	knownStops,
 	telegramSubscriptions,
@@ -101,13 +101,13 @@ function formatWeekdays(weekdays: string): string {
 
 async function fetchDirections(db: Db, line: string) {
 	return db
-		.selectDistinct({ direction: departures.direction })
-		.from(departures)
+		.selectDistinct({ direction: journeyRuns.destName })
+		.from(journeyRuns)
 		.where(
 			and(
-				eq(departures.line, line),
-				isNotNull(departures.direction),
-				gte(departures.date, sql`date('now', '-7 days')`),
+				eq(journeyRuns.line, line),
+				isNotNull(journeyRuns.destName),
+				gte(journeyRuns.dayOfOperation, sql`date('now', '-7 days')`),
 			),
 		);
 }
