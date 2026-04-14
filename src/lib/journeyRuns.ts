@@ -138,7 +138,7 @@ export async function snapshotJourneys(
 						partCancelled: excluded(journeyRuns.partCancelled),
 						cancelledStopCount: excluded(journeyRuns.cancelledStopCount),
 						totalStopCount: excluded(journeyRuns.totalStopCount),
-						wasTracked: excluded(journeyRuns.wasTracked),
+						wasTracked: sql`MAX(${journeyRuns.wasTracked}, ${excluded(journeyRuns.wasTracked)})`,
 						snapshotAt: excluded(journeyRuns.snapshotAt),
 					},
 				});

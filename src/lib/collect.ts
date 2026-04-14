@@ -12,6 +12,7 @@ import { coalesce, excluded, max } from "../db/helpers";
 import {
 	departures,
 	haikus,
+	journeyRuns,
 	lineDailyStats,
 	operatorDailyStats,
 	stationDailyStats,
@@ -20,12 +21,9 @@ import { createHafasClient } from "./hafas";
 import type { components } from "./hafas-types";
 import {
 	avgDelaySql,
-	cancelledDistinctSql,
 	delayedDistinctSql,
 	delayedSql,
-	ghostDistinctSql,
 	ghostSql,
-	totalDistinctSql,
 } from "./queries";
 import type { Station } from "./stations";
 import { STATIONS } from "./stations";
@@ -45,7 +43,7 @@ async function collectDepartures(
 	station: Station,
 ): Promise<number> {
 	const client = createHafasClient(apiKey);
-	const start = nowBerlin().subtract(90, "minute");
+	const start = nowBerlin();
 
 	const { data, error } = await client.GET("/departureBoard", {
 		params: {
@@ -54,7 +52,7 @@ async function collectDepartures(
 				id: station.id,
 				date: start.format("YYYY-MM-DD"),
 				time: start.format("HH:mm"),
-				duration: 105,
+				duration: 120,
 				maxJourneys: -1,
 				format: "json",
 			},
@@ -329,18 +327,42 @@ async function materializeStationStats(db: Db, date: string): Promise<void> {
 }
 
 async function materializeOperatorStats(db: Db, date: string): Promise<void> {
-	const rows = await db
-		.select({
-			operator: departures.operator,
-			total: totalDistinctSql.as("total"),
-			cancelled: cancelledDistinctSql.as("cancelled"),
-			ghost: ghostDistinctSql.as("ghost"),
-			delayed: delayedDistinctSql.as("delayed"),
-			avgDelay: avgDelaySql.as("avg_delay"),
-		})
-		.from(departures)
-		.where(and(eq(departures.date, date), isNotNull(departures.operator)))
-		.groupBy(departures.operator);
+	const [jrRows, delayRows] = await Promise.all([
+		db
+			.select({
+				operator: journeyRuns.operator,
+				total: count().as("total"),
+				cancelled: sql<number>`SUM(${journeyRuns.cancelled})`.as("cancelled"),
+				ghost:
+					sql<number>`SUM(CASE WHEN ${journeyRuns.wasTracked} = 0 AND ${journeyRuns.cancelled} = 0 THEN 1 ELSE 0 END)`.as(
+						"ghost",
+					),
+			})
+			.from(journeyRuns)
+			.where(
+				and(
+					eq(journeyRuns.dayOfOperation, date),
+					isNotNull(journeyRuns.operator),
+				),
+			)
+			.groupBy(journeyRuns.operator),
+		db
+			.select({
+				operator: departures.operator,
+				delayed: delayedDistinctSql.as("delayed"),
+				avgDelay: avgDelaySql.as("avg_delay"),
+			})
+			.from(departures)
+			.where(and(eq(departures.date, date), isNotNull(departures.operator)))
+			.groupBy(departures.operator),
+	]);
+
+	const delayMap = new Map(delayRows.map((d) => [d.operator, d]));
+	const rows = jrRows.map((jr) => ({
+		...jr,
+		delayed: delayMap.get(jr.operator!)?.delayed ?? 0,
+		avgDelay: delayMap.get(jr.operator!)?.avgDelay ?? null,
+	}));
 
 	await Promise.all(
 		rows.map((row) =>
@@ -370,26 +392,51 @@ async function materializeOperatorStats(db: Db, date: string): Promise<void> {
 }
 
 async function materializeLineStats(db: Db, date: string): Promise<void> {
-	const rows = await db
-		.select({
-			line: departures.line,
-			category: departures.category,
-			total: totalDistinctSql.as("total"),
-			cancelled: cancelledDistinctSql.as("cancelled"),
-			ghost: ghostDistinctSql.as("ghost"),
-			delayed: delayedDistinctSql.as("delayed"),
-			avgDelay: avgDelaySql.as("avg_delay"),
-			operators: sql<string>`GROUP_CONCAT(DISTINCT ${departures.operator})`.as(
-				"operators",
-			),
-			destinations:
-				sql<string>`GROUP_CONCAT(DISTINCT ${departures.direction})`.as(
-					"destinations",
-				),
-		})
-		.from(departures)
-		.where(and(eq(departures.date, date), isNotNull(departures.operator)))
-		.groupBy(departures.line, departures.category);
+	const [jrRows, depRows] = await Promise.all([
+		db
+			.select({
+				line: journeyRuns.line,
+				category: journeyRuns.category,
+				total: count().as("total"),
+				cancelled: sql<number>`SUM(${journeyRuns.cancelled})`.as("cancelled"),
+				ghost:
+					sql<number>`SUM(CASE WHEN ${journeyRuns.wasTracked} = 0 AND ${journeyRuns.cancelled} = 0 THEN 1 ELSE 0 END)`.as(
+						"ghost",
+					),
+			})
+			.from(journeyRuns)
+			.where(eq(journeyRuns.dayOfOperation, date))
+			.groupBy(journeyRuns.line, journeyRuns.category),
+		db
+			.select({
+				line: departures.line,
+				delayed: delayedDistinctSql.as("delayed"),
+				avgDelay: avgDelaySql.as("avg_delay"),
+				operators:
+					sql<string>`GROUP_CONCAT(DISTINCT ${departures.operator})`.as(
+						"operators",
+					),
+				destinations:
+					sql<string>`GROUP_CONCAT(DISTINCT ${departures.direction})`.as(
+						"destinations",
+					),
+			})
+			.from(departures)
+			.where(and(eq(departures.date, date), isNotNull(departures.operator)))
+			.groupBy(departures.line),
+	]);
+
+	const depMap = new Map(depRows.map((d) => [d.line, d]));
+	const rows = jrRows.map((jr) => {
+		const dep = depMap.get(jr.line);
+		return {
+			...jr,
+			delayed: dep?.delayed ?? 0,
+			avgDelay: dep?.avgDelay ?? null,
+			operators: dep?.operators ?? null,
+			destinations: dep?.destinations ?? null,
+		};
+	});
 
 	await Promise.all(
 		rows.map((row) =>
@@ -442,16 +489,12 @@ export async function runCollection(
 	db: Db,
 	ai: Ai,
 	apiKeys: string,
+	queue: Queue<JourneyPollMessage>,
 	telegramToken?: string,
 ): Promise<CollectionResult> {
-	const now = nowBerlin();
-	const slot = Math.floor((now.hour() * 60 + now.minute()) / 3);
-	const idx = (slot * 3) % STATIONS.length;
-	const batch = [0, 1, 2].map((i) => STATIONS[(idx + i) % STATIONS.length]);
-
 	const summary: Record<string, number> = {};
 	const results = await Promise.all(
-		batch.map((station) =>
+		STATIONS.map((station) =>
 			collectDepartures(db, pickKey(apiKeys), station).then((count) => ({
 				station,
 				count,
@@ -466,19 +509,13 @@ export async function runCollection(
 	await generateDailyHaiku(db, ai);
 
 	const today = todayBerlin();
-	const cutoff = nowBerlin().subtract(15, "minute").format("HH:mm");
-	await db
-		.update(departures)
-		.set({ ghost: 1 })
-		.where(
-			and(
-				eq(departures.date, today),
-				eq(departures.cancelled, 0),
-				eq(departures.ghost, 0),
-				sql`${departures.rtTime} IS NULL`,
-				sql`${departures.time} < ${cutoff}`,
-			),
-		);
+
+	await syncAllJourneyRuns(db, today);
+
+	await markGhosts(db, today);
+
+	const enqueued = await enqueueInterestingJourneys(db, queue, today);
+	if (enqueued > 0) console.log(`enqueued ${enqueued} journeys for polling`);
 
 	await Promise.all([
 		materializeStationStats(db, today),
@@ -584,4 +621,180 @@ export async function runCollection(
 	}
 
 	return { summary, linesToday, operatorsToday };
+}
+
+async function syncAllJourneyRuns(db: Db, today: string): Promise<void> {
+	const journeyAgg = await db
+		.select({
+			journeyRef: departures.journeyRef,
+			line: sql<string>`MIN(${departures.line})`.as("line"),
+			category: sql<string | null>`MIN(${departures.category})`.as("category"),
+			operator: sql<string | null>`MIN(${departures.operator})`.as("operator"),
+			direction: sql<string>`MIN(${departures.direction})`.as("direction"),
+			stationId: sql<string>`MIN(${departures.stationId})`.as("station_id"),
+			stop: sql<string | null>`MIN(${departures.stop})`.as("stop"),
+			time: sql<string>`MIN(${departures.time})`.as("time"),
+			journeyStatus: sql<string | null>`MAX(${departures.journeyStatus})`.as(
+				"journey_status",
+			),
+			cancelledCount: sql<number>`SUM(${departures.cancelled})`.as(
+				"cancelled_count",
+			),
+			depCount: count().as("dep_count"),
+			trackedCount:
+				sql<number>`SUM(CASE WHEN ${departures.rtTime} IS NOT NULL THEN 1 ELSE 0 END)`.as(
+					"tracked_count",
+				),
+		})
+		.from(departures)
+		.where(and(eq(departures.date, today), isNotNull(departures.journeyRef)))
+		.groupBy(departures.journeyRef);
+
+	if (journeyAgg.length === 0) return;
+
+	const snapshotAt = new Date().toISOString();
+	const D1_MAX_PARAMS = 100;
+	const colCount = Object.keys(getTableColumns(journeyRuns)).length;
+	const batchSize = Math.max(1, Math.floor(D1_MAX_PARAMS / colCount));
+
+	for (let i = 0; i < journeyAgg.length; i += batchSize) {
+		const batch = journeyAgg.slice(i, i + batchSize);
+		await db
+			.insert(journeyRuns)
+			.values(
+				batch.map((a) => ({
+					journeyRef: a.journeyRef!,
+					dayOfOperation: today,
+					line: a.line,
+					category: a.category ?? null,
+					operator: a.operator ?? null,
+					lineId: null,
+					originStopId: a.stationId,
+					originName: a.stop ?? a.stationId,
+					originDepTime: a.time,
+					destStopId: "",
+					destName: a.direction,
+					destArrTime: a.time,
+					status: a.journeyStatus ?? "P",
+					cancelled: a.depCount > 0 && a.cancelledCount === a.depCount ? 1 : 0,
+					partCancelled: a.cancelledCount > 0 ? 1 : 0,
+					cancelledStopCount: a.cancelledCount,
+					totalStopCount: 0,
+					wasTracked: a.trackedCount > 0 ? 1 : 0,
+					snapshotAt,
+				})),
+			)
+			.onConflictDoUpdate({
+				target: [journeyRuns.journeyRef, journeyRuns.dayOfOperation],
+				set: {
+					wasTracked: sql`MAX(${journeyRuns.wasTracked}, ${excluded(journeyRuns.wasTracked)})`,
+					cancelled: excluded(journeyRuns.cancelled),
+					partCancelled: sql`MAX(${journeyRuns.partCancelled}, ${excluded(journeyRuns.partCancelled)})`,
+					cancelledStopCount: sql`MAX(${journeyRuns.cancelledStopCount}, ${excluded(journeyRuns.cancelledStopCount)})`,
+					snapshotAt: excluded(journeyRuns.snapshotAt),
+				},
+			});
+	}
+}
+
+async function markGhosts(db: Db, today: string): Promise<void> {
+	const cutoff = nowBerlin().subtract(15, "minute").format("HH:mm");
+
+	// Clear ghost for departures whose journey is actually tracked
+	await db
+		.update(departures)
+		.set({ ghost: 0 })
+		.where(
+			and(
+				eq(departures.date, today),
+				eq(departures.ghost, 1),
+				sql`${departures.journeyRef} IN (
+					SELECT ${journeyRuns.journeyRef} FROM ${journeyRuns}
+					WHERE ${journeyRuns.dayOfOperation} = ${today}
+					AND ${journeyRuns.wasTracked} = 1
+				)`,
+			),
+		);
+
+	// Mark ghost for untracked, non-cancelled departures past cutoff
+	await db
+		.update(departures)
+		.set({ ghost: 1 })
+		.where(
+			and(
+				eq(departures.date, today),
+				eq(departures.cancelled, 0),
+				eq(departures.ghost, 0),
+				sql`${departures.time} < ${cutoff}`,
+				sql`(
+					${departures.journeyRef} IS NULL
+					OR ${departures.journeyRef} IN (
+						SELECT ${journeyRuns.journeyRef} FROM ${journeyRuns}
+						WHERE ${journeyRuns.dayOfOperation} = ${today}
+						AND ${journeyRuns.wasTracked} = 0
+						AND ${journeyRuns.cancelled} = 0
+					)
+				)`,
+			),
+		);
+}
+
+async function enqueueInterestingJourneys(
+	db: Db,
+	queue: Queue<JourneyPollMessage>,
+	today: string,
+): Promise<number> {
+	const candidates = await db
+		.select({
+			journeyRef: journeyRuns.journeyRef,
+			dayOfOperation: journeyRuns.dayOfOperation,
+		})
+		.from(journeyRuns)
+		.where(
+			and(
+				eq(journeyRuns.dayOfOperation, today),
+				sql`${journeyRuns.pollState} IS NULL`,
+				or(
+					eq(journeyRuns.cancelled, 1),
+					eq(journeyRuns.partCancelled, 1),
+					and(eq(journeyRuns.wasTracked, 0), eq(journeyRuns.cancelled, 0)),
+				),
+			),
+		);
+
+	if (candidates.length === 0) return 0;
+
+	const refs = candidates.map((c) => c.journeyRef);
+	for (let i = 0; i < refs.length; i += 50) {
+		const batch = refs.slice(i, i + 50);
+		await db
+			.update(journeyRuns)
+			.set({ pollState: "queued" })
+			.where(
+				and(
+					eq(journeyRuns.dayOfOperation, today),
+					sql`${journeyRuns.pollState} IS NULL`,
+					sql`${journeyRuns.journeyRef} IN (${sql.join(
+						batch.map((r) => sql`${r}`),
+						sql`,`,
+					)})`,
+				),
+			);
+	}
+
+	const QUEUE_BATCH_LIMIT = 100;
+	for (let i = 0; i < candidates.length; i += QUEUE_BATCH_LIMIT) {
+		const batch = candidates.slice(i, i + QUEUE_BATCH_LIMIT);
+		await queue.sendBatch(
+			batch.map((c) => ({
+				body: {
+					journeyRef: c.journeyRef,
+					dayOfOperation: c.dayOfOperation,
+					pollCount: 0,
+				},
+			})),
+		);
+	}
+
+	return candidates.length;
 }

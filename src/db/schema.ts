@@ -122,6 +122,7 @@ export const journeyRuns = sqliteTable(
 		cancelledStopCount: integer("cancelled_stop_count").notNull().default(0),
 		totalStopCount: integer("total_stop_count").notNull(),
 		wasTracked: integer("was_tracked").notNull().default(0),
+		pollState: text("poll_state"),
 		snapshotAt: text("snapshot_at").notNull(),
 	},
 	(t) => [
@@ -129,6 +130,26 @@ export const journeyRuns = sqliteTable(
 		index("idx_journey_runs_day").on(t.dayOfOperation),
 		index("idx_journey_runs_line_day").on(t.line, t.dayOfOperation),
 		index("idx_journey_runs_operator_day").on(t.operator, t.dayOfOperation),
+		index("idx_journey_runs_poll_state").on(t.pollState, t.dayOfOperation),
+	],
+);
+
+export const journeyPositions = sqliteTable(
+	"journey_positions",
+	{
+		id: integer().primaryKey({ autoIncrement: true }),
+		journeyRef: text("journey_ref").notNull(),
+		dayOfOperation: text("day_of_operation").notNull(),
+		lat: real().notNull(),
+		lon: real().notNull(),
+		reportedAt: text("reported_at").notNull(),
+		routeIdx: integer("route_idx"),
+		rtRouteIdx: integer("rt_route_idx"),
+		capturedAt: text("captured_at").notNull(),
+	},
+	(t) => [
+		index("idx_journey_pos_ref_day").on(t.journeyRef, t.dayOfOperation),
+		index("idx_journey_pos_captured").on(t.capturedAt),
 	],
 );
 

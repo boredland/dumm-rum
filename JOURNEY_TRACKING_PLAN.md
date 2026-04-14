@@ -5,7 +5,7 @@ Goal: move beyond per-stop-visit accounting in `departures` toward per-vehicle-r
 ## Status (as of 2026-04-14)
 
 - **Phase 1: shipped** (`ed94bd3`, `56b7acc`). Captures `journey_ref` + `journey_status` on every departure row from the existing board response.
-- **Phase 2a: shipped** (`97d1c1f`, `a26eeb6`). Nightly `journey_runs` snapshot: route topology from `/journeyDetail`, operational data derived from `departures`. Fires at 02:00 Berlin daily.
+- **Phase 2a: shipped** (`97d1c1f`, `a26eeb6`). Nightly `journey_runs` snapshot: route topology from `/journeyDetail`, operational data derived from `departures`. Fires at 02:00 Berlin daily. Will be retired once Phase 3 is live (queue consumer takes over `journey_runs` population).
 - **Phase 2b: skipped.** Inline ghost verification in the 5-min cron was a stepping stone — jumping straight to Phase 3 Queue-based polling instead (same infra, no throwaway work).
 - **Phase 3: designed, not started.** Queue-based live journey polling + `journey_positions` time-series for live map.
 
@@ -20,6 +20,7 @@ From probing `/departureBoard` and `/journeyDetail` on RMV's HAFAS deployment:
 5. **RMV never reports `JourneyStatus = 'R'` on `/departureBoard`.** Only `P` (planned) and `A` (additional) have been observed. The `R` status may only appear in `/journeyDetail` while live, or may be unused by RMV entirely.
 6. **RMV only accepts `rtMode=OFF` or `rtMode=SERVER_DEFAULT`.** The OpenAPI spec lists `FULL`/`REALTIME`/`INFOS` but RMV rejects them with `API_PARAM`.
 7. **`wasTracked` must use `rt_time IS NOT NULL` from departures, not `journey_status IN (R,A,S)`.** Since R is never reported on the board, the status check was always false. The rt_time check correctly identifies departures where the board had realtime data.
+8. **`/departureBoard` accepts `duration` from 0 to 1439 minutes (23h59m).** Tested live on 2026-04-14. `duration=1440` returns `400 API_PARAM`. Departure count scales linearly (~0.5/min for station 3000129). A 120-minute window returns ~66 departures per station — lightweight enough for frequent polling.
 
 **Core constraint:** every "interesting" signal from `/journeyDetail` (positions, per-stop rt times, cancellation chains, vehicle progress) is only available **while the journey is live**. Anything not captured same-day is lost forever. This makes live polling the only way to get corridor-wide data.
 
@@ -54,13 +55,33 @@ Plausible Phase 3 cadence: hourly discovery poll per station (instead of every 3
 
 Poll `/journeyDetail` for journeys during their live window to capture data that RMV strips afterward: per-stop rt times, cancellation chains for the full corridor, vehicle positions (`lastPos`), and stop-progress (`lastPassRouteIdx`). This replaces the skipped Phase 2b and provides the foundation for a live vehicle map.
 
+### Discovery cadence
+
+The board cron switches from its current role (primary data source, every 3 min, `duration=105`) to a pure discovery role: find journey_refs to enqueue for queue-based polling.
+
+**New cadence:** every 2 hours, `duration=120`. Covers 2 hours of upcoming departures per poll, giving every journey at least one discovery window before departure. 12 polls/day per station — down from ~480 today.
+
+This catches most `A` (additional) / `S` (substitute) services added mid-day. Services added <2h before departure could theoretically slip through one cycle, but the overlap makes this unlikely in practice. Can be tightened later if data shows missed A/S services.
+
 ### Scope progression
 
-**3a (scoped start):** Enqueue only "interesting" journeys — cancelled, ghost-suspect, or significantly delayed departures detected by the existing board cron. ~200 journeys/day, ~600 API calls.
+**3a (scoped start):** Enqueue only "interesting" journeys — no rt data at scheduled departure time (ghost-suspect), cancelled, or significantly delayed. ~200 journeys/day, ~600 API calls.
 
 **3b (full coverage):** Enqueue ALL journeys at discovery time. ~1,200 journeys/day, ~5,000 API calls. Enables corridor-wide OTP and live map for all services.
 
-**3c (reduced board cadence):** Drop per-station board polling from every 3 min to every 30-60 min (discovery-only). Journey polling becomes the primary data source. Eliminates ~95% of current board API calls.
+Phase 2a (nightly `journey_runs` snapshot) is retired once Phase 3 is live — the queue consumer populates `journey_runs` with richer live data.
+
+### Role changes at Phase 3 cutover
+
+**`departures` table:** becomes a discovery/log table, updated every 2h. No longer the primary source for rt data, ghost detection, or delay metrics. Historical data (collected at 3-min resolution) is preserved as-is.
+
+**`journey_runs` `poll_state` migration:** existing rows backfilled to `poll_state = 'done'` so they don't get re-enqueued.
+
+**Telegram notifications:** move from the board cron to the queue consumer, which sees cancellations and rt data in near-real-time via `/journeyDetail`. The 2h board cadence would make cron-based notifications too stale.
+
+**Ghost marking:** moves to the queue consumer's 3-poll ghost resolution logic. The board cron's `rt_time IS NULL` ghost sweep is removed.
+
+**Daily materialized stats:** will shift to derive from `journey_runs` instead of `departures` once the consumer is the authoritative data source.
 
 ### Infrastructure: Cloudflare Queues
 
@@ -82,7 +103,8 @@ dead_letter_queue = "journey-polls-dlq"
 
 ### Adaptive polling strategy
 
-For a journey with scheduled first departure at **T** and duration **D**:
+**T** = scheduled departure at the journey's origin station (from `/journeyDetail.Stops[0]`).
+**D** = journey duration (last stop arrival − first stop departure).
 
 ```
 Enqueue at: T - 5min
@@ -109,8 +131,8 @@ Poll 3 (T + 15m, only if still no rt):
 Ongoing (for journeys WITH rt):
   Poll every ~10min
   Each poll captures progressive per-stop rtDepTime/rtArrTime + position
-  Stop when: lastPassRouteIdx >= last stop index
-             OR T + D + 15min reached (hard cap)
+  Stop when: lastPassRouteIdx >= Stops.length - 1 (vehicle passed final stop)
+             OR T + D + 15min reached (hard cap for GPS dropout at terminal)
 ```
 
 ### Call budget
@@ -122,7 +144,9 @@ Ongoing (for journeys WITH rt):
 | No rt ever (ghost / untracked) | 3 then stop | ~15% |
 | Rt appears late, medium journey | 5-7 | ~10% |
 
-Full coverage (3b): ~1,200 journeys/day x ~4 avg = ~4,800 calls/day, ~3.3/min sustained.
+Full coverage (3b): ~1,200 journeys/day x ~4 avg = ~4,800 journey-detail calls/day, ~3.3/min sustained.
+
+Board discovery calls (all phases): 12 polls/day x N stations (vs. ~480 today). Negligible relative to journey polling.
 
 ### Ghost resolution from `/journeyDetail`
 
@@ -195,6 +219,24 @@ WHERE journey_ref = ? AND day_of_operation = ?
 ORDER BY captured_at
 ```
 
+### Enqueue mechanism
+
+The board cron (now running every 2h) discovers journey_refs and enqueues qualifying ones to `JOURNEY_QUEUE`. Deduplication uses a `poll_state` column on `journey_runs`:
+
+- `NULL` — not yet enqueued
+- `'queued'` — in the queue, awaiting first poll
+- `'polling'` — consumer is actively tracking
+- `'done'` — polling finished (completed, ghost, or cancelled)
+
+**Cron logic (after upserting departures):**
+
+1. For each departure with a `journey_ref`, upsert a minimal `journey_runs` row if not exists (just the ref + day, enough for the FK).
+2. Check Phase 3a criteria: `rt_time IS NULL` and scheduled time has passed, or `cancelled = 1`, or delay > threshold.
+3. Enqueue where criteria match AND `poll_state IS NULL`.
+4. Set `poll_state = 'queued'` for enqueued journeys.
+
+In Phase 3b, step 2 is replaced with "enqueue all" — every discovered journey gets queued unconditionally.
+
 ### Queue consumer flow (pseudocode)
 
 ```
@@ -203,12 +245,15 @@ queue(batch, env, ctx):
   db = createDb(env.DB)
 
   for msg in batch.messages:
-    { ref, dayOfOperation, pollCount } = msg.body
+    { ref, dayOfOperation, pollCount, scheduledOriginDep } = msg.body
+
+    UPDATE journey_runs SET poll_state = 'polling'
+      WHERE journey_ref = ref AND day_of_operation = dayOfOperation
 
     detail = await client.GET("/journeyDetail", { id: ref })
-    if error: msg.retry()
+    if error: msg.retry(); continue
 
-    // Record position if available
+    // Record position synchronously (not waitUntil — guaranteed delivery)
     if detail.lastPos:
       INSERT INTO journey_positions (ref, dayOp, lat, lon, reportedAt, routeIdx, ...)
 
@@ -216,29 +261,42 @@ queue(batch, env, ctx):
     UPSERT journey_runs with live cancellation chain from detail.Stops
 
     // Decide: re-enqueue or stop?
-    if journey completed (lastPassRouteIdx >= last stop):
+    if journey completed (lastPassRouteIdx >= Stops.length - 1):
+      UPDATE journey_runs SET poll_state = 'done'
+      msg.ack()
+    else if T + D + 15min reached (hard cap):
+      UPDATE journey_runs SET poll_state = 'done'
       msg.ack()
     else if no rt data and pollCount >= 3:
-      msg.ack()  // ghost — stop polling
+      UPDATE journey_runs SET poll_state = 'done'  // ghost
+      msg.ack()
     else:
       msg.ack()
-      queue.send({ ref, dayOfOperation, pollCount: pollCount + 1 },
+      queue.send({ ref, dayOfOperation, pollCount: pollCount + 1, scheduledOriginDep },
                  { delaySeconds: detail.lastPos ? 600 : 300 })
 ```
 
 ### Known constraints
 
-- **Queue per-message `delaySeconds` cap:** believed to be ~12h. For journeys scheduled >12h from enqueue, use tickler pattern (enqueue with 10h delay, consumer re-enqueues with remaining) or run discovery every 6-8h.
+- **Queue per-message `delaySeconds` cap:** believed to be ~12h. Not a concern: with discovery running every 2h and `duration=120`, journeys are enqueued at most ~2h before departure — well within the cap. No tickler pattern needed.
 - **No cancel-scheduled-message:** If a journey is cancelled, its queued polls still fire — consumer must check-and-skip. Minor inefficiency (~200 wasted calls on disruption days).
 - **Requires Workers Paid plan** (already in use).
 
 ## Open questions before Phase 3
 
-- Verify current Cloudflare Queue per-message delay cap (believed ~12h).
+- Verify current Cloudflare Queue per-message delay cap (believed ~12h). Likely not blocking since enqueue-to-departure is at most ~2h with the new discovery cadence.
 - Confirm `lastPos` appears within a predictable window before scheduled departure (not only after vehicle starts moving).
 - Test Queue consumer concurrency: can multiple consumers process the same queue simultaneously, or is it single-consumer?
-- Measure `ctx.waitUntil()` reliability for D1 position INSERTs — if it's lossy under load, consider batching positions into a single INSERT per consumer batch invocation.
-- Decide on Phase 3a scope: enqueue only ghost-suspects + cancelled (conservative), or all departures with `rt_time IS NULL` past cutoff (broader)?
+
+### Resolved
+
+- **`ctx.waitUntil()` for position INSERTs:** Decision: use synchronous D1 inserts inside the queue consumer (not `waitUntil`). Queue consumers get up to 15 min execution time per batch. With `max_batch_size=25`, a single batched INSERT is fast and guaranteed.
+- **Phase 3a scope:** Enqueue departures with `rt_time IS NULL` past scheduled time (ghost-suspect), `cancelled = 1`, or delay above threshold. Dedup via `poll_state` column on `journey_runs`.
+- **Board polling cadence:** Every 2h, `duration=120`. Discovery-only role. Replaces the current 3-min primary data collection.
+- **Duration API limit:** Tested 2026-04-14 — RMV accepts `duration` 0–1439 (23h59m). 1440 returns `400 API_PARAM`.
+- **Tickler pattern:** Not needed. 2h discovery + 2h lookahead keeps enqueue-to-departure well within the ~12h delay cap.
+- **Completion detection:** `lastPassRouteIdx >= Stops.length - 1`, with hard time cap (T + D + 15min) as fallback for GPS dropout.
+- **Phase 2a retirement:** Nightly job will be removed once Phase 3 consumer populates `journey_runs` with live data.
 
 ## File and code references
 

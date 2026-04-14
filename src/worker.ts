@@ -1,6 +1,7 @@
 import { handle } from "@astrojs/cloudflare/handler";
 import { createDb } from "./db/client";
 import { runCollection } from "./lib/collect";
+import { processJourneyBatch } from "./lib/journeyPoller";
 import { snapshotJourneys } from "./lib/journeyRuns";
 import { STATIONS } from "./lib/stations";
 import { handleTelegramWebhook } from "./lib/telegram";
@@ -57,10 +58,10 @@ export default {
 	) {
 		const db = createDb(env.DB);
 
-		// Once-per-day window: snapshot yesterday's journeys into journey_runs.
-		// The 3-min cron means exactly one tick lands in the [02:00, 02:03) slot.
+		// 02:00 tick: snapshot yesterday's journeys for topology enrichment.
+		// Fills in origin/dest from /journeyDetail that the cron's skeleton rows lack.
 		const berlinNow = nowBerlin();
-		if (berlinNow.hour() === 2 && berlinNow.minute() < 3) {
+		if (berlinNow.hour() === 2) {
 			const yesterday = berlinNow.subtract(1, "day").format("YYYY-MM-DD");
 			const apiKey = env.RMV_API_KEY.split(",")[0].trim();
 			ctx.waitUntil(
@@ -78,6 +79,7 @@ export default {
 			db,
 			env.AI,
 			env.RMV_API_KEY,
+			env.JOURNEY_QUEUE,
 			env.TELEGRAM_BOT_TOKEN,
 		);
 
@@ -107,4 +109,12 @@ export default {
 			);
 		}
 	},
-} satisfies ExportedHandler<Cloudflare.Env>;
+
+	async queue(
+		batch: MessageBatch<JourneyPollMessage>,
+		env: Cloudflare.Env,
+		_ctx: ExecutionContext,
+	) {
+		await processJourneyBatch(batch, env);
+	},
+} satisfies ExportedHandler<Cloudflare.Env, JourneyPollMessage>;
