@@ -57,12 +57,14 @@ function categoryIcon(cat) {
 	return CATEGORY_ICONS[cat] || CATEGORY_ICONS["Bus"];
 }
 
-function createVehicleIcon(cat) {
+function createVehicleIcon(cat, sleeping) {
 	const color = categoryColor(cat);
 	const icon = categoryIcon(cat);
+	const opacity = sleeping ? "opacity:0.5;" : "";
+	const zzz = sleeping ? `<span style="position:absolute;top:-8px;right:-6px;font-size:10px;line-height:1">💤</span>` : "";
 	return L.divIcon({
 		className: "",
-		html: `<div style="background:${color};border-radius:50%;width:28px;height:28px;display:flex;align-items:center;justify-content:center;border:2px solid white;box-shadow:0 2px 6px rgba(0,0,0,.35)">${icon}</div>`,
+		html: `<div style="position:relative;${opacity}background:${color};border-radius:50%;width:28px;height:28px;display:flex;align-items:center;justify-content:center;border:2px solid white;box-shadow:0 2px 6px rgba(0,0,0,.35)">${icon}${zzz}</div>`,
 		iconSize: [28, 28],
 		iconAnchor: [14, 14],
 		popupAnchor: [0, -16],
@@ -71,9 +73,10 @@ function createVehicleIcon(cat) {
 }
 
 const iconCache = new Map();
-function getVehicleIcon(cat) {
-	if (!iconCache.has(cat)) iconCache.set(cat, createVehicleIcon(cat));
-	return iconCache.get(cat);
+function getVehicleIcon(cat, sleeping) {
+	const key = sleeping ? `${cat}:zzz` : cat;
+	if (!iconCache.has(key)) iconCache.set(key, createVehicleIcon(cat, sleeping));
+	return iconCache.get(key);
 }
 
 function formatTime(isoString) {
@@ -156,11 +159,14 @@ async function fetchAndRender() {
 
 		const seen = new Set();
 
+		const nowSec = new Date().getHours() * 3600 + new Date().getMinutes() * 60 + new Date().getSeconds();
 		for (const v of vehicles) {
-			if (!v.nextArrTime || !v.lastDepTime) { continue; }
+			if (!v.nextArrTime) { continue; }
 			seen.add(v.id);
 			const cat = v.category || "Bus";
 			const visible = matchesFilter(cat, activeFilter);
+			const depSec = timeToSeconds(v.originDepTime);
+			const sleeping = depSec !== null && depSec > nowSec;
 
 			const poly = v.polyline ? JSON.parse(v.polyline) : null;
 			vehicleState.set(v.id, {
@@ -174,12 +180,13 @@ async function fetchAndRender() {
 
 			if (markers.has(v.id)) {
 				const m = markers.get(v.id);
+				m.setIcon(getVehicleIcon(cat, sleeping));
 				m.setPopupContent(popupContent(v));
 				m.setTooltipContent(`${v.line} → ${shortName(v.destination)}`);
 				if (visible && !map.hasLayer(m)) m.addTo(map);
 				else if (!visible && map.hasLayer(m)) m.remove();
 			} else {
-				const m = L.marker([v.lat, v.lon], { icon: getVehicleIcon(cat) });
+				const m = L.marker([v.lat, v.lon], { icon: getVehicleIcon(cat, sleeping) });
 				m.bindPopup(popupContent(v));
 				m.bindTooltip(`${v.line} → ${shortName(v.destination)}`, { direction: "top" });
 				m._vehicleCategory = cat;

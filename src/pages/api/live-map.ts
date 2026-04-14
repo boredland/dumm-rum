@@ -24,6 +24,7 @@ export const GET: APIRoute = async () => {
 			reportedAt: journeyPositions.reportedAt,
 			routeIdx: journeyPositions.routeIdx,
 			destArrTime: journeyRuns.destArrTime,
+			originDepTime: journeyRuns.originDepTime,
 			polyline: journeyRuns.polyline,
 			nextLat: sql<number | null>`(
 				SELECT js.lat FROM journey_stops js
@@ -76,7 +77,7 @@ export const GET: APIRoute = async () => {
 				),
 				gte(journeyPositions.capturedAt, cutoff),
 				sql`${journeyRuns.destArrTime} >= ${nowTime}`,
-				sql`${journeyRuns.originDepTime} <= ${nowTime}`,
+				sql`${journeyRuns.originDepTime} <= time(${nowTime}, '+5 minutes')`,
 			),
 		);
 
