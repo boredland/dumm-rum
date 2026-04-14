@@ -8,7 +8,6 @@ import { langFromParams, t } from "../../../lib/i18n";
 import {
 	findStopBySlug,
 	getOldestDate,
-	getStats,
 	getStopStats,
 	parseFilter,
 } from "../../../lib/queries";
@@ -48,14 +47,8 @@ const stopIds = configured ? [configured.id] : dynamicStop!.stopIds;
 const filter = parseFilter(Astro.url);
 const { coreOnly, days: daysFilter } = filter;
 const { stats, oldestDate } = await all({
-	stats: () =>
-		configured
-			? getStats(db, configured, filter)
-			: getStopStats(db, stopIds, filter),
-	oldestDate: () =>
-		configured
-			? getOldestDate(db, { station: configured.id })
-			: getOldestDate(db, { stopIds }),
+	stats: () => getStopStats(db, stopIds, filter),
+	oldestDate: () => getOldestDate(db, { stopIds }),
 });
 const categories = dynamicStop?.categories ?? stats.categories;
 

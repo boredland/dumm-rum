@@ -8,7 +8,6 @@ import Layout from "../../../../layouts/Layout.astro";
 import { langFromParams, t } from "../../../../lib/i18n";
 import {
 	findStopBySlug,
-	getDayDepartures,
 	getHaiku,
 	getStopDayDepartures,
 } from "../../../../lib/queries";
@@ -50,10 +49,7 @@ const stopIds = configured ? [configured.id] : dynamicStop!.stopIds;
 
 const date = Astro.params.date!;
 const { departures, haiku } = await all({
-	departures: () =>
-		configured
-			? getDayDepartures(db, configured, date)
-			: getStopDayDepartures(db, stopIds, date),
+	departures: () => getStopDayDepartures(db, stopIds, date),
 	haiku: () => getHaiku(db, date, lang),
 });
 

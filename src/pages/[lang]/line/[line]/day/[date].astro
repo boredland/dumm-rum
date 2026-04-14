@@ -6,7 +6,7 @@ import StatusBadge from "../../../../../components/StatusBadge.astro";
 import { createDb } from "../../../../../db/client";
 import Layout from "../../../../../layouts/Layout.astro";
 import { langFromParams, t } from "../../../../../lib/i18n";
-import { getHaiku, getLineDayDepartures } from "../../../../../lib/queries";
+import { getHaiku, getLineDayJourneys } from "../../../../../lib/queries";
 import { categoryIcons } from "../../../../../lib/stations";
 import {
 	DELAY_THRESHOLD_MIN,
@@ -22,7 +22,7 @@ const date = Astro.params.date!;
 
 const db = createDb(env.DB);
 const { departures, haiku } = await all({
-	departures: () => getLineDayDepartures(db, line, date),
+	departures: () => getLineDayJourneys(db, line, date),
 	haiku: () => getHaiku(db, date, lang),
 });
 

@@ -3,7 +3,6 @@ import type { APIRoute } from "astro";
 import { createDb } from "../../../../db/client";
 import {
 	findStopBySlug,
-	getStats,
 	getStopStats,
 	parseFilter,
 } from "../../../../lib/queries";
@@ -29,10 +28,9 @@ export const GET: APIRoute = async ({ params, url, redirect }) => {
 	if (!configured && !dynamicStop)
 		return new Response("Not found", { status: 404 });
 
+	const stopIds = configured ? [configured.id] : dynamicStop!.stopIds;
 	const filter = parseFilter(url);
-	const stats = configured
-		? await getStats(db, configured, filter)
-		: await getStopStats(db, dynamicStop!.stopIds, filter);
+	const stats = await getStopStats(db, stopIds, filter);
 
 	return Response.json(stats);
 };

@@ -17,22 +17,16 @@ import {
 	knownStops,
 	lineDailyStats,
 	operatorDailyStats,
-	stationDailyStats,
 } from "../db/schema";
 import { createHafasClient } from "./hafas";
 import type { components } from "./hafas-types";
-import {
-	avgDelaySql,
-	delayedDistinctSql,
-	delayedSql,
-	ghostSql,
-} from "./queries";
 import type { Station } from "./stations";
 import { STATIONS } from "./stations";
 import {
 	DELAY_THRESHOLD_MIN,
 	delayMinutes,
 	nowBerlin,
+	PLANNED_FREQUENCY_MIN,
 	todayBerlin,
 } from "./utils";
 
@@ -287,84 +281,43 @@ async function generateDailyHaiku(db: Db, ai: Ai): Promise<void> {
 		.onConflictDoNothing();
 }
 
-async function materializeStationStats(db: Db, date: string): Promise<void> {
+async function materializeOperatorStats(db: Db, date: string): Promise<void> {
 	const rows = await db
 		.select({
-			stationId: departures.stationId,
+			operator: journeyRuns.operator,
 			total: count().as("total"),
-			cancelled: sql<number>`SUM(${departures.cancelled})`.as("cancelled"),
-			ghost: ghostSql.as("ghost"),
-			delayed: delayedSql.as("delayed"),
-			avgDelay: avgDelaySql.as("avg_delay"),
-		})
-		.from(departures)
-		.where(eq(departures.date, date))
-		.groupBy(departures.stationId);
-
-	await Promise.all(
-		rows.map((row) =>
-			db
-				.insert(stationDailyStats)
-				.values({
-					stationId: row.stationId,
-					date,
-					total: row.total,
-					cancelled: row.cancelled,
-					ghost: row.ghost,
-					delayed: row.delayed,
-					avgDelay: row.avgDelay,
-				})
-				.onConflictDoUpdate({
-					target: [stationDailyStats.stationId, stationDailyStats.date],
-					set: {
-						total: row.total,
-						cancelled: row.cancelled,
-						ghost: row.ghost,
-						delayed: row.delayed,
-						avgDelay: row.avgDelay,
-					},
-				}),
-		),
-	);
-}
-
-async function materializeOperatorStats(db: Db, date: string): Promise<void> {
-	const [jrRows, delayRows] = await Promise.all([
-		db
-			.select({
-				operator: journeyRuns.operator,
-				total: count().as("total"),
-				cancelled: sql<number>`SUM(${journeyRuns.cancelled})`.as("cancelled"),
-				ghost:
-					sql<number>`SUM(CASE WHEN ${journeyRuns.wasTracked} = 0 AND ${journeyRuns.cancelled} = 0 THEN 1 ELSE 0 END)`.as(
-						"ghost",
-					),
-			})
-			.from(journeyRuns)
-			.where(
-				and(
-					eq(journeyRuns.dayOfOperation, date),
-					isNotNull(journeyRuns.operator),
+			cancelled: sql<number>`SUM(${journeyRuns.cancelled})`.as("cancelled"),
+			ghost:
+				sql<number>`SUM(CASE WHEN ${journeyRuns.wasTracked} = 0 AND ${journeyRuns.cancelled} = 0 THEN 1 ELSE 0 END)`.as(
+					"ghost",
 				),
-			)
-			.groupBy(journeyRuns.operator),
-		db
-			.select({
-				operator: departures.operator,
-				delayed: delayedDistinctSql.as("delayed"),
-				avgDelay: avgDelaySql.as("avg_delay"),
-			})
-			.from(departures)
-			.where(and(eq(departures.date, date), isNotNull(departures.operator)))
-			.groupBy(departures.operator),
-	]);
-
-	const delayMap = new Map(delayRows.map((d) => [d.operator, d]));
-	const rows = jrRows.map((jr) => ({
-		...jr,
-		delayed: delayMap.get(jr.operator!)?.delayed ?? 0,
-		avgDelay: delayMap.get(jr.operator!)?.avgDelay ?? null,
-	}));
+			delayed:
+				sql<number>`SUM(CASE WHEN ${journeyRuns.cancelled} = 0 AND EXISTS (
+					SELECT 1 FROM ${journeyStops} js
+					WHERE js.journey_ref = ${journeyRuns.journeyRef}
+					AND js.day_of_operation = ${journeyRuns.dayOfOperation}
+					AND js.rt_dep_time IS NOT NULL AND js.dep_time IS NOT NULL
+					AND (strftime('%s', js.day_of_operation || 'T' || js.rt_dep_time) - strftime('%s', js.day_of_operation || 'T' || js.dep_time)) / 60.0 >= ${DELAY_THRESHOLD_MIN}
+				) THEN 1 ELSE 0 END)`.as("delayed"),
+			avgDelay: sql<
+				number | null
+			>`AVG(CASE WHEN ${journeyRuns.cancelled} = 1 THEN ${PLANNED_FREQUENCY_MIN} ELSE (
+					SELECT (strftime('%s', js.day_of_operation || 'T' || js.rt_dep_time) - strftime('%s', js.day_of_operation || 'T' || js.dep_time)) / 60.0
+					FROM ${journeyStops} js
+					WHERE js.journey_ref = ${journeyRuns.journeyRef}
+					AND js.day_of_operation = ${journeyRuns.dayOfOperation}
+					AND js.rt_dep_time IS NOT NULL AND js.dep_time IS NOT NULL
+					AND js.route_idx = 0
+				) END)`.as("avg_delay"),
+		})
+		.from(journeyRuns)
+		.where(
+			and(
+				eq(journeyRuns.dayOfOperation, date),
+				isNotNull(journeyRuns.operator),
+			),
+		)
+		.groupBy(journeyRuns.operator);
 
 	await Promise.all(
 		rows.map((row) =>
@@ -394,51 +347,45 @@ async function materializeOperatorStats(db: Db, date: string): Promise<void> {
 }
 
 async function materializeLineStats(db: Db, date: string): Promise<void> {
-	const [jrRows, depRows] = await Promise.all([
-		db
-			.select({
-				line: journeyRuns.line,
-				category: journeyRuns.category,
-				total: count().as("total"),
-				cancelled: sql<number>`SUM(${journeyRuns.cancelled})`.as("cancelled"),
-				ghost:
-					sql<number>`SUM(CASE WHEN ${journeyRuns.wasTracked} = 0 AND ${journeyRuns.cancelled} = 0 THEN 1 ELSE 0 END)`.as(
-						"ghost",
-					),
-			})
-			.from(journeyRuns)
-			.where(eq(journeyRuns.dayOfOperation, date))
-			.groupBy(journeyRuns.line, journeyRuns.category),
-		db
-			.select({
-				line: departures.line,
-				delayed: delayedDistinctSql.as("delayed"),
-				avgDelay: avgDelaySql.as("avg_delay"),
-				operators:
-					sql<string>`GROUP_CONCAT(DISTINCT ${departures.operator})`.as(
-						"operators",
-					),
-				destinations:
-					sql<string>`GROUP_CONCAT(DISTINCT ${departures.direction})`.as(
-						"destinations",
-					),
-			})
-			.from(departures)
-			.where(and(eq(departures.date, date), isNotNull(departures.operator)))
-			.groupBy(departures.line),
-	]);
-
-	const depMap = new Map(depRows.map((d) => [d.line, d]));
-	const rows = jrRows.map((jr) => {
-		const dep = depMap.get(jr.line);
-		return {
-			...jr,
-			delayed: dep?.delayed ?? 0,
-			avgDelay: dep?.avgDelay ?? null,
-			operators: dep?.operators ?? null,
-			destinations: dep?.destinations ?? null,
-		};
-	});
+	const rows = await db
+		.select({
+			line: journeyRuns.line,
+			category: journeyRuns.category,
+			total: count().as("total"),
+			cancelled: sql<number>`SUM(${journeyRuns.cancelled})`.as("cancelled"),
+			ghost:
+				sql<number>`SUM(CASE WHEN ${journeyRuns.wasTracked} = 0 AND ${journeyRuns.cancelled} = 0 THEN 1 ELSE 0 END)`.as(
+					"ghost",
+				),
+			delayed:
+				sql<number>`SUM(CASE WHEN ${journeyRuns.cancelled} = 0 AND EXISTS (
+					SELECT 1 FROM ${journeyStops} js
+					WHERE js.journey_ref = ${journeyRuns.journeyRef}
+					AND js.day_of_operation = ${journeyRuns.dayOfOperation}
+					AND js.rt_dep_time IS NOT NULL AND js.dep_time IS NOT NULL
+					AND (strftime('%s', js.day_of_operation || 'T' || js.rt_dep_time) - strftime('%s', js.day_of_operation || 'T' || js.dep_time)) / 60.0 >= ${DELAY_THRESHOLD_MIN}
+				) THEN 1 ELSE 0 END)`.as("delayed"),
+			avgDelay: sql<
+				number | null
+			>`AVG(CASE WHEN ${journeyRuns.cancelled} = 1 THEN ${PLANNED_FREQUENCY_MIN} ELSE (
+					SELECT (strftime('%s', js.day_of_operation || 'T' || js.rt_dep_time) - strftime('%s', js.day_of_operation || 'T' || js.dep_time)) / 60.0
+					FROM ${journeyStops} js
+					WHERE js.journey_ref = ${journeyRuns.journeyRef}
+					AND js.day_of_operation = ${journeyRuns.dayOfOperation}
+					AND js.rt_dep_time IS NOT NULL AND js.dep_time IS NOT NULL
+					AND js.route_idx = 0
+				) END)`.as("avg_delay"),
+			operators: sql<string>`GROUP_CONCAT(DISTINCT ${journeyRuns.operator})`.as(
+				"operators",
+			),
+			destinations:
+				sql<string>`GROUP_CONCAT(DISTINCT ${journeyRuns.destName})`.as(
+					"destinations",
+				),
+		})
+		.from(journeyRuns)
+		.where(eq(journeyRuns.dayOfOperation, date))
+		.groupBy(journeyRuns.line, journeyRuns.category);
 
 	await Promise.all(
 		rows.map((row) =>
@@ -585,7 +532,6 @@ export async function runCollection(
 	if (enqueued > 0) console.log(`enqueued ${enqueued} journeys for polling`);
 
 	await Promise.all([
-		materializeStationStats(db, today),
 		materializeOperatorStats(db, today),
 		materializeLineStats(db, today),
 		materializeKnownStops(db),

@@ -2,29 +2,24 @@ import type { InferSelectModel } from "drizzle-orm";
 import { and, count, desc, eq, gte, isNotNull, sql, sum } from "drizzle-orm";
 import type { Db } from "../db/client";
 import {
-	departures,
 	haikus,
 	journeyRuns,
 	journeyStops,
 	knownStops,
 	lineDailyStats,
 	operatorDailyStats,
-	stationDailyStats,
 } from "../db/schema";
-import type { Station } from "./stations";
 import {
 	DELAY_THRESHOLD_MIN,
 	PLANNED_FREQUENCY_MIN,
 	todayBerlin,
 } from "./utils";
 
-const CORE_HOURS = sql`((${departures.time} >= '06:00:00' AND ${departures.time} < '09:00:00') OR (${departures.time} >= '16:00:00' AND ${departures.time} < '19:00:00'))`;
-
 export type DaysFilter = "" | "all" | "today" | "weekdays" | "weekends";
 
 function daysCondition(dateCol: unknown, filter: DaysFilter = "") {
 	if (filter === "today")
-		return eq(dateCol as typeof departures.date, todayBerlin());
+		return eq(dateCol as typeof lineDailyStats.date, todayBerlin());
 	if (filter === "weekdays")
 		return sql`strftime('%w', ${dateCol}) NOT IN ('0', '6')`;
 	if (filter === "weekends")
@@ -40,19 +35,14 @@ const validDays = new Set<DaysFilter>([
 	"weekends",
 ]);
 
-const validCategories = new Set(["U-Bahn", "S", "Tram", "Bus", "RE,RB"]);
-
 export function parseFilter(url: URL): QueryFilter {
 	const days = url.searchParams.get("days") ?? "today";
-	const cat = url.searchParams.get("cat") ?? "";
 	return {
 		coreOnly: url.searchParams.get("hours") === "core",
 		days: validDays.has(days as DaysFilter) ? (days as DaysFilter) : "today",
-		category: validCategories.has(cat) ? cat : "",
+		category: "",
 	};
 }
-
-export type DayStats = InferSelectModel<typeof stationDailyStats>;
 
 export interface QueryFilter {
 	coreOnly?: boolean;
@@ -60,14 +50,13 @@ export interface QueryFilter {
 	category?: string;
 }
 
-function categoryCondition(category?: string) {
-	if (!category) return undefined;
-	const cats = category.split(",");
-	if (cats.length === 1) return eq(departures.category, cats[0]);
-	return sql`${departures.category} IN (${sql.join(
-		cats.map((c) => sql`${c}`),
-		sql`, `,
-	)})`;
+export interface DayStats {
+	date: string;
+	total: number;
+	cancelled: number;
+	ghost: number;
+	delayed: number;
+	avgDelay: number | null;
 }
 
 export interface Stats {
@@ -75,139 +64,6 @@ export interface Stats {
 	lastChange: string | null;
 	haiku: string | null;
 	categories: string[];
-}
-
-export async function getStats(
-	db: Db,
-	station: Station,
-	filter: QueryFilter = {},
-): Promise<Stats> {
-	if (filter.coreOnly) {
-		return getStatsFallback(db, station, filter);
-	}
-
-	const daysCond = daysCondition(stationDailyStats.date, filter.days);
-	const conditions = [eq(stationDailyStats.stationId, station.id)];
-	if (daysCond) conditions.push(daysCond);
-
-	const [dayRows, lastChangeRows, haikuRows, catRows] = await Promise.all([
-		db
-			.select()
-			.from(stationDailyStats)
-			.where(and(...conditions))
-			.orderBy(desc(stationDailyStats.date)),
-		db
-			.select({ fetchedAt: departures.fetchedAt })
-			.from(departures)
-			.where(eq(departures.stationId, station.id))
-			.orderBy(desc(departures.fetchedAt))
-			.limit(1),
-		db
-			.select({ haiku: haikus.haiku })
-			.from(haikus)
-			.where(eq(haikus.date, todayBerlin()))
-			.limit(1),
-		db
-			.selectDistinct({ category: departures.category })
-			.from(departures)
-			.where(
-				and(
-					eq(departures.stationId, station.id),
-					isNotNull(departures.category),
-				),
-			),
-	]);
-
-	return {
-		days: dayRows,
-		lastChange: lastChangeRows[0]?.fetchedAt ?? null,
-		haiku: haikuRows[0]?.haiku ?? null,
-		categories: catRows.map((r) => r.category!),
-	};
-}
-
-export const avgDelaySql = sql<
-	number | null
->`AVG(CASE WHEN ${departures.cancelled} = 1 THEN ${PLANNED_FREQUENCY_MIN} WHEN ${departures.rtTime} IS NOT NULL THEN MIN((strftime('%s', ${departures.rtDate} || ' ' || ${departures.rtTime}) - strftime('%s', ${departures.date} || ' ' || ${departures.time})) / 60.0, ${PLANNED_FREQUENCY_MIN}) END)`;
-
-export const delayedSql = sql<number>`SUM(CASE WHEN ${departures.cancelled} = 0 AND ${departures.rtTime} IS NOT NULL AND (strftime('%s', ${departures.rtDate} || ' ' || ${departures.rtTime}) - strftime('%s', ${departures.date} || ' ' || ${departures.time})) / 60.0 >= ${DELAY_THRESHOLD_MIN} THEN 1 ELSE 0 END)`;
-
-export const ghostSql = sql<number>`SUM(${departures.ghost})`;
-
-export const totalDistinctSql = sql<number>`COUNT(DISTINCT ${departures.journeyNum})`;
-export const cancelledDistinctSql = sql<number>`COUNT(DISTINCT CASE WHEN ${departures.cancelled} = 1 THEN ${departures.journeyNum} END)`;
-export const ghostDistinctSql = sql<number>`COUNT(DISTINCT CASE WHEN ${departures.ghost} = 1 THEN ${departures.journeyNum} END)`;
-export const delayedDistinctSql = sql<number>`COUNT(DISTINCT CASE WHEN ${departures.cancelled} = 0 AND ${departures.rtTime} IS NOT NULL AND (strftime('%s', ${departures.rtDate} || ' ' || ${departures.rtTime}) - strftime('%s', ${departures.date} || ' ' || ${departures.time})) / 60.0 >= ${DELAY_THRESHOLD_MIN} THEN ${departures.journeyNum} END)`;
-
-async function getStatsFallback(
-	db: Db,
-	station: Station,
-	filter: QueryFilter = {},
-): Promise<Stats> {
-	const daysCond = daysCondition(departures.date, filter.days);
-	const conditions = [eq(departures.stationId, station.id), CORE_HOURS];
-	if (daysCond) conditions.push(daysCond);
-
-	const [dayRows, lastChangeRows, haikuRows, catRows] = await Promise.all([
-		db
-			.select({
-				stationId: departures.stationId,
-				date: departures.date,
-				total: count().as("total"),
-				cancelled: sql<number>`SUM(${departures.cancelled})`.as("cancelled"),
-				ghost: ghostSql.as("ghost"),
-				delayed: delayedSql.as("delayed"),
-				avgDelay: avgDelaySql.as("avg_delay"),
-			})
-			.from(departures)
-			.where(and(...conditions))
-			.groupBy(departures.date)
-			.orderBy(desc(departures.date)),
-		db
-			.select({ fetchedAt: departures.fetchedAt })
-			.from(departures)
-			.where(eq(departures.stationId, station.id))
-			.orderBy(desc(departures.fetchedAt))
-			.limit(1),
-		db
-			.select({ haiku: haikus.haiku })
-			.from(haikus)
-			.where(eq(haikus.date, todayBerlin()))
-			.limit(1),
-		db
-			.selectDistinct({ category: departures.category })
-			.from(departures)
-			.where(
-				and(
-					eq(departures.stationId, station.id),
-					isNotNull(departures.category),
-				),
-			),
-	]);
-
-	return {
-		days: dayRows,
-		lastChange: lastChangeRows[0]?.fetchedAt ?? null,
-		haiku: haikuRows[0]?.haiku ?? null,
-		categories: catRows.map((r) => r.category!),
-	};
-}
-
-export async function getDayDepartures(db: Db, station: Station, date: string) {
-	return db
-		.select({
-			date: departures.date,
-			time: departures.time,
-			rtDate: departures.rtDate,
-			rtTime: departures.rtTime,
-			line: departures.line,
-			direction: departures.direction,
-			cancelled: departures.cancelled,
-			ghost: departures.ghost,
-		})
-		.from(departures)
-		.where(and(eq(departures.stationId, station.id), eq(departures.date, date)))
-		.orderBy(departures.time, departures.direction);
 }
 
 export async function getHaiku(
@@ -239,81 +95,59 @@ export async function getOperatorSummaries(
 	db: Db,
 	filter: QueryFilter = {},
 ): Promise<OperatorSummary[]> {
-	const depDaysCond = daysCondition(departures.date, filter.days);
 	const opDaysCond = daysCondition(operatorDailyStats.date, filter.days);
-	const catCond = categoryCondition(filter.category);
-	const useDepartures = filter.coreOnly || !!catCond;
 
 	const [statsRows, lineRows] = await Promise.all([
-		useDepartures
-			? db
-					.select({
-						operator: departures.operator,
-						total: totalDistinctSql.as("total"),
-						cancelled: cancelledDistinctSql.as("cancelled"),
-						ghost: ghostDistinctSql.as("ghost"),
-						delayed: delayedDistinctSql.as("delayed"),
-						avgDelay: avgDelaySql.as("avg_delay"),
-					})
-					.from(departures)
-					.where(
-						and(
-							isNotNull(departures.operator),
-							filter.coreOnly ? CORE_HOURS : undefined,
-							depDaysCond,
-							catCond,
-						),
-					)
-					.groupBy(departures.operator)
-			: db
-					.select({
-						operator: operatorDailyStats.operator,
-						total: sum(operatorDailyStats.total).as("total"),
-						cancelled: sum(operatorDailyStats.cancelled).as("cancelled"),
-						ghost: sum(operatorDailyStats.ghost).as("ghost"),
-						delayed: sum(operatorDailyStats.delayed).as("delayed"),
-						avgDelay: sql<
-							number | null
-						>`SUM(${operatorDailyStats.avgDelay} * ${operatorDailyStats.total}) / NULLIF(SUM(CASE WHEN ${operatorDailyStats.avgDelay} IS NOT NULL THEN ${operatorDailyStats.total} END), 0)`.as(
-							"avg_delay",
-						),
-					})
-					.from(operatorDailyStats)
-					.where(opDaysCond)
-					.groupBy(operatorDailyStats.operator),
+		db
+			.select({
+				operator: operatorDailyStats.operator,
+				total: sum(operatorDailyStats.total).as("total"),
+				cancelled: sum(operatorDailyStats.cancelled).as("cancelled"),
+				ghost: sum(operatorDailyStats.ghost).as("ghost"),
+				delayed: sum(operatorDailyStats.delayed).as("delayed"),
+				avgDelay: sql<
+					number | null
+				>`SUM(${operatorDailyStats.avgDelay} * ${operatorDailyStats.total}) / NULLIF(SUM(CASE WHEN ${operatorDailyStats.avgDelay} IS NOT NULL THEN ${operatorDailyStats.total} END), 0)`.as(
+					"avg_delay",
+				),
+			})
+			.from(operatorDailyStats)
+			.where(opDaysCond)
+			.groupBy(operatorDailyStats.operator),
 		db
 			.selectDistinct({
-				operator: departures.operator,
-				line: departures.line,
-				category: departures.category,
+				operator: journeyRuns.operator,
+				line: journeyRuns.line,
+				category: journeyRuns.category,
 			})
-			.from(departures)
+			.from(journeyRuns)
 			.where(
 				and(
-					isNotNull(departures.operator),
-					gte(departures.date, sql`date('now', '-30 days')`),
+					isNotNull(journeyRuns.operator),
+					gte(journeyRuns.dayOfOperation, sql`date('now', '-30 days')`),
 				),
 			)
-			.orderBy(departures.operator, departures.line),
+			.orderBy(journeyRuns.operator, journeyRuns.line),
 	]);
 
 	const lineMap = new Map<string, string[]>();
 	const catMap = new Map<string, Set<string>>();
 	for (const row of lineRows) {
-		const lines = lineMap.get(row.operator!) ?? [];
+		if (!row.operator) continue;
+		const lines = lineMap.get(row.operator) ?? [];
 		lines.push(row.line);
-		lineMap.set(row.operator!, lines);
+		lineMap.set(row.operator, lines);
 		if (row.category) {
-			const cats = catMap.get(row.operator!) ?? new Set();
+			const cats = catMap.get(row.operator) ?? new Set();
 			cats.add(row.category);
-			catMap.set(row.operator!, cats);
+			catMap.set(row.operator, cats);
 		}
 	}
 
 	return statsRows.map((r) => ({
-		operator: r.operator!,
-		lines: lineMap.get(r.operator!) ?? [],
-		categories: [...(catMap.get(r.operator!) ?? [])],
+		operator: r.operator,
+		lines: lineMap.get(r.operator) ?? [],
+		categories: [...(catMap.get(r.operator) ?? [])],
 		total: Number(r.total ?? 0),
 		cancelled: Number(r.cancelled ?? 0),
 		ghost: Number(r.ghost ?? 0),
@@ -338,52 +172,6 @@ export async function getLineSummaries(
 	db: Db,
 	filter: QueryFilter = {},
 ): Promise<LineSummary[]> {
-	const catCond = categoryCondition(filter.category);
-	const useDepartures = filter.coreOnly || !!catCond;
-
-	if (useDepartures) {
-		const daysCond = daysCondition(departures.date, filter.days);
-		const conditions = [isNotNull(departures.operator)];
-		if (filter.coreOnly) conditions.push(CORE_HOURS);
-		if (daysCond) conditions.push(daysCond);
-		if (catCond) conditions.push(catCond);
-
-		const rows = await db
-			.select({
-				line: departures.line,
-				category: departures.category,
-				operators:
-					sql<string>`GROUP_CONCAT(DISTINCT ${departures.operator})`.as(
-						"operators",
-					),
-				destinations:
-					sql<string>`GROUP_CONCAT(DISTINCT ${departures.direction})`.as(
-						"destinations",
-					),
-				total: totalDistinctSql.as("total"),
-				cancelled: cancelledDistinctSql.as("cancelled"),
-				ghost: ghostDistinctSql.as("ghost"),
-				delayed: delayedDistinctSql.as("delayed"),
-				avgDelay: avgDelaySql.as("avg_delay"),
-			})
-			.from(departures)
-			.where(and(...conditions))
-			.groupBy(departures.line, departures.category)
-			.orderBy(departures.category, departures.line);
-
-		return rows.map((r) => ({
-			line: r.line,
-			category: r.category ?? "Bus",
-			operators: r.operators ? r.operators.split(",") : [],
-			destinations: r.destinations ? r.destinations.split(",") : [],
-			total: r.total,
-			cancelled: r.cancelled,
-			ghost: r.ghost,
-			delayed: r.delayed,
-			avgDelay: r.avgDelay,
-		}));
-	}
-
 	const daysCond = daysCondition(lineDailyStats.date, filter.days);
 	const rows = await db
 		.select({
@@ -443,50 +231,6 @@ export async function getLineStats(
 	operators: string[];
 	categories: string[];
 }> {
-	if (filter.coreOnly) {
-		const daysCond = daysCondition(departures.date, filter.days);
-		const conditions = [eq(departures.line, line)];
-		conditions.push(CORE_HOURS);
-		if (daysCond) conditions.push(daysCond);
-
-		const [dayRows, opRows, catRows] = await Promise.all([
-			db
-				.select({
-					date: departures.date,
-					total: totalDistinctSql.as("total"),
-					cancelled: cancelledDistinctSql.as("cancelled"),
-					ghost: ghostDistinctSql.as("ghost"),
-					delayed: delayedDistinctSql.as("delayed"),
-					avgDelay: avgDelaySql.as("avg_delay"),
-				})
-				.from(departures)
-				.where(and(...conditions))
-				.groupBy(departures.date)
-				.orderBy(desc(departures.date)),
-			db
-				.selectDistinct({ operator: departures.operator })
-				.from(departures)
-				.where(and(eq(departures.line, line), isNotNull(departures.operator))),
-			db
-				.selectDistinct({ category: departures.category })
-				.from(departures)
-				.where(and(eq(departures.line, line), isNotNull(departures.category))),
-		]);
-
-		return {
-			days: dayRows.map((d) => ({
-				date: d.date,
-				total: d.total,
-				cancelled: d.cancelled,
-				ghost: d.ghost,
-				delayed: d.delayed,
-				avgDelay: d.avgDelay,
-			})),
-			operators: opRows.map((r) => r.operator!),
-			categories: catRows.map((r) => r.category!),
-		};
-	}
-
 	const daysCond = daysCondition(lineDailyStats.date, filter.days);
 	const conditions = [eq(lineDailyStats.line, line)];
 	if (daysCond) conditions.push(daysCond);
@@ -518,31 +262,6 @@ export async function getLineStats(
 	};
 }
 
-export async function getLineDayDepartures(db: Db, line: string, date: string) {
-	return db
-		.select({
-			date: departures.date,
-			time: sql<string>`min(${departures.time})`.as("time"),
-			rtDate: departures.rtDate,
-			rtTime: departures.rtTime,
-			direction: departures.direction,
-			cancelled: sql<number>`max(${departures.cancelled})`.as("cancelled"),
-			ghost: sql<number>`max(${departures.ghost})`.as("ghost"),
-			operator: departures.operator,
-			category: departures.category,
-			stop: departures.stop,
-		})
-		.from(departures)
-		.where(and(eq(departures.line, line), eq(departures.date, date)))
-		.groupBy(
-			departures.date,
-			departures.line,
-			departures.direction,
-			departures.journeyNum,
-		)
-		.orderBy(sql`time`, departures.direction);
-}
-
 type OperatorDayStats = InferSelectModel<typeof operatorDailyStats>;
 
 export async function getOperatorStats(
@@ -554,88 +273,35 @@ export async function getOperatorStats(
 	lines: string[];
 	categories: string[];
 }> {
-	const depDaysCond = daysCondition(departures.date, filter.days);
 	const opDaysCond = daysCondition(operatorDailyStats.date, filter.days);
 
 	const [dayRows, lineRows, catRows] = await Promise.all([
-		filter.coreOnly
-			? db
-					.select({
-						operator: departures.operator,
-						date: departures.date,
-						total: totalDistinctSql.as("total"),
-						cancelled: cancelledDistinctSql.as("cancelled"),
-						ghost: ghostDistinctSql.as("ghost"),
-						delayed: delayedDistinctSql.as("delayed"),
-						avgDelay: avgDelaySql.as("avg_delay"),
-					})
-					.from(departures)
-					.where(
-						and(eq(departures.operator, operator), CORE_HOURS, depDaysCond),
-					)
-					.groupBy(departures.date)
-					.orderBy(desc(departures.date))
-			: db
-					.select()
-					.from(operatorDailyStats)
-					.where(and(eq(operatorDailyStats.operator, operator), opDaysCond))
-					.orderBy(desc(operatorDailyStats.date)),
 		db
-			.selectDistinct({ line: departures.line })
-			.from(departures)
-			.where(eq(departures.operator, operator))
-			.orderBy(departures.line),
+			.select()
+			.from(operatorDailyStats)
+			.where(and(eq(operatorDailyStats.operator, operator), opDaysCond))
+			.orderBy(desc(operatorDailyStats.date)),
 		db
-			.selectDistinct({ category: departures.category })
-			.from(departures)
+			.selectDistinct({ line: journeyRuns.line })
+			.from(journeyRuns)
+			.where(eq(journeyRuns.operator, operator))
+			.orderBy(journeyRuns.line),
+		db
+			.selectDistinct({ category: journeyRuns.category })
+			.from(journeyRuns)
 			.where(
-				and(eq(departures.operator, operator), isNotNull(departures.category)),
+				and(
+					eq(journeyRuns.operator, operator),
+					isNotNull(journeyRuns.category),
+				),
 			),
 	]);
 
-	const days = dayRows.map((d) => ({
-		operator: d.operator!,
-		date: d.date,
-		total: Number(d.total),
-		cancelled: Number(d.cancelled),
-		ghost: Number(d.ghost ?? 0),
-		delayed: Number(d.delayed),
-		avgDelay: d.avgDelay,
-	}));
 	return {
-		days,
+		days: dayRows,
 		lines: lineRows.map((r) => r.line),
-		categories: catRows.map((r) => r.category!),
+		categories: catRows.map((r) => r.category).filter(Boolean) as string[],
 	};
-}
-
-export async function getOperatorDayDepartures(
-	db: Db,
-	operator: string,
-	date: string,
-) {
-	return db
-		.select({
-			date: departures.date,
-			time: sql<string>`min(${departures.time})`.as("time"),
-			rtDate: departures.rtDate,
-			rtTime: departures.rtTime,
-			line: departures.line,
-			category: departures.category,
-			direction: departures.direction,
-			cancelled: sql<number>`max(${departures.cancelled})`.as("cancelled"),
-			ghost: sql<number>`max(${departures.ghost})`.as("ghost"),
-			stop: departures.stop,
-		})
-		.from(departures)
-		.where(and(eq(departures.operator, operator), eq(departures.date, date)))
-		.groupBy(
-			departures.date,
-			departures.line,
-			departures.direction,
-			departures.journeyNum,
-		)
-		.orderBy(sql`time`, departures.line, departures.direction);
 }
 
 export async function getOldestDate(
@@ -660,13 +326,6 @@ export async function getOldestDate(
 			.where(sql`${journeyStops.stopId} IN (${stopIdList})`);
 		return rows[0]?.date ?? null;
 	}
-	if (entity?.station) {
-		const rows = await db
-			.select({ date: sql<string>`MIN(${stationDailyStats.date})` })
-			.from(stationDailyStats)
-			.where(eq(stationDailyStats.stationId, entity.station));
-		return rows[0]?.date ?? null;
-	}
 	if (entity?.line) {
 		const rows = await db
 			.select({ date: sql<string>`MIN(${lineDailyStats.date})` })
@@ -676,14 +335,18 @@ export async function getOldestDate(
 	}
 	if (entity?.operator) {
 		const rows = await db
-			.select({ date: sql<string>`MIN(${departures.date})` })
-			.from(departures)
-			.where(eq(departures.operator, entity.operator));
+			.select({
+				date: sql<string>`MIN(${operatorDailyStats.date})`,
+			})
+			.from(operatorDailyStats)
+			.where(eq(operatorDailyStats.operator, entity.operator));
 		return rows[0]?.date ?? null;
 	}
 	const rows = await db
-		.select({ date: sql<string>`MIN(${stationDailyStats.date})` })
-		.from(stationDailyStats);
+		.select({
+			date: sql<string>`MIN(${journeyStops.dayOfOperation})`,
+		})
+		.from(journeyStops);
 	return rows[0]?.date ?? null;
 }
 
@@ -884,4 +547,67 @@ export async function getStopDayDepartures(
 			),
 		)
 		.orderBy(sql`time`, journeyRuns.line);
+}
+
+export async function getLineDayJourneys(db: Db, line: string, date: string) {
+	return db
+		.select({
+			date: journeyRuns.dayOfOperation,
+			time: journeyRuns.originDepTime,
+			rtDate: journeyRuns.dayOfOperation,
+			rtTime: sql<
+				string | null
+			>`(SELECT js.rt_dep_time FROM journey_stops js WHERE js.journey_ref = ${journeyRuns.journeyRef} AND js.day_of_operation = ${journeyRuns.dayOfOperation} AND js.route_idx = 0)`.as(
+				"rt_time",
+			),
+			direction: journeyRuns.destName,
+			cancelled: journeyRuns.cancelled,
+			ghost:
+				sql<number>`CASE WHEN ${journeyRuns.wasTracked} = 0 AND ${journeyRuns.cancelled} = 0 THEN 1 ELSE 0 END`.as(
+					"ghost",
+				),
+			operator: journeyRuns.operator,
+			category: journeyRuns.category,
+			stop: journeyRuns.originName,
+		})
+		.from(journeyRuns)
+		.where(
+			and(eq(journeyRuns.line, line), eq(journeyRuns.dayOfOperation, date)),
+		)
+		.orderBy(journeyRuns.originDepTime, journeyRuns.destName);
+}
+
+export async function getOperatorDayJourneys(
+	db: Db,
+	operator: string,
+	date: string,
+) {
+	return db
+		.select({
+			date: journeyRuns.dayOfOperation,
+			time: journeyRuns.originDepTime,
+			rtDate: journeyRuns.dayOfOperation,
+			rtTime: sql<
+				string | null
+			>`(SELECT js.rt_dep_time FROM journey_stops js WHERE js.journey_ref = ${journeyRuns.journeyRef} AND js.day_of_operation = ${journeyRuns.dayOfOperation} AND js.route_idx = 0)`.as(
+				"rt_time",
+			),
+			line: journeyRuns.line,
+			category: journeyRuns.category,
+			direction: journeyRuns.destName,
+			cancelled: journeyRuns.cancelled,
+			ghost:
+				sql<number>`CASE WHEN ${journeyRuns.wasTracked} = 0 AND ${journeyRuns.cancelled} = 0 THEN 1 ELSE 0 END`.as(
+					"ghost",
+				),
+			stop: journeyRuns.originName,
+		})
+		.from(journeyRuns)
+		.where(
+			and(
+				eq(journeyRuns.operator, operator),
+				eq(journeyRuns.dayOfOperation, date),
+			),
+		)
+		.orderBy(journeyRuns.originDepTime, journeyRuns.line, journeyRuns.destName);
 }
