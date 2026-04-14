@@ -14,10 +14,3 @@ export function coalesce<T>(...args: SqlOrColumn[]) {
 		sql.raw(","),
 	)})`;
 }
-
-export function max<T>(...args: SqlOrColumn[]) {
-	return sql<T>`MAX(${sql.join(
-		args.map((a) => sql`${a}`),
-		sql.raw(","),
-	)})`;
-}

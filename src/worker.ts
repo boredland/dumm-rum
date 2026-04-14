@@ -80,7 +80,6 @@ export default {
 			env.AI,
 			env.RMV_API_KEY,
 			env.JOURNEY_QUEUE,
-			env.TELEGRAM_BOT_TOKEN,
 		);
 
 		const site = env.SITE_URL;
