@@ -1,138 +1,71 @@
 # Journey-level tracking roadmap
 
-Goal: move beyond per-stop-visit accounting in `departures` toward per-vehicle-run ("journey") data, so we can answer corridor-level questions ("how does S8 degrade between Wiesbaden and Frankfurt?"), build honest OTP metrics that don't double-count cross-station visits, and reliably distinguish ghost departures from sensor dropouts.
+Goal: move beyond per-stop-visit accounting in `departures` toward per-vehicle-run ("journey") data, so we can answer corridor-level questions ("how does S8 degrade between Wiesbaden and Frankfurt?"), build honest OTP metrics that don't double-count cross-station visits, reliably distinguish ghost departures from sensor dropouts, and eventually display live vehicle positions on a map.
 
-## Status (as of 2026-04-13)
+## Status (as of 2026-04-14)
 
-- **Phase 1: shipped and deployed** (commits `ed94bd3`, `56b7acc` — `56b7acc` committed locally but **not yet pushed**).
-- **Phase 2a: designed, not started.**
-- **Phase 2b: outlined, not started.**
-- **Phase 3: deferred — only pursue if product direction shifts toward vehicle tracking.**
+- **Phase 1: shipped** (`ed94bd3`, `56b7acc`). Captures `journey_ref` + `journey_status` on every departure row from the existing board response.
+- **Phase 2a: shipped** (`97d1c1f`, `a26eeb6`). Nightly `journey_runs` snapshot: route topology from `/journeyDetail`, operational data derived from `departures`. Fires at 02:00 Berlin daily.
+- **Phase 2b: skipped.** Inline ghost verification in the 5-min cron was a stepping stone — jumping straight to Phase 3 Queue-based polling instead (same infra, no throwaway work).
+- **Phase 3: designed, not started.** Queue-based live journey polling + `journey_positions` time-series for live map.
 
-## Empirical findings (useful constraints)
+## Empirical findings (constraints that shape the design)
 
 From probing `/departureBoard` and `/journeyDetail` on RMV's HAFAS deployment:
 
-1. **RMV strips ALL operational metadata from `/journeyDetail` overnight — cancellations, rt times, positions, AND per-stop `cancelled` flags.** A journey that showed `partCancelled: true` + all stops cancelled on the same evening returns `cancelled: None, partCancelled: None, 0 cancelled stops` the next morning. This means the nightly snapshot can only provide **route topology** (origin, dest, stop list) from `/journeyDetail`; all operational data (was it cancelled, was it tracked, how late was it) must be derived from the `departures` table which captured live flags.
-2. **`journey_ref` is stable across stations on the same day.** Verified with 5 S1 journeys × 4 stations = 20 observations; all byte-identical. The `ZI#<N>` component in the ref identifies the journey-run; `TA#<N>` encodes the origin route index, not the reporting station.
-2. **`(journey_ref, day_of_operation)` is a safe PK.** The ref token embeds `DA#YYMMDD`, but the explicit column protects against midnight-crossing edge cases.
-3. **RMV strips realtime data once a journey ages out.** Per-stop `rtDepTime`/`rtArrTime` and journey-level `lastPos`/`rtLastPassRouteIdx` are only present while the journey is live. Yesterday's `/journeyDetail` returns planned times only.
-4. **~~Journey-level cancellation metadata IS preserved.~~** WRONG — cancellation flags are stripped overnight, same as rt data. The `departures` table is the authoritative source for cancellations.
-5. **`JourneyStatus` is volatile.** RMV reports `R`/`A`/`S` while live and flips back to `P` after the journey completes. Phase 1's sticky-status rule in `src/lib/collect.ts` preserves the most informative status ever seen.
-6. **RMV only accepts `rtMode=OFF` or `rtMode=SERVER_DEFAULT`.** `FULL`/`REALTIME`/`INFOS` are rejected with `API_PARAM` despite the OpenAPI spec listing them.
-7. **RMV never reports `JourneyStatus = 'R'` on `/departureBoard`.** Only `P` (planned) and `A` (additional) have been observed. `R` (realtime-created journey) may be RMV-unused or only visible in `/journeyDetail` while live.
+1. **RMV strips ALL operational metadata from `/journeyDetail` overnight.** Cancellations, rt times, positions, AND per-stop `cancelled` flags are all gone by the next morning. A journey that showed `partCancelled: true` + all stops cancelled the same evening returns `cancelled: None, partCancelled: None, 0 cancelled stops` the next day. The `departures` table (which captured live flags via the board cron) is the only authoritative source for historical operational data.
+2. **`journey_ref` is stable across stations on the same day.** Verified with 5 S1 journeys x 4 stations = 20 observations; all byte-identical. The `ZI#<N>` component identifies the journey-run; `TA#<N>` encodes the origin route index, not the reporting station.
+3. **`(journey_ref, day_of_operation)` is a safe PK.** The ref token embeds `DA#YYMMDD`, but the explicit column protects against midnight-crossing edge cases.
+4. **`JourneyStatus` is volatile.** RMV reports `R`/`A`/`S` while live and flips back to `P` after the journey completes. Phase 1's sticky-status rule preserves the most informative status ever seen.
+5. **RMV never reports `JourneyStatus = 'R'` on `/departureBoard`.** Only `P` (planned) and `A` (additional) have been observed. The `R` status may only appear in `/journeyDetail` while live, or may be unused by RMV entirely.
+6. **RMV only accepts `rtMode=OFF` or `rtMode=SERVER_DEFAULT`.** The OpenAPI spec lists `FULL`/`REALTIME`/`INFOS` but RMV rejects them with `API_PARAM`.
+7. **`wasTracked` must use `rt_time IS NOT NULL` from departures, not `journey_status IN (R,A,S)`.** Since R is never reported on the board, the status check was always false. The rt_time check correctly identifies departures where the board had realtime data.
 
-These shape the plan below: the board cron is load-bearing (can't be replaced by journey polling because rt data only exists live), cancellation and tracking data must come from our own `departures` table (RMV strips everything overnight), and any live-quality data (position, per-stop rt times, cancellation chain) must be captured **same-day via inline or queued `/journeyDetail` calls**.
+**Core constraint:** every "interesting" signal from `/journeyDetail` (positions, per-stop rt times, cancellation chains, vehicle progress) is only available **while the journey is live**. Anything not captured same-day is lost forever. This makes live polling the only way to get corridor-wide data.
 
-## Phase 1 — Capture journey identity on each departure ✅
+### Cross-station redundancy
 
-**Goal.** Record `journey_ref` and `journey_status` on every `departures` row so downstream work can dedupe across stations and distinguish tracked/untracked/additional/substitute services.
+Measured 2026-04-13: 1,278 unique journeys produce 2,057 `departures` rows — ~60% row-count inflation from journeys that touch multiple tracked stations. Corridor-heavy stations carry most of the duplication (`3000933` at 81.7% shared, `3000129` at 78.9%, `3001507` at 77.1%, `3001217` at 73.8%).
 
-**What was done.**
-- Added `journey_ref TEXT` and `journey_status TEXT` columns to `departures` (`src/db/schema.ts`).
-- Migration: `migrations/20260413173928_motionless_johnny_storm.sql`.
-- `src/lib/collect.ts` reads `dep.JourneyDetailRef.ref` and `dep.JourneyStatus` — both already present in every `/departureBoard` response; zero new API calls.
-- Upsert uses `coalesce(excluded, existing)` for `journey_ref` (stable, first-non-null preserves).
-- Upsert uses `CASE` for `journey_status` to preserve `R`/`A`/`S` once observed (so post-event `P` re-fetches don't downgrade).
+Under Phase 3, `/journeyDetail.Stops[]` supplies per-stop rt data for every stop on a route — including stations we don't track — so per-station polling becomes redundant for *delay analytics*. What it can't be dropped for:
+- Discovery of `A` (additional) / `S` (substitute) services added mid-day
+- Per-station "next departures" UX if ever needed
 
-**Known gaps / follow-ups.**
-- No index covers `journey_ref` yet. Add when the first query reads it.
-- Ref stability across re-fetches of the same row has not been empirically verified (the `coalesce` upsert would mask any drift). Worth probing if Phase 2 surfaces weirdness.
-- Old rows pre-deploy will have `journey_ref = NULL` forever — acceptable.
+Plausible Phase 3 cadence: hourly discovery poll per station (instead of every 3 min) + journey-primary polling via Queues.
 
-## Phase 2a — End-of-day `journey_runs` snapshot
+## Phase 1 — Capture journey identity on each departure (done)
 
-**Goal.** Produce a canonical per-journey record of what actually ran yesterday, including full cancellation chain for all stops on the route (not just our tracked stations).
+- Added `journey_ref TEXT` and `journey_status TEXT` to `departures`.
+- `collect.ts` reads `dep.JourneyDetailRef.ref` and `dep.JourneyStatus` from the existing board response (zero new API calls).
+- `journey_ref` uses `coalesce(excluded, existing)` on upsert (stable, first-non-null preserves).
+- `journey_status` uses a CASE expression to preserve `R`/`A`/`S` once observed (sticky — prevents post-event `P` from downgrading).
 
-**Why it's cheap.** Cancellations are preserved in `/journeyDetail` after the fact (finding #4). No live-window scheduling needed — run once around 02:00 Berlin.
+## Phase 2a — Nightly `journey_runs` snapshot (done)
 
-**New table: `journey_runs`**
+- `journey_runs` table keyed by `(journey_ref, day_of_operation)` with denormalized line/category/operator, origin/dest metadata, cancellation counts, `was_tracked` bit.
+- `/journeyDetail` provides route topology (origin, dest, stop list, product info). Operational data (`cancelled`, `part_cancelled`, `was_tracked`) is derived from the `departures` table since RMV strips operational flags overnight.
+- `wasTracked = 1` when any departure for this journey_ref has `rt_time IS NOT NULL`.
+- Fires during the 02:00-02:03 Berlin window of the existing 3-min cron. Idempotent upserts on the PK.
+- Module: `src/lib/journeyRuns.ts`, wired in `src/worker.ts`.
 
-```ts
-export const journeyRuns = sqliteTable(
-  "journey_runs",
-  {
-    journeyRef: text("journey_ref").notNull(),
-    dayOfOperation: text("day_of_operation").notNull(),   // YYYY-MM-DD
-    line: text().notNull(),
-    category: text(),
-    operator: text(),
-    lineId: text("line_id"),                              // stable cross-day, e.g. "de:rmv:00000903:"
-    originStopId: text("origin_stop_id").notNull(),
-    originName: text("origin_name").notNull(),
-    originDepTime: text("origin_dep_time").notNull(),
-    destStopId: text("dest_stop_id").notNull(),
-    destName: text("dest_name").notNull(),
-    destArrTime: text("dest_arr_time").notNull(),
-    status: text().notNull(),                             // last-known: P/R/A/S
-    cancelled: integer().notNull().default(0),
-    partCancelled: integer("part_cancelled").notNull().default(0),
-    cancelledStopCount: integer("cancelled_stop_count").notNull().default(0),
-    totalStopCount: integer("total_stop_count").notNull(),
-    wasTracked: integer("was_tracked").notNull().default(0),  // true if any R/A/S seen in departures
-    snapshotAt: text("snapshot_at").notNull(),
-  },
-  (t) => [
-    primaryKey({ columns: [t.journeyRef, t.dayOfOperation] }),
-    index("idx_journey_runs_day").on(t.dayOfOperation),
-    index("idx_journey_runs_line_day").on(t.line, t.dayOfOperation),
-    index("idx_journey_runs_operator_day").on(t.operator, t.dayOfOperation),
-  ],
-);
-```
+## Phase 3 — Live journey polling via Cloudflare Queues
 
-**Populator algorithm** (new function in `src/lib/collect.ts` or a sibling module):
+### Goal
 
-```
-1. Pull distinct journey_ref from departures WHERE date = yesterday AND journey_ref IS NOT NULL
-2. Chunk into batches of ~10; Promise.all → GET /journeyDetail?id=<ref> per batch
-3. For each response:
-   - Extract origin/dest from Stops[0] / Stops[-1]
-   - dayOfOperation from response.dayOfOperation
-   - partCancelled from response.partCancelled
-   - cancelledStopCount = count(Stops[*].cancelled = true)
-   - totalStopCount = Stops.length
-   - cancelled = (cancelledStopCount === totalStopCount)
-4. wasTracked = EXISTS(SELECT 1 FROM departures WHERE journey_ref = :ref AND journey_status IN ('R','A','S'))
-5. UPSERT into journey_runs with snapshot_at = now
-```
+Poll `/journeyDetail` for journeys during their live window to capture data that RMV strips afterward: per-stop rt times, cancellation chains for the full corridor, vehicle positions (`lastPos`), and stop-progress (`lastPassRouteIdx`). This replaces the skipped Phase 2b and provides the foundation for a live vehicle map.
 
-**Scheduling.** Add a second cron trigger to `wrangler.toml` (e.g. `"30 0 * * *"` — 02:30 Berlin after DST), dispatch in `src/worker.ts`'s `scheduled` handler based on time-of-day.
+### Scope progression
 
-**Expected volume.** ~500 distinct journeys/day × 1 call each = 500 `/journeyDetail` calls, spread over ~5 minutes. Well within RMV quota.
+**3a (scoped start):** Enqueue only "interesting" journeys — cancelled, ghost-suspect, or significantly delayed departures detected by the existing board cron. ~200 journeys/day, ~600 API calls.
 
-**Consumers (later work, not part of 2a).**
-- Per-journey cancellation page ("S6 at 18:34 — cancelled between Langen and Frankfurt")
-- Corrected per-line cancellation counts (one journey = one cancellation, not N stops)
-- Substitute/additional service surfacing on operator pages
+**3b (full coverage):** Enqueue ALL journeys at discovery time. ~1,200 journeys/day, ~5,000 API calls. Enables corridor-wide OTP and live map for all services.
 
-## Phase 2b — Live ghost verification
+**3c (reduced board cadence):** Drop per-station board polling from every 3 min to every 30-60 min (discovery-only). Journey polling becomes the primary data source. Eliminates ~95% of current board API calls.
 
-**Goal.** Replace the 15-min-cutoff heuristic with a definitive "did this vehicle run?" check, same-day only (position data decays overnight per finding #3).
-
-**Trigger.** Inline in the existing 5-min cron (`src/lib/collect.ts:runCollection`), after the existing ghost-marking pass. For every row newly flagged `ghost = 1` this run (or candidate for flagging), call `/journeyDetail` for its `journey_ref`.
-
-**Decision rule:**
-
-| Signal from `/journeyDetail` | Verdict |
-|---|---|
-| `lastPassRouteIdx` ≥ index of this stop on the route | Vehicle passed — sensor dropout, not ghost. Clear ghost flag, record data-quality note. |
-| `cancelled = true` or `partCancelled = true` with this stop in cancelled range | Real cancellation. Set `cancelled = 1`, clear ghost. |
-| `JourneyStatus = R` but vehicle hasn't reached this stop yet | Wait — not a ghost yet. |
-| No `lastPos`, status faded to `P` | Genuine ghost. Keep `ghost = 1`. |
-
-**Volume.** ~5–20 ghost-candidates per cron tick × 288 ticks/day = ~2,000–5,000 `/journeyDetail` calls/day. Fine for RMV quota but worth monitoring.
-
-**Risk.** Doubles the latency of the cron run (more HAFAS round-trips). Mitigate with `Promise.all` chunking.
-
-## Phase 3 — Journey-primary architecture (deferred)
-
-Only worth doing if the product shifts toward "follow this train" / live map features. The board cron becomes a discovery mechanism at reduced cadence (maybe hourly), and `/journeyDetail` polling becomes the primary data source with per-journey scheduled polls.
-
-**Infrastructure: Cloudflare Queues.**
+### Infrastructure: Cloudflare Queues
 
 ```toml
-# wrangler.toml
+# wrangler.toml additions
 [[queues.producers]]
 binding = "JOURNEY_QUEUE"
 queue = "journey-polls"
@@ -145,54 +78,174 @@ max_retries = 3
 dead_letter_queue = "journey-polls-dlq"
 ```
 
-**Pattern.**
-1. Morning cron runs `/departureBoard` for discovery → enqueues one `{ type: "poll_journey", ref, dayOfOperation }` per distinct ref with `delaySeconds = scheduledDep - now - 5min`.
-2. Consumer Worker receives batches of up to 25 due messages, calls `/journeyDetail` for each, upserts stop-level rt data.
-3. If journey still live (`lastPos` advancing, not at final stop), consumer re-enqueues itself with `delaySeconds = 600`.
-4. Otherwise drop.
+`src/worker.ts` gets a `queue(batch, env, ctx)` handler alongside the existing `fetch` and `scheduled`.
 
-**Known constraints.**
-- Per-message `delaySeconds` is capped (≈12h at last check — **verify current value before committing**). For journeys scheduled >12h from enqueue, use the tickler pattern or run discovery every 6–8h.
-- No cancel-scheduled-message operation. Consumer must check "is this journey still worth polling?" and no-op if not.
-- Requires Workers Paid plan (already in use).
+### Adaptive polling strategy
 
-**Why not Durable Objects.** Queue's batching, retries, DLQ, and horizontal scaling beat DO alarm chaining for this shape of work. DO is the wrong primitive here.
+For a journey with scheduled first departure at **T** and duration **D**:
 
-**Why not now.** Phase 2 delivers most of the user-visible wins (corridor cancellation, honest OTP, ghost verification). Phase 3 is infrastructure-heavy and only unlocks features that aren't on the roadmap yet.
+```
+Enqueue at: T - 5min
 
-### Cross-station redundancy (Phase 3 lever)
+Poll 1 (T - 5m):
+  Call /journeyDetail
+  ├─ rt present (lastPos exists or any stop has rtDepTime)?
+  │   → Record snapshot + position
+  │   → Re-enqueue in 10min
+  └─ No rt?
+      → Re-enqueue at T + 5min
 
-Measured 2026-04-13: 1,278 unique journeys produce 2,057 `departures` rows — ~60% row-count inflation from journeys that touch multiple tracked stations. Corridor-heavy stations carry most of the duplication (e.g. `3000933` at 81.7% shared, `3000129` at 78.9%, `3001507` at 77.1%, `3001217` at 73.8%).
+Poll 2 (T + 5m, only if no rt at poll 1):
+  Call /journeyDetail
+  ├─ rt present? → Record, continue adaptive polling every 10min
+  └─ Still no rt? → Re-enqueue at T + 15min (last chance)
 
-Under Phase 3, `/journeyDetail.Stops[]` supplies per-stop rt data for every stop on a route — including stations we don't track — so per-station polling becomes redundant for *delay analytics*. What it can't be dropped for:
-- Discovery of `A` (additional) / `S` (substitute) services added mid-day (these only appear on live boards, not in any schedule source)
-- Per-station "next departures" UX if we ever add one
+Poll 3 (T + 15m, only if still no rt):
+  Call /journeyDetail
+  ├─ rt present? → Late-tracked vehicle, record
+  ├─ cancelled/partCancelled? → Confirmed cancellation, record, stop
+  └─ Still nothing? → Ghost. Record verdict, stop polling.
 
-Plausible Phase 3 cadence: hourly discovery poll per station (instead of every 3 min) + journey-primary polling via Queues. Keeps discovery but drops ~95% of redundant polling volume.
+Ongoing (for journeys WITH rt):
+  Poll every ~10min
+  Each poll captures progressive per-stop rtDepTime/rtArrTime + position
+  Stop when: lastPassRouteIdx >= last stop index
+             OR T + D + 15min reached (hard cap)
+```
 
-## Open questions to resolve before each phase
+### Call budget
 
-**Before 2a:**
-- Does `/journeyDetail` return data for a ref that was valid yesterday but never ran (e.g. strike day)? Expected: yes, with `cancelled = true` across the stop chain. Worth one probe.
-- Are there journey_refs that `/journeyDetail` 404s for (e.g. refs that expired)? Need retry/skip logic.
+| Scenario | Calls/journey | Est. % of journeys |
+|---|---|---|
+| Rt appears immediately, short journey (<30 min) | 2-3 | ~40% |
+| Rt appears, medium journey (30-60 min) | 4-6 | ~35% |
+| No rt ever (ghost / untracked) | 3 then stop | ~15% |
+| Rt appears late, medium journey | 5-7 | ~10% |
 
-**Before 2b:**
-- Confirm `lastPos` is populated within a predictable window before scheduled departure (not only while vehicle is actually moving).
-- Test behavior for `partCancelled` journeys where this stop is in the non-cancelled section vs. cancelled section.
+Full coverage (3b): ~1,200 journeys/day x ~4 avg = ~4,800 calls/day, ~3.3/min sustained.
 
-**Before 3:**
-- Verify current Cloudflare Queue per-message delay cap.
-- Measure Workers Paid plan quota headroom for sustained ~5k queue ops/day.
+### Ghost resolution from `/journeyDetail`
+
+The consumer classifies each journey into one of three states:
+
+| Signal | Verdict | Action |
+|---|---|---|
+| `lastPos` exists (vehicle GPS broadcasting) | Vehicle running, stop sensors silent | Clear ghost flag in `departures`, mark as sensor dropout |
+| `cancelled`/`partCancelled` on journey or stops | Confirmed cancellation | Set `cancelled = 1` in `departures`, clear ghost |
+| No `lastPos`, no cancellation, `JourneyStatus = P` at T+15m | Genuine ghost | Keep `ghost = 1` — scheduled service never dispatched |
+
+### New table: `journey_positions`
+
+Time-series of vehicle positions captured during live polling. One row per poll per journey (not one row per journey).
+
+```ts
+export const journeyPositions = sqliteTable(
+  "journey_positions",
+  {
+    id: integer().primaryKey({ autoIncrement: true }),
+    journeyRef: text("journey_ref").notNull(),
+    dayOfOperation: text("day_of_operation").notNull(),
+    lat: real().notNull(),
+    lon: real().notNull(),
+    reportedAt: text("reported_at").notNull(),     // HAFAS lastPosReported timestamp
+    routeIdx: integer("route_idx"),                // lastPassRouteIdx — last stop passed
+    rtRouteIdx: integer("rt_route_idx"),            // rtLastPassRouteIdx
+    capturedAt: text("captured_at").notNull(),     // when we polled
+  },
+  (t) => [
+    index("idx_journey_pos_ref_day").on(t.journeyRef, t.dayOfOperation),
+    index("idx_journey_pos_captured").on(t.capturedAt),
+  ],
+);
+```
+
+**Volume:** ~4,800 rows/day (full coverage), ~200 bytes/row = ~1 MB/day, ~30 MB/month. D1's 10 GB limit gives years of headroom.
+
+**Pruning:** Optional cleanup job to drop positions older than N days if storage becomes a concern. Recommend keeping at least 90 days for replay/animation use.
+
+#### Why D1, not Analytics Engine
+
+Cloudflare Workers Analytics Engine was considered for position time-series but rejected:
+
+- **Query ergonomics:** AE is queried via REST API with bearer auth, not the Worker D1 binding. Every SSR page showing position data would need an HTTP round-trip instead of a direct D1 query.
+- **No JOINs:** A live map needs positions + journey metadata (line, category, origin). With D1, one JOIN query. With AE, two separate queries stitched in application code.
+- **Blob-based schema:** AE uses `blob1..blob20` / `double1..double20` — no named columns, no Drizzle typing. Fragile at any team size.
+- **3-month retention cap:** Fine for live display, but replay/animation beyond 3 months would lose data. D1 keeps it indefinitely.
+- **Volume doesn't justify it:** AE shines at millions of events/day with aggregation. At ~5K positions/day, D1 handles it trivially.
+- **Fire-and-forget writes** (AE's one advantage) can be approximated with `ctx.waitUntil()` for D1 batched INSERTs.
+
+#### Live map query patterns
+
+**Current positions (all active vehicles):**
+```sql
+SELECT jr.line, jr.category, jp.lat, jp.lon, jp.reported_at
+FROM journey_positions jp
+JOIN journey_runs jr ON jr.journey_ref = jp.journey_ref
+  AND jr.day_of_operation = jp.day_of_operation
+WHERE jp.captured_at > datetime('now', '-15 minutes')
+ORDER BY jp.journey_ref, jp.captured_at DESC
+-- Group by journey_ref, take first row each
+```
+
+**Replay (single journey trail):**
+```sql
+SELECT lat, lon, reported_at, route_idx
+FROM journey_positions
+WHERE journey_ref = ? AND day_of_operation = ?
+ORDER BY captured_at
+```
+
+### Queue consumer flow (pseudocode)
+
+```
+queue(batch, env, ctx):
+  client = createHafasClient(env.RMV_API_KEY)
+  db = createDb(env.DB)
+
+  for msg in batch.messages:
+    { ref, dayOfOperation, pollCount } = msg.body
+
+    detail = await client.GET("/journeyDetail", { id: ref })
+    if error: msg.retry()
+
+    // Record position if available
+    if detail.lastPos:
+      INSERT INTO journey_positions (ref, dayOp, lat, lon, reportedAt, routeIdx, ...)
+
+    // Update journey_runs with live data (cancellations, stop rt times)
+    UPSERT journey_runs with live cancellation chain from detail.Stops
+
+    // Decide: re-enqueue or stop?
+    if journey completed (lastPassRouteIdx >= last stop):
+      msg.ack()
+    else if no rt data and pollCount >= 3:
+      msg.ack()  // ghost — stop polling
+    else:
+      msg.ack()
+      queue.send({ ref, dayOfOperation, pollCount: pollCount + 1 },
+                 { delaySeconds: detail.lastPos ? 600 : 300 })
+```
+
+### Known constraints
+
+- **Queue per-message `delaySeconds` cap:** believed to be ~12h. For journeys scheduled >12h from enqueue, use tickler pattern (enqueue with 10h delay, consumer re-enqueues with remaining) or run discovery every 6-8h.
+- **No cancel-scheduled-message:** If a journey is cancelled, its queued polls still fire — consumer must check-and-skip. Minor inefficiency (~200 wasted calls on disruption days).
+- **Requires Workers Paid plan** (already in use).
+
+## Open questions before Phase 3
+
+- Verify current Cloudflare Queue per-message delay cap (believed ~12h).
+- Confirm `lastPos` appears within a predictable window before scheduled departure (not only after vehicle starts moving).
+- Test Queue consumer concurrency: can multiple consumers process the same queue simultaneously, or is it single-consumer?
+- Measure `ctx.waitUntil()` reliability for D1 position INSERTs — if it's lossy under load, consider batching positions into a single INSERT per consumer batch invocation.
+- Decide on Phase 3a scope: enqueue only ghost-suspects + cancelled (conservative), or all departures with `rt_time IS NULL` past cutoff (broader)?
 
 ## File and code references
 
-- Schema: `src/db/schema.ts` (add `journeyRuns` for Phase 2a)
-- Collection: `src/lib/collect.ts` (Phase 2a populator, Phase 2b ghost verifier)
-- Worker dispatch: `src/worker.ts` (branch on time-of-day in `scheduled` handler)
+- Schema: `src/db/schema.ts` (departures + journeyRuns; add journeyPositions for Phase 3)
+- Journey snapshot: `src/lib/journeyRuns.ts` (nightly populator)
+- Board collection: `src/lib/collect.ts` (cron-triggered, captures journey_ref/status)
+- Worker dispatch: `src/worker.ts` (scheduled handler + future queue handler)
 - HAFAS client: `src/lib/hafas.ts`
-- HAFAS types: `src/lib/hafas-types.ts` (`JourneyDetail` at line 591, `Stop` fields, `JourneyStatus` enum `P|R|A|S`)
+- HAFAS types: `src/lib/hafas-types.ts` (JourneyDetail at line 591, StopType at line 1401)
 - Operational guide: `AGENTS.md` (D1 param limits, migration workflow, secrets)
-
-## Unpushed work
-
-- Commit `56b7acc` ("Keep journey_status sticky at R/A/S…") is local-only. Push before starting Phase 2a — or bundle it with the first Phase 2a commit.
