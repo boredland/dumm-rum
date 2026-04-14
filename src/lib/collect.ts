@@ -13,7 +13,7 @@ import { createHafasClient } from "./hafas";
 import type { components } from "./hafas-types";
 import { ghostCaseSql } from "./queries";
 import type { Station } from "./stations";
-import { STATIONS } from "./stations";
+import { nameToSlug, STATIONS } from "./stations";
 import {
 	DELAY_THRESHOLD_MIN,
 	nowBerlin,
@@ -418,6 +418,7 @@ async function materializeKnownStops(db: Db): Promise<void> {
 				batch.map((r) => ({
 					stopId: r.stopId,
 					stopName: r.stopName,
+					slug: nameToSlug(r.stopName),
 					lines: r.lines,
 					categories: r.categories,
 					journeyCount: r.journeyCount,
@@ -431,6 +432,7 @@ async function materializeKnownStops(db: Db): Promise<void> {
 				target: knownStops.stopId,
 				set: {
 					stopName: excluded(knownStops.stopName),
+					slug: excluded(knownStops.slug),
 					lines: excluded(knownStops.lines),
 					categories: excluded(knownStops.categories),
 					journeyCount: excluded(knownStops.journeyCount),

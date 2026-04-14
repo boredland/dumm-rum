@@ -127,17 +127,22 @@ export const journeyStops = sqliteTable(
 	],
 );
 
-export const knownStops = sqliteTable("known_stops", {
-	stopId: text("stop_id").primaryKey(),
-	stopName: text("stop_name").notNull(),
-	lines: text(),
-	categories: text(),
-	journeyCount: integer("journey_count").notNull().default(0),
-	cancelled: integer().notNull().default(0),
-	ghost: integer().notNull().default(0),
-	delayed: integer().notNull().default(0),
-	updatedAt: text("updated_at").notNull(),
-});
+export const knownStops = sqliteTable(
+	"known_stops",
+	{
+		stopId: text("stop_id").primaryKey(),
+		stopName: text("stop_name").notNull(),
+		slug: text(),
+		lines: text(),
+		categories: text(),
+		journeyCount: integer("journey_count").notNull().default(0),
+		cancelled: integer().notNull().default(0),
+		ghost: integer().notNull().default(0),
+		delayed: integer().notNull().default(0),
+		updatedAt: text("updated_at").notNull(),
+	},
+	(t) => [index("idx_known_stops_slug").on(t.slug)],
+);
 
 export const telegramSubscriptions = sqliteTable(
 	"telegram_subscriptions",

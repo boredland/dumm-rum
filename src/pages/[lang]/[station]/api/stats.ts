@@ -6,11 +6,7 @@ import {
 	getStopStats,
 	parseFilter,
 } from "../../../../lib/queries";
-import {
-	findStation,
-	nameToSlug,
-	SLUG_REDIRECTS,
-} from "../../../../lib/stations";
+import { findStation, SLUG_REDIRECTS } from "../../../../lib/stations";
 
 export const GET: APIRoute = async ({ params, url, redirect }) => {
 	const slug = params.station!;
@@ -22,9 +18,7 @@ export const GET: APIRoute = async ({ params, url, redirect }) => {
 		);
 	const db = createDb(env.DB);
 	const configured = findStation(slug);
-	const dynamicStop = configured
-		? null
-		: await findStopBySlug(db, slug, nameToSlug);
+	const dynamicStop = configured ? null : await findStopBySlug(db, slug);
 	if (!configured && !dynamicStop)
 		return new Response("Not found", { status: 404 });
 

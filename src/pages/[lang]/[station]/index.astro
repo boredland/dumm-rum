@@ -14,7 +14,6 @@ import {
 import {
 	categoryIcons,
 	findStation,
-	nameToSlug,
 	SLUG_REDIRECTS,
 } from "../../../lib/stations";
 import {
@@ -34,9 +33,7 @@ if (redirectSlug)
 	return Astro.redirect(`/${lang}/${redirectSlug}${Astro.url.search}`, 301);
 
 const configured = findStation(slug);
-const dynamicStop = configured
-	? null
-	: await findStopBySlug(db, slug, nameToSlug);
+const dynamicStop = configured ? null : await findStopBySlug(db, slug);
 if (!configured && !dynamicStop)
 	return new Response("Not found", { status: 404 });
 

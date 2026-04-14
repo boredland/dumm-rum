@@ -404,37 +404,29 @@ export interface KnownStop {
 export async function findStopBySlug(
 	db: Db,
 	slug: string,
-	nameToSlug: (name: string) => string,
 ): Promise<KnownStop | null> {
-	const rows = await db.select().from(knownStops);
-	const grouped = new Map<
-		string,
-		{ ids: string[]; name: string; categories: Set<string> }
-	>();
+	const rows = await db
+		.select({
+			stopId: knownStops.stopId,
+			stopName: knownStops.stopName,
+			categories: knownStops.categories,
+		})
+		.from(knownStops)
+		.where(eq(knownStops.slug, slug));
+
+	if (rows.length === 0) return null;
+
+	const categories = new Set<string>();
 	for (const r of rows) {
-		const existing = grouped.get(r.stopName);
-		if (existing) {
-			existing.ids.push(r.stopId);
-			if (r.categories)
-				for (const c of r.categories.split(",")) existing.categories.add(c);
-		} else {
-			grouped.set(r.stopName, {
-				ids: [r.stopId],
-				name: r.stopName,
-				categories: new Set(r.categories?.split(",").filter(Boolean) ?? []),
-			});
-		}
+		if (r.categories)
+			for (const c of r.categories.split(",")) categories.add(c);
 	}
-	for (const g of grouped.values()) {
-		if (nameToSlug(g.name) === slug) {
-			return {
-				stopIds: g.ids,
-				stopName: g.name,
-				categories: [...g.categories],
-			};
-		}
-	}
-	return null;
+
+	return {
+		stopIds: rows.map((r) => r.stopId),
+		stopName: rows[0].stopName,
+		categories: [...categories].filter(Boolean),
+	};
 }
 
 export async function getStopStats(
