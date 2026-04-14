@@ -244,10 +244,9 @@ function nearestPolylineIndex(poly, lat, lon) {
 	return best;
 }
 
-function interpolateAlongPolyline(poly, startIdx, progress) {
-	const remaining = poly.length - 1 - startIdx;
-	if (remaining <= 0) return poly[poly.length - 1];
-	const target = startIdx + remaining * progress;
+function interpolateAlongPolyline(poly, startIdx, endIdx, progress) {
+	if (endIdx <= startIdx) return poly[Math.min(startIdx, poly.length - 1)];
+	const target = startIdx + (endIdx - startIdx) * progress;
 	const i = Math.min(Math.floor(target), poly.length - 2);
 	const frac = target - i;
 	return [
@@ -270,9 +269,10 @@ function interpolatePositions() {
 
 		const progress = Math.max(0, Math.min(1, (nowSec - depSec) / (arrSec - depSec)));
 
-		if (state.polyline && state.polyline.length >= 2) {
+		if (state.polyline && state.polyline.length >= 2 && state.nextLat && state.nextLon) {
 			const startIdx = nearestPolylineIndex(state.polyline, state.lat, state.lon);
-			const pos = interpolateAlongPolyline(state.polyline, startIdx, progress);
+			const endIdx = nearestPolylineIndex(state.polyline, state.nextLat, state.nextLon);
+			const pos = interpolateAlongPolyline(state.polyline, startIdx, endIdx, progress);
 			m.setLatLng(pos);
 		} else if (state.nextLat && state.nextLon) {
 			const lat = state.lat + (state.nextLat - state.lat) * progress;
