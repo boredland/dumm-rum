@@ -349,7 +349,7 @@ function interpolatePositions() {
 		const m = markers.get(id);
 		if (!m) continue;
 
-		if (state.destArrSec !== null && nowSec > state.destArrSec + 15) {
+		if (!state.isGhost && state.destArrSec !== null && nowSec > state.destArrSec + 15) {
 			m.remove();
 			markers.delete(id);
 			vehicleState.delete(id);
