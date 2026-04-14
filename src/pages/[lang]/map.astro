@@ -94,9 +94,16 @@ let map;
 let markers = new Map();
 let activeFilter = "all";
 let vehicleState = new Map();
+let fetchInterval;
+let interpInterval;
 
 function initMap() {
-	if (map) return;
+	if (map) {
+		map.remove();
+		map = null;
+		markers = new Map();
+		vehicleState = new Map();
+	}
 	const el = document.getElementById("map");
 	if (!el) return;
 
@@ -228,10 +235,13 @@ function interpolatePositions() {
 }
 
 function init() {
+	clearInterval(fetchInterval);
+	clearInterval(interpInterval);
 	initMap();
+	if (!map) return;
 	fetchAndRender();
-	setInterval(fetchAndRender, 60_000);
-	setInterval(interpolatePositions, 3000);
+	fetchInterval = setInterval(fetchAndRender, 60_000);
+	interpInterval = setInterval(interpolatePositions, 3000);
 
 	for (const pill of document.querySelectorAll(".cat-pill")) {
 		pill.addEventListener("click", () => applyFilter(pill.dataset.cat));
