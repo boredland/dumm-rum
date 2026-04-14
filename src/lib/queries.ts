@@ -4,6 +4,8 @@ import type { Db } from "../db/client";
 import {
 	departures,
 	haikus,
+	journeyRuns,
+	journeyStops,
 	knownStops,
 	lineDailyStats,
 	operatorDailyStats,
@@ -638,8 +640,26 @@ export async function getOperatorDayDepartures(
 
 export async function getOldestDate(
 	db: Db,
-	entity?: { station?: string; line?: string; operator?: string },
+	entity?: {
+		station?: string;
+		stopIds?: string[];
+		line?: string;
+		operator?: string;
+	},
 ): Promise<string | null> {
+	if (entity?.stopIds) {
+		const stopIdList = sql.join(
+			entity.stopIds.map((id) => sql`${id}`),
+			sql`, `,
+		);
+		const rows = await db
+			.select({
+				date: sql<string>`MIN(${journeyStops.dayOfOperation})`,
+			})
+			.from(journeyStops)
+			.where(sql`${journeyStops.stopId} IN (${stopIdList})`);
+		return rows[0]?.date ?? null;
+	}
 	if (entity?.station) {
 		const rows = await db
 			.select({ date: sql<string>`MIN(${stationDailyStats.date})` })
@@ -709,4 +729,159 @@ export async function getStopSummaries(db: Db): Promise<StopSummary[]> {
 			? [...new Set(r.categories.split(","))].filter(Boolean)
 			: [],
 	}));
+}
+
+export interface KnownStop {
+	stopIds: string[];
+	stopName: string;
+	categories: string[];
+}
+
+export async function findStopBySlug(
+	db: Db,
+	slug: string,
+	nameToSlug: (name: string) => string,
+): Promise<KnownStop | null> {
+	const rows = await db.select().from(knownStops);
+	const grouped = new Map<
+		string,
+		{ ids: string[]; name: string; categories: Set<string> }
+	>();
+	for (const r of rows) {
+		const existing = grouped.get(r.stopName);
+		if (existing) {
+			existing.ids.push(r.stopId);
+			if (r.categories)
+				for (const c of r.categories.split(",")) existing.categories.add(c);
+		} else {
+			grouped.set(r.stopName, {
+				ids: [r.stopId],
+				name: r.stopName,
+				categories: new Set(r.categories?.split(",").filter(Boolean) ?? []),
+			});
+		}
+	}
+	for (const g of grouped.values()) {
+		if (nameToSlug(g.name) === slug) {
+			return {
+				stopIds: g.ids,
+				stopName: g.name,
+				categories: [...g.categories],
+			};
+		}
+	}
+	return null;
+}
+
+export async function getStopStats(
+	db: Db,
+	stopIds: string[],
+	filter: QueryFilter = {},
+): Promise<Stats> {
+	const stopIdList = sql.join(
+		stopIds.map((id) => sql`${id}`),
+		sql`, `,
+	);
+	const daysCond = daysCondition(journeyStops.dayOfOperation, filter.days);
+	const conditions = [sql`${journeyStops.stopId} IN (${stopIdList})`];
+	if (daysCond) conditions.push(daysCond);
+
+	const [dayRows, haikuRows] = await Promise.all([
+		db
+			.select({
+				date: journeyStops.dayOfOperation,
+				total: count().as("total"),
+				cancelled: sql<number>`SUM(${journeyStops.cancelled})`.as("cancelled"),
+				ghost:
+					sql<number>`SUM(CASE WHEN ${journeyRuns.wasTracked} = 0 AND ${journeyRuns.cancelled} = 0 THEN 1 ELSE 0 END)`.as(
+						"ghost",
+					),
+				delayed:
+					sql<number>`SUM(CASE WHEN ${journeyStops.cancelled} = 0 AND ${journeyStops.rtDepTime} IS NOT NULL AND ${journeyStops.depTime} IS NOT NULL AND (strftime('%s', ${journeyStops.dayOfOperation} || 'T' || ${journeyStops.rtDepTime}) - strftime('%s', ${journeyStops.dayOfOperation} || 'T' || ${journeyStops.depTime})) / 60.0 >= ${DELAY_THRESHOLD_MIN} THEN 1 ELSE 0 END)`.as(
+						"delayed",
+					),
+				avgDelay: sql<
+					number | null
+				>`AVG(CASE WHEN ${journeyStops.cancelled} = 1 THEN ${PLANNED_FREQUENCY_MIN} WHEN ${journeyStops.rtDepTime} IS NOT NULL AND ${journeyStops.depTime} IS NOT NULL THEN (strftime('%s', ${journeyStops.dayOfOperation} || 'T' || ${journeyStops.rtDepTime}) - strftime('%s', ${journeyStops.dayOfOperation} || 'T' || ${journeyStops.depTime})) / 60.0 END)`.as(
+					"avg_delay",
+				),
+			})
+			.from(journeyStops)
+			.leftJoin(
+				journeyRuns,
+				and(
+					eq(journeyRuns.journeyRef, journeyStops.journeyRef),
+					eq(journeyRuns.dayOfOperation, journeyStops.dayOfOperation),
+				),
+			)
+			.where(and(...conditions))
+			.groupBy(journeyStops.dayOfOperation)
+			.orderBy(desc(journeyStops.dayOfOperation)),
+		db
+			.select({ haiku: haikus.haiku, haikuDe: haikus.haikuDe })
+			.from(haikus)
+			.where(eq(haikus.date, todayBerlin()))
+			.limit(1),
+	]);
+
+	return {
+		days: dayRows.map((d) => ({
+			stationId: stopIds[0],
+			date: d.date,
+			total: d.total,
+			cancelled: d.cancelled,
+			ghost: d.ghost,
+			delayed: d.delayed,
+			avgDelay: d.avgDelay,
+		})),
+		lastChange: null,
+		haiku: haikuRows[0]?.haiku ?? null,
+		categories: [],
+	};
+}
+
+export async function getStopDayDepartures(
+	db: Db,
+	stopIds: string[],
+	date: string,
+) {
+	const stopIdList = sql.join(
+		stopIds.map((id) => sql`${id}`),
+		sql`, `,
+	);
+	return db
+		.select({
+			date: journeyStops.dayOfOperation,
+			time: sql<string>`COALESCE(${journeyStops.depTime}, ${journeyStops.arrTime})`.as(
+				"time",
+			),
+			rtDate: journeyStops.dayOfOperation,
+			rtTime: sql<
+				string | null
+			>`COALESCE(${journeyStops.rtDepTime}, ${journeyStops.rtArrTime})`.as(
+				"rt_time",
+			),
+			line: journeyRuns.line,
+			direction: journeyRuns.destName,
+			cancelled: journeyStops.cancelled,
+			ghost:
+				sql<number>`CASE WHEN ${journeyRuns.wasTracked} = 0 AND ${journeyRuns.cancelled} = 0 THEN 1 ELSE 0 END`.as(
+					"ghost",
+				),
+		})
+		.from(journeyStops)
+		.innerJoin(
+			journeyRuns,
+			and(
+				eq(journeyRuns.journeyRef, journeyStops.journeyRef),
+				eq(journeyRuns.dayOfOperation, journeyStops.dayOfOperation),
+			),
+		)
+		.where(
+			and(
+				sql`${journeyStops.stopId} IN (${stopIdList})`,
+				eq(journeyStops.dayOfOperation, date),
+			),
+		)
+		.orderBy(sql`time`, journeyRuns.line);
 }

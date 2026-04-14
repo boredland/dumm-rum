@@ -78,6 +78,37 @@ export function findStation(slug: string): Station | undefined {
 	return STATIONS.find((s) => s.slug === slug);
 }
 
+const GERMAN_MAP: Record<string, string> = {
+	ä: "ae",
+	ö: "oe",
+	ü: "ue",
+	ß: "ss",
+	Ä: "Ae",
+	Ö: "Oe",
+	Ü: "Ue",
+};
+
+export function nameToSlug(name: string): string {
+	return name
+		.replace(/^Frankfurt \(Main\)\s*/i, "")
+		.replace(/[äöüßÄÖÜ]/g, (ch) => GERMAN_MAP[ch] ?? ch)
+		.normalize("NFD")
+		.replace(/[\u0300-\u036f]/g, "")
+		.toLowerCase()
+		.replace(/[^a-z0-9]+/g, "-")
+		.replace(/^-|-$/g, "");
+}
+
+const SLUG_BY_STOP_ID = new Map(STATIONS.map((s) => [s.id, s.slug]));
+
+export function slugForStop(stopIds: string[], stopName: string): string {
+	for (const id of stopIds) {
+		const slug = SLUG_BY_STOP_ID.get(id);
+		if (slug) return slug;
+	}
+	return nameToSlug(stopName);
+}
+
 export const SLUG_REDIRECTS: Record<string, string> = {
 	"hauptbahnhof-suedseite": "hauptbahnhof",
 };

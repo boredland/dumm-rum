@@ -6,8 +6,17 @@ import StatusBadge from "../../../../components/StatusBadge.astro";
 import { createDb } from "../../../../db/client";
 import Layout from "../../../../layouts/Layout.astro";
 import { langFromParams, t } from "../../../../lib/i18n";
-import { getDayDepartures, getHaiku } from "../../../../lib/queries";
-import { findStation, SLUG_REDIRECTS } from "../../../../lib/stations";
+import {
+	findStopBySlug,
+	getDayDepartures,
+	getHaiku,
+	getStopDayDepartures,
+} from "../../../../lib/queries";
+import {
+	findStation,
+	nameToSlug,
+	SLUG_REDIRECTS,
+} from "../../../../lib/stations";
 import {
 	DELAY_THRESHOLD_MIN,
 	delayMinutes,
@@ -26,13 +35,25 @@ if (redirectSlug)
 		`/${lang}/${redirectSlug}/day/${Astro.params.date}${Astro.url.search}`,
 		301,
 	);
-const station = findStation(slug);
-if (!station) return new Response("Not found", { status: 404 });
 
 const db = createDb(env.DB);
+const configured = findStation(slug);
+const dynamicStop = configured
+	? null
+	: await findStopBySlug(db, slug, nameToSlug);
+if (!configured && !dynamicStop)
+	return new Response("Not found", { status: 404 });
+
+const stopName = configured?.name ?? dynamicStop!.stopName;
+const stopSlug = slug;
+const stopIds = configured ? [configured.id] : dynamicStop!.stopIds;
+
 const date = Astro.params.date!;
 const { departures, haiku } = await all({
-	departures: () => getDayDepartures(db, station, date),
+	departures: () =>
+		configured
+			? getDayDepartures(db, configured, date)
+			: getStopDayDepartures(db, stopIds, date),
 	haiku: () => getHaiku(db, date, lang),
 });
 
@@ -51,9 +72,9 @@ const delayedCount = departures.filter(
 let anchorPlaced = false;
 ---
 
-<Layout title={`${fmtDate(date, lang)} — ${shortStationName(station.name)}`} lang={lang}>
+<Layout title={`${fmtDate(date, lang)} — ${shortStationName(stopName)}`} lang={lang}>
 	<a
-		href={`/${lang}/${station.slug}`}
+		href={`/${lang}/${stopSlug}`}
 		class="inline-flex items-center gap-1 text-muted text-sm mb-6 hover:text-link no-underline"
 	>
 		&larr; {t(lang, "nav.back")}
@@ -61,7 +82,7 @@ let anchorPlaced = false;
 
 	<header class="mb-6">
 		<h1 class="text-2xl font-bold text-emphasis"><time datetime={date}>{fmtDate(date, lang)}</time></h1>
-		<p class="text-muted text-sm mt-1">{shortStationName(station.name)}</p>
+		<p class="text-muted text-sm mt-1">{shortStationName(stopName)}</p>
 		{
 			haiku && (
 				<div class="mt-3">

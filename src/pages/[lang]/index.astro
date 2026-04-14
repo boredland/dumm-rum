@@ -13,7 +13,7 @@ import {
 	getStopSummaries,
 	parseFilter,
 } from "../../lib/queries";
-import { categoryIcons, STATIONS } from "../../lib/stations";
+import { categoryIcons, STATIONS, slugForStop } from "../../lib/stations";
 import {
 	onTimeRate,
 	pct,
@@ -231,20 +231,17 @@ for (const stop of stops) {
 		<div class="grid grid-cols-[repeat(auto-fit,minmax(180px,1fr))] gap-4 max-sm:grid-cols-1 mt-3">
 		{
 			stops.map((stop) => {
-				const configured = stop.stopIds.map((id) => stationById.get(id)).find(Boolean);
-				const href = configured ? `/${lang}/${configured.slug}${Astro.url.search}` : undefined;
+				const href = `/${lang}/${slugForStop(stop.stopIds, stop.stopName)}${Astro.url.search}`;
 				const cancRate = stop.journeyCount > 0 ? stop.cancelled / stop.journeyCount : 0;
 				const borderColor = cancRate > 0.1 ? "border-danger" : cancRate > 0.05 ? "border-warning" : "border-success";
-				const Tag = href ? "a" : "div";
 				return (
-					<Tag
+					<a
 						href={href}
 						data-search={`${shortStationName(stop.stopName)} ${stop.lines.join(" ")}`.toLowerCase()}
 						data-categories={stop.categories.join(",")}
 						class:list={[
-							"bg-surface border rounded-xl p-5 no-underline transition-colors",
+							"bg-surface border rounded-xl p-5 no-underline transition-colors hover:bg-surface-hover",
 							borderColor,
-							href && "hover:bg-surface-hover",
 						]}
 					>
 						<div class="text-[0.7rem] uppercase tracking-wide text-muted mb-1">
@@ -263,7 +260,7 @@ for (const stop of stops) {
 						) : (
 							<div class="text-sm text-dimmed mt-1">{t(lang, "table.no_data")}</div>
 						)}
-					</Tag>
+					</a>
 				);
 			})
 		}

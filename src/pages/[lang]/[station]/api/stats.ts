@@ -1,8 +1,17 @@
 import { env } from "cloudflare:workers";
 import type { APIRoute } from "astro";
 import { createDb } from "../../../../db/client";
-import { getStats, parseFilter } from "../../../../lib/queries";
-import { findStation, SLUG_REDIRECTS } from "../../../../lib/stations";
+import {
+	findStopBySlug,
+	getStats,
+	getStopStats,
+	parseFilter,
+} from "../../../../lib/queries";
+import {
+	findStation,
+	nameToSlug,
+	SLUG_REDIRECTS,
+} from "../../../../lib/stations";
 
 export const GET: APIRoute = async ({ params, url, redirect }) => {
 	const slug = params.station!;
@@ -13,11 +22,17 @@ export const GET: APIRoute = async ({ params, url, redirect }) => {
 			301,
 		);
 	const db = createDb(env.DB);
-	const station = findStation(slug);
-	if (!station) return new Response("Not found", { status: 404 });
+	const configured = findStation(slug);
+	const dynamicStop = configured
+		? null
+		: await findStopBySlug(db, slug, nameToSlug);
+	if (!configured && !dynamicStop)
+		return new Response("Not found", { status: 404 });
 
 	const filter = parseFilter(url);
-	const stats = await getStats(db, station, filter);
+	const stats = configured
+		? await getStats(db, configured, filter)
+		: await getStopStats(db, dynamicStop!.stopIds, filter);
 
 	return Response.json(stats);
 };
