@@ -5,6 +5,7 @@ import { coalesce, d1BatchSize, excluded } from "../db/helpers";
 import { journeyPositions, journeyRuns, journeyStops } from "../db/schema";
 import { createHafasClient } from "./hafas";
 import type { components } from "./hafas-types";
+import { mgateJourneyDetail } from "./mgate";
 import { notifyJourneyIssues } from "./telegram";
 import { berlinTime, extractPolyline, nowBerlin, pickKey } from "./utils";
 
@@ -39,64 +40,143 @@ export async function processJourneyBatch(
 				continue;
 			}
 
-			const client = createHafasClient(pickKey(env.RMV_API_KEY));
-			const { data, error } = await client.GET("/journeyDetail", {
-				params: {
-					query: { id: journeyRef, poly: "1", format: "json" },
-				},
-			});
+			const mgateResult = await mgateJourneyDetail(journeyRef);
 
-			if (error || !data) {
-				const isQuota =
-					typeof error === "object" &&
-					error !== null &&
-					"errorCode" in error &&
-					(error as { errorCode?: string }).errorCode === "API_QUOTA";
-				console.error(`journeyDetail failed for ${journeyRef}:`, error);
-				if (isQuota) {
+			if (!mgateResult) {
+				console.error(`mgate failed for ${journeyRef}, trying REST API`);
+				const client = createHafasClient(pickKey(env.RMV_API_KEY));
+				const { data, error } = await client.GET("/journeyDetail", {
+					params: {
+						query: { id: journeyRef, poly: "1", format: "json" },
+					},
+				});
+
+				if (error || !data) {
+					const isQuota =
+						typeof error === "object" &&
+						error !== null &&
+						"errorCode" in error &&
+						(error as { errorCode?: string }).errorCode === "API_QUOTA";
+					console.error(`journeyDetail failed for ${journeyRef}:`, error);
+					if (isQuota) {
+						msg.ack();
+						await env.JOURNEY_QUEUE.send(
+							{ journeyRef, dayOfOperation, pollCount },
+							{ delaySeconds: 1800 },
+						);
+					} else {
+						msg.retry();
+					}
+					continue;
+				}
+
+				const detail = data as JourneyDetail;
+				const stops = detail.Stops?.Stop ?? [];
+
+				if (detail.lastPos) {
+					await db.insert(journeyPositions).values({
+						journeyRef,
+						dayOfOperation,
+						lat: detail.lastPos.lat,
+						lon: detail.lastPos.lon,
+						reportedAt: detail.lastPosReported ?? now,
+						routeIdx: detail.lastPassRouteIdx ?? null,
+						rtRouteIdx: detail.rtLastPassRouteIdx ?? null,
+						capturedAt: now,
+					});
+				}
+
+				await upsertJourneyRun(db, journeyRef, detail, now);
+				await upsertJourneyStops(db, journeyRef, dayOfOperation, stops);
+
+				const product = detail.Product?.[0];
+				const line = product?.line ?? product?.name;
+				const lastStopIdx = stops.length - 1;
+				const passedLastStop =
+					detail.lastPassRouteIdx != null &&
+					lastStopIdx >= 0 &&
+					detail.lastPassRouteIdx >= lastStopIdx;
+				const hasRtData =
+					detail.lastPos != null ||
+					stops.some((s) => s.rtDepTime || s.rtArrTime);
+				const origin = stops[0];
+				const dest = stops[lastStopIdx];
+				const hardCapReached = isHardCapReached(
+					origin?.depTime,
+					dest?.arrTime,
+					dayOfOperation,
+				);
+				const noRtAfterMaxPolls = !hasRtData && pollCount >= 2;
+				const maxPollsReached = pollCount >= 15;
+
+				if (pollCount === 0 && line && env.TELEGRAM_BOT_TOKEN) {
+					await notifyJourneyIssues(
+						db,
+						env.TELEGRAM_BOT_TOKEN,
+						journeyRef,
+						dayOfOperation,
+						line,
+						dest?.name ?? "",
+					);
+				}
+
+				if (
+					passedLastStop ||
+					hardCapReached ||
+					noRtAfterMaxPolls ||
+					maxPollsReached
+				) {
+					await db
+						.update(journeyRuns)
+						.set({ pollState: "done" })
+						.where(
+							and(
+								eq(journeyRuns.journeyRef, journeyRef),
+								eq(journeyRuns.dayOfOperation, dayOfOperation),
+							),
+						);
+					msg.ack();
+				} else {
 					msg.ack();
 					await env.JOURNEY_QUEUE.send(
-						{ journeyRef, dayOfOperation, pollCount },
-						{ delaySeconds: 1800 },
+						{ journeyRef, dayOfOperation, pollCount: pollCount + 1 },
+						{ delaySeconds: hasRtData ? 900 : 600 },
 					);
-				} else {
-					msg.retry();
 				}
 				continue;
 			}
 
-			const detail = data as JourneyDetail;
-			const stops = detail.Stops?.Stop ?? [];
+			const mgStops = mgateResult.stops;
 
-			if (detail.lastPos) {
+			if (mgateResult.lastPos) {
 				await db.insert(journeyPositions).values({
 					journeyRef,
 					dayOfOperation,
-					lat: detail.lastPos.lat,
-					lon: detail.lastPos.lon,
-					reportedAt: detail.lastPosReported ?? now,
-					routeIdx: detail.lastPassRouteIdx ?? null,
-					rtRouteIdx: detail.rtLastPassRouteIdx ?? null,
+					lat: mgateResult.lastPos.lat,
+					lon: mgateResult.lastPos.lon,
+					reportedAt: mgateResult.lastPosReported ?? now,
+					routeIdx: mgateResult.lastPassRouteIdx ?? null,
+					rtRouteIdx: null,
 					capturedAt: now,
 				});
 			}
 
-			await upsertJourneyRun(db, journeyRef, detail, now);
-			await upsertJourneyStops(db, journeyRef, dayOfOperation, stops);
+			await upsertJourneyRunFromMgate(db, journeyRef, mgateResult, now);
+			await upsertMgateStops(db, journeyRef, dayOfOperation, mgStops);
 
-			const product = detail.Product?.[0];
-			const line = product?.line ?? product?.name;
-			const lastStopIdx = stops.length - 1;
+			const line = mgateResult.product?.line ?? mgateResult.product?.name;
+			const lastStopIdx = mgStops.length - 1;
 			const passedLastStop =
-				detail.lastPassRouteIdx != null &&
+				mgateResult.lastPassRouteIdx != null &&
 				lastStopIdx >= 0 &&
-				detail.lastPassRouteIdx >= lastStopIdx;
+				mgateResult.lastPassRouteIdx >= lastStopIdx;
 
 			const hasRtData =
-				detail.lastPos != null || stops.some((s) => s.rtDepTime || s.rtArrTime);
+				mgateResult.lastPos != null ||
+				mgStops.some((s) => s.rtDepTime || s.rtArrTime);
 
-			const origin = stops[0];
-			const dest = stops[lastStopIdx];
+			const origin = mgStops[0];
+			const dest = mgStops[lastStopIdx];
 			const hardCapReached = isHardCapReached(
 				origin?.depTime,
 				dest?.arrTime,
@@ -107,7 +187,6 @@ export async function processJourneyBatch(
 			const maxPollsReached = pollCount >= 15;
 
 			if (pollCount === 0 && line && env.TELEGRAM_BOT_TOKEN) {
-				const dest = stops[lastStopIdx];
 				await notifyJourneyIssues(
 					db,
 					env.TELEGRAM_BOT_TOKEN,
@@ -269,6 +348,152 @@ async function upsertJourneyStops(
 					cancelled: s.cancelled ? 1 : 0,
 					lat: s.lat ?? null,
 					lon: s.lon ?? null,
+				})),
+			)
+			.onConflictDoUpdate({
+				target: [
+					journeyStops.journeyRef,
+					journeyStops.dayOfOperation,
+					journeyStops.routeIdx,
+				],
+				set: {
+					rtDepTime: coalesce(
+						excluded(journeyStops.rtDepTime),
+						journeyStops.rtDepTime,
+					),
+					rtArrTime: coalesce(
+						excluded(journeyStops.rtArrTime),
+						journeyStops.rtArrTime,
+					),
+					cancelled: sql`MAX(${journeyStops.cancelled}, ${excluded(journeyStops.cancelled)})`,
+					lat: coalesce(excluded(journeyStops.lat), journeyStops.lat),
+					lon: coalesce(excluded(journeyStops.lon), journeyStops.lon),
+				},
+			});
+	}
+}
+
+async function upsertJourneyRunFromMgate(
+	db: Db,
+	ref: string,
+	mg: import("./mgate").MgateJourneyDetail,
+	snapshotAt: string,
+): Promise<void> {
+	const stops = mg.stops;
+	if (stops.length < 2) return;
+
+	const origin = stops[0];
+	const dest = stops[stops.length - 1];
+	if (!origin.depTime || !dest.arrTime) return;
+
+	const line = mg.product?.line ?? mg.product?.name;
+	if (!line) return;
+
+	const cancelledStops = stops.filter((s) => s.cancelled).length;
+	const hasRtData =
+		mg.lastPos != null || stops.some((s) => s.rtDepTime || s.rtArrTime);
+
+	let polyline: string | null = null;
+	if (mg.polylineCrd && mg.polylineCrd.length >= 4) {
+		const dim = mg.polylineDim ?? 2;
+		const raw = mg.polylineDelta
+			? decodeDeltaCrd(mg.polylineCrd)
+			: mg.polylineCrd;
+		const points: [number, number][] = [];
+		for (let i = 0; i < raw.length; i += dim) {
+			points.push([raw[i] / 1_000_000, raw[i + 1] / 1_000_000]);
+		}
+		polyline = JSON.stringify(points);
+	}
+
+	await db
+		.insert(journeyRuns)
+		.values({
+			journeyRef: ref,
+			dayOfOperation: mg.dayOfOperation ?? "",
+			line,
+			category: mg.product?.catOut ?? null,
+			operator: mg.product?.operator ?? null,
+			lineId: null,
+			originStopId: origin.extId,
+			originName: origin.name,
+			originDepTime: origin.depTime,
+			destStopId: dest.extId,
+			destName: dest.name,
+			destArrTime: dest.arrTime,
+			status: mg.status ?? "P",
+			cancelled: mg.cancelled ? 1 : 0,
+			partCancelled: Number(mg.partCancelled || cancelledStops > 0),
+			cancelledStopCount: cancelledStops,
+			totalStopCount: stops.length,
+			wasTracked: hasRtData ? 1 : 0,
+			pollState: "polling",
+			polyline,
+			snapshotAt,
+		})
+		.onConflictDoUpdate({
+			target: [journeyRuns.journeyRef, journeyRuns.dayOfOperation],
+			set: {
+				line: excluded(journeyRuns.line),
+				category: excluded(journeyRuns.category),
+				operator: excluded(journeyRuns.operator),
+				originStopId: excluded(journeyRuns.originStopId),
+				originName: excluded(journeyRuns.originName),
+				originDepTime: excluded(journeyRuns.originDepTime),
+				destStopId: excluded(journeyRuns.destStopId),
+				destName: excluded(journeyRuns.destName),
+				destArrTime: excluded(journeyRuns.destArrTime),
+				status: excluded(journeyRuns.status),
+				cancelled: excluded(journeyRuns.cancelled),
+				partCancelled: excluded(journeyRuns.partCancelled),
+				cancelledStopCount: excluded(journeyRuns.cancelledStopCount),
+				totalStopCount: excluded(journeyRuns.totalStopCount),
+				wasTracked: sql`MAX(${journeyRuns.wasTracked}, ${excluded(journeyRuns.wasTracked)})`,
+				pollState: sql`'polling'`,
+				polyline: sql`COALESCE(${excluded(journeyRuns.polyline)}, ${journeyRuns.polyline})`,
+				snapshotAt: excluded(journeyRuns.snapshotAt),
+			},
+		});
+}
+
+function decodeDeltaCrd(encoded: number[]): number[] {
+	const result: number[] = [];
+	let acc = 0;
+	for (const v of encoded) {
+		acc += v;
+		result.push(acc);
+	}
+	return result;
+}
+
+async function upsertMgateStops(
+	db: Db,
+	journeyRef: string,
+	dayOfOperation: string,
+	stops: import("./mgate").MgateJourneyDetail["stops"],
+): Promise<void> {
+	if (stops.length === 0) return;
+
+	const batchSize = d1BatchSize(journeyStops);
+
+	for (let i = 0; i < stops.length; i += batchSize) {
+		const batch = stops.slice(i, i + batchSize);
+		await db
+			.insert(journeyStops)
+			.values(
+				batch.map((s) => ({
+					journeyRef,
+					dayOfOperation,
+					routeIdx: s.routeIdx,
+					stopId: s.extId,
+					stopName: s.name,
+					depTime: s.depTime ?? null,
+					arrTime: s.arrTime ?? null,
+					rtDepTime: s.rtDepTime ?? null,
+					rtArrTime: s.rtArrTime ?? null,
+					cancelled: s.cancelled ? 1 : 0,
+					lat: s.lat || null,
+					lon: s.lon || null,
 				})),
 			)
 			.onConflictDoUpdate({
