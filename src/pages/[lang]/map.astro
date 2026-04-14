@@ -95,7 +95,7 @@ let markers = new Map();
 let activeFilter = "all";
 let vehicleState = new Map();
 let fetchInterval;
-let interpInterval;
+let animFrameId;
 
 function initMap() {
 	if (map) {
@@ -165,8 +165,6 @@ async function fetchAndRender() {
 				vehicleState.delete(id);
 			}
 		}
-
-		interpolatePositions();
 
 		const visibleCount = vehicles.filter(v => matchesFilter(v.category || "Bus", activeFilter)).length;
 		const countEl = document.getElementById("vehicle-count");
@@ -245,7 +243,8 @@ function interpolateAlongPolyline(poly, startIdx, progress) {
 }
 
 function interpolatePositions() {
-	const nowSec = new Date().getHours() * 3600 + new Date().getMinutes() * 60 + new Date().getSeconds();
+	const now = new Date();
+	const nowSec = now.getHours() * 3600 + now.getMinutes() * 60 + now.getSeconds() + now.getMilliseconds() / 1000;
 	for (const [id, state] of vehicleState) {
 		if (!state.lastDepTime || !state.nextArrTime) continue;
 		const m = markers.get(id);
@@ -267,16 +266,17 @@ function interpolatePositions() {
 			m.setLatLng([lat, lon]);
 		}
 	}
+	animFrameId = requestAnimationFrame(interpolatePositions);
 }
 
 function init() {
 	clearInterval(fetchInterval);
-	clearInterval(interpInterval);
+	cancelAnimationFrame(animFrameId);
 	initMap();
 	if (!map) return;
 	fetchAndRender();
 	fetchInterval = setInterval(fetchAndRender, 60_000);
-	interpInterval = setInterval(interpolatePositions, 3000);
+	animFrameId = requestAnimationFrame(interpolatePositions);
 
 	for (const pill of document.querySelectorAll(".cat-pill")) {
 		pill.addEventListener("click", () => applyFilter(pill.dataset.cat));
