@@ -136,7 +136,7 @@ export async function processJourneyBatch(
 				msg.ack();
 			} else {
 				msg.ack();
-				const delaySeconds = hasRtData ? 900 : 600;
+				const delaySeconds = hasRtData ? 1800 : 900;
 				await env.JOURNEY_QUEUE.send(
 					{ journeyRef, dayOfOperation, pollCount: pollCount + 1 },
 					{ delaySeconds },
