@@ -303,7 +303,10 @@ function interpolatePositions() {
 		const m = markers.get(id);
 		if (!m) continue;
 
-		if (state.destArrSec !== null && nowSec > state.destArrSec) {
+		const arrSec = timeToSeconds(state.nextArrTime);
+		const expired = (state.destArrSec !== null && nowSec > state.destArrSec)
+			|| (arrSec !== null && nowSec > arrSec + 60);
+		if (expired) {
 			m.remove();
 			markers.delete(id);
 			vehicleState.delete(id);
@@ -311,7 +314,6 @@ function interpolatePositions() {
 		}
 
 		const depSec = timeToSeconds(state.lastDepTime);
-		const arrSec = timeToSeconds(state.nextArrTime);
 		const canInterpolate = depSec !== null && arrSec !== null && arrSec > depSec && nowSec >= depSec && nowSec <= arrSec;
 
 		if (canInterpolate) {
