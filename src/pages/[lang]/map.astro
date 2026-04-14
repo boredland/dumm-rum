@@ -121,16 +121,15 @@ async function fetchAndRender() {
 			const cat = v.category || "Bus";
 			const visible = matchesFilter(cat, activeFilter);
 
-			const prev = vehicleState.get(v.id);
-			vehicleState.set(v.id, { lat: v.lat, lon: v.lon, reportedAt: v.reportedAt });
+			vehicleState.set(v.id, {
+				lat: v.lat, lon: v.lon,
+				nextLat: v.nextLat, nextLon: v.nextLon,
+				lastDepTime: v.lastDepTime, nextArrTime: v.nextArrTime,
+			});
 
 			if (markers.has(v.id)) {
 				const m = markers.get(v.id);
-				if (prev && (prev.lat !== v.lat || prev.lon !== v.lon)) {
-					animateMarker(m, [prev.lat, prev.lon], [v.lat, v.lon], 1500);
-				} else {
-					m.setLatLng([v.lat, v.lon]);
-				}
+				m.setLatLng([v.lat, v.lon]);
 				m.setIcon(createVehicleIcon(cat));
 				m.setPopupContent(popupContent(v));
 				m.setTooltipContent(`${v.line} → ${shortName(v.destination)}`);
@@ -198,23 +197,35 @@ function applyFilter(cat) {
 	if (countEl) countEl.textContent = total === 0 ? noVehiclesText : `${visibleCount} ${vehiclesText}`;
 }
 
-function animateMarker(marker, from, to, durationMs) {
-	const start = performance.now();
-	function step(now) {
-		const t = Math.min((now - start) / durationMs, 1);
-		const ease = t * (2 - t);
-		const lat = from[0] + (to[0] - from[0]) * ease;
-		const lng = from[1] + (to[1] - from[1]) * ease;
-		marker.setLatLng([lat, lng]);
-		if (t < 1) requestAnimationFrame(step);
+function timeToSeconds(t) {
+	if (!t) return null;
+	const parts = t.split(":");
+	return (+parts[0]) * 3600 + (+parts[1]) * 60 + (+parts[2] || 0);
+}
+
+function interpolatePositions() {
+	const nowSec = new Date().getHours() * 3600 + new Date().getMinutes() * 60 + new Date().getSeconds();
+	for (const [id, state] of vehicleState) {
+		if (!state.nextLat || !state.nextLon || !state.lastDepTime || !state.nextArrTime) continue;
+		const m = markers.get(id);
+		if (!m) continue;
+
+		const depSec = timeToSeconds(state.lastDepTime);
+		const arrSec = timeToSeconds(state.nextArrTime);
+		if (depSec === null || arrSec === null || arrSec <= depSec) continue;
+
+		const progress = Math.max(0, Math.min(1, (nowSec - depSec) / (arrSec - depSec)));
+		const lat = state.lat + (state.nextLat - state.lat) * progress;
+		const lon = state.lon + (state.nextLon - state.lon) * progress;
+		m.setLatLng([lat, lon]);
 	}
-	requestAnimationFrame(step);
 }
 
 function init() {
 	initMap();
 	fetchAndRender();
 	setInterval(fetchAndRender, 60_000);
+	setInterval(interpolatePositions, 3000);
 
 	for (const pill of document.querySelectorAll(".cat-pill")) {
 		pill.addEventListener("click", () => applyFilter(pill.dataset.cat));
