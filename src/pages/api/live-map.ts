@@ -9,7 +9,9 @@ export const GET: APIRoute = async () => {
 	const db = createDb(env.DB);
 	const today = todayBerlin();
 	const cutoff = new Date(Date.now() - 15 * 60 * 1000).toISOString();
-	const now = nowBerlin().format("HH:mm:ss");
+	const now = nowBerlin();
+	const nowTime = now.format("HH:mm:ss");
+	const lookback = now.subtract(10, "minute").format("HH:mm:ss");
 
 	const vehicles = await db
 		.select({
@@ -29,55 +31,31 @@ export const GET: APIRoute = async () => {
 				SELECT js.lat FROM journey_stops js
 				WHERE js.journey_ref = "journey_runs"."journey_ref"
 				AND js.day_of_operation = "journey_runs"."day_of_operation"
+				AND js.dep_time > ${lookback}
 				AND js.cancelled = 0 AND js.lat IS NOT NULL
-				AND (js.lat - "journey_positions"."lat") * (js.lat - "journey_positions"."lat") + (js.lon - "journey_positions"."lon") * (js.lon - "journey_positions"."lon") > 0.00001
-				AND js.route_idx > COALESCE((
-					SELECT js2.route_idx FROM journey_stops js2
-					WHERE js2.journey_ref = "journey_runs"."journey_ref"
-					AND js2.day_of_operation = "journey_runs"."day_of_operation"
-					AND js2.lat IS NOT NULL
-					ORDER BY (js2.lat - "journey_positions"."lat") * (js2.lat - "journey_positions"."lat") + (js2.lon - "journey_positions"."lon") * (js2.lon - "journey_positions"."lon")
-					LIMIT 1
-				), -1)
 				ORDER BY js.route_idx LIMIT 1
 			)`.as("next_lat"),
 			nextLon: sql<number | null>`(
 				SELECT js.lon FROM journey_stops js
 				WHERE js.journey_ref = "journey_runs"."journey_ref"
 				AND js.day_of_operation = "journey_runs"."day_of_operation"
+				AND js.dep_time > ${lookback}
 				AND js.cancelled = 0 AND js.lon IS NOT NULL
-				AND (js.lat - "journey_positions"."lat") * (js.lat - "journey_positions"."lat") + (js.lon - "journey_positions"."lon") * (js.lon - "journey_positions"."lon") > 0.00001
-				AND js.route_idx > COALESCE((
-					SELECT js2.route_idx FROM journey_stops js2
-					WHERE js2.journey_ref = "journey_runs"."journey_ref"
-					AND js2.day_of_operation = "journey_runs"."day_of_operation"
-					AND js2.lat IS NOT NULL
-					ORDER BY (js2.lat - "journey_positions"."lat") * (js2.lat - "journey_positions"."lat") + (js2.lon - "journey_positions"."lon") * (js2.lon - "journey_positions"."lon")
-					LIMIT 1
-				), -1)
 				ORDER BY js.route_idx LIMIT 1
 			)`.as("next_lon"),
 			lastDepTime: sql<string | null>`(
 				SELECT COALESCE(js.rt_dep_time, js.dep_time) FROM journey_stops js
 				WHERE js.journey_ref = "journey_runs"."journey_ref"
 				AND js.day_of_operation = "journey_runs"."day_of_operation"
-				AND js.cancelled = 0 AND js.lat IS NOT NULL
-				ORDER BY (js.lat - "journey_positions"."lat") * (js.lat - "journey_positions"."lat") + (js.lon - "journey_positions"."lon") * (js.lon - "journey_positions"."lon")
-				LIMIT 1
+				AND js.dep_time <= ${nowTime} AND js.cancelled = 0
+				ORDER BY js.route_idx DESC LIMIT 1
 			)`.as("last_dep_time"),
 			nextArrTime: sql<string | null>`(
 				SELECT COALESCE(js.rt_arr_time, js.arr_time, js.dep_time) FROM journey_stops js
 				WHERE js.journey_ref = "journey_runs"."journey_ref"
 				AND js.day_of_operation = "journey_runs"."day_of_operation"
-				AND js.cancelled = 0 AND js.lat IS NOT NULL
-				AND js.route_idx > COALESCE((
-					SELECT js2.route_idx FROM journey_stops js2
-					WHERE js2.journey_ref = "journey_runs"."journey_ref"
-					AND js2.day_of_operation = "journey_runs"."day_of_operation"
-					AND js2.lat IS NOT NULL
-					ORDER BY (js2.lat - "journey_positions"."lat") * (js2.lat - "journey_positions"."lat") + (js2.lon - "journey_positions"."lon") * (js2.lon - "journey_positions"."lon")
-					LIMIT 1
-				), -1)
+				AND js.dep_time > ${lookback}
+				AND js.cancelled = 0
 				ORDER BY js.route_idx LIMIT 1
 			)`.as("next_arr_time"),
 		})
@@ -99,7 +77,7 @@ export const GET: APIRoute = async () => {
 					sql`(SELECT jp2.id FROM journey_positions jp2 WHERE jp2.journey_ref = ${journeyRuns.journeyRef} AND jp2.day_of_operation = ${journeyRuns.dayOfOperation} ORDER BY jp2.captured_at DESC LIMIT 1)`,
 				),
 				gte(journeyPositions.capturedAt, cutoff),
-				sql`${journeyRuns.destArrTime} >= ${now}`,
+				sql`${journeyRuns.destArrTime} >= ${nowTime}`,
 			),
 		);
 
