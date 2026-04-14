@@ -114,8 +114,6 @@ for (const stop of stops) {
 			if (isWorse(l.delayed, l.total, worstLineDelayed)) worstLineDelayed = { name: l.line, count: l.delayed, rate: l.total > 0 ? l.delayed / l.total : 0 };
 		}
 		let worstStationCancelled: Worst | null = null;
-		let worstStationGhost: Worst | null = null;
-		let worstStationDelayed: Worst | null = null;
 		for (const stop of stops) {
 			const name = shortStationName(stop.stopName);
 			const total = stop.journeyCount;
@@ -158,9 +156,6 @@ for (const stop of stops) {
 					{worstLineGhost && worstLineGhost.count > 0 && (
 						<div class="text-sm mt-1"><span class="text-purple-400 font-semibold">{(worstLineGhost.rate * 100).toFixed(1)}%</span> <span class="text-muted">{t(lang, "home.line")}</span> <span class="font-semibold">{worstLineGhost.name}</span></div>
 					)}
-					{worstStationGhost && worstStationGhost.count > 0 && (
-						<div class="text-sm mt-1 truncate" title={worstStationGhost.name}><span class="text-purple-400 font-semibold">{(worstStationGhost.rate * 100).toFixed(1)}%</span> <span class="text-muted">{t(lang, "home.station")}</span> <span class="font-semibold">{worstStationGhost.name}</span></div>
-					)}
 					{worstOperatorGhost && worstOperatorGhost.count > 0 && (
 						<div class="text-sm mt-1 truncate" title={worstOperatorGhost.name}><span class="text-purple-400 font-semibold">{(worstOperatorGhost.rate * 100).toFixed(1)}%</span> <span class="text-muted">{t(lang, "home.operator")}</span> <span class="font-semibold">{worstOperatorGhost.name}</span></div>
 					)}
@@ -170,9 +165,6 @@ for (const stop of stops) {
 					<div class="text-[0.7rem] uppercase tracking-wide text-muted mb-1">{t(lang, "home.most_delays")}</div>
 					{worstLineDelayed && worstLineDelayed.count > 0 && (
 						<div class="text-sm mt-1"><span class="text-warning font-semibold">{(worstLineDelayed.rate * 100).toFixed(1)}%</span> <span class="text-muted">{t(lang, "home.line")}</span> <span class="font-semibold">{worstLineDelayed.name}</span></div>
-					)}
-					{worstStationDelayed && worstStationDelayed.count > 0 && (
-						<div class="text-sm mt-1 truncate" title={worstStationDelayed.name}><span class="text-warning font-semibold">{(worstStationDelayed.rate * 100).toFixed(1)}%</span> <span class="text-muted">{t(lang, "home.station")}</span> <span class="font-semibold">{worstStationDelayed.name}</span></div>
 					)}
 					{worstOperatorDelayed && worstOperatorDelayed.count > 0 && (
 						<div class="text-sm mt-1 truncate" title={worstOperatorDelayed.name}><span class="text-warning font-semibold">{(worstOperatorDelayed.rate * 100).toFixed(1)}%</span> <span class="text-muted">{t(lang, "home.operator")}</span> <span class="font-semibold">{worstOperatorDelayed.name}</span></div>
