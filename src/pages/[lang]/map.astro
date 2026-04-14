@@ -28,17 +28,6 @@ const lang = langFromParams(Astro.params);
 <script is:inline src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
 <script is:inline define:vars={{ lang, noVehiclesText: t(lang, "map.no_vehicles"), vehiclesText: t(lang, "map.vehicles"), lastUpdateText: t(lang, "map.last_update") }}>
-const CATEGORY_COLORS = {
-	"U-Bahn": "#0065ae",
-	"S": "#00843d",
-	"S-Bahn": "#00843d",
-	"Tram": "#c4122e",
-	"Bus": "#93559a",
-	"RE": "#ec6608",
-	"RB": "#ec6608",
-	"RE,RB": "#ec6608",
-};
-
 const CATEGORY_ICON_URLS = {
 	"U-Bahn": "/icons/ubahn.svg",
 	"S": "/icons/sbahn.svg",
@@ -48,10 +37,6 @@ const CATEGORY_ICON_URLS = {
 	"RE": "/icons/reg.svg",
 	"RB": "/icons/reg.svg",
 };
-
-function categoryColor(cat) {
-	return CATEGORY_COLORS[cat] || "#6e7681";
-}
 
 function createVehicleIcon(cat, sleeping) {
 	const iconUrl = CATEGORY_ICON_URLS[cat] || CATEGORY_ICON_URLS["Bus"];
