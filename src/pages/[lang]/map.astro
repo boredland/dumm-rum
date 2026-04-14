@@ -275,23 +275,23 @@ function interpolatePositions() {
 	const now = new Date();
 	const nowSec = now.getHours() * 3600 + now.getMinutes() * 60 + now.getSeconds() + now.getMilliseconds() / 1000;
 	for (const [id, state] of vehicleState) {
-		if (!state.lastDepTime || !state.nextArrTime) continue;
 		const m = markers.get(id);
 		if (!m) continue;
 
 		const depSec = timeToSeconds(state.lastDepTime);
 		const arrSec = timeToSeconds(state.nextArrTime);
-		if (depSec === null || arrSec === null || arrSec <= depSec) continue;
+		const canInterpolate = depSec !== null && arrSec !== null && arrSec > depSec && nowSec >= depSec && nowSec <= arrSec;
 
-		const progress = Math.max(0, Math.min(1, (nowSec - depSec) / (arrSec - depSec)));
-
-		if (state.polyline && state.polyline.length >= 2 && state.endIdx > state.startIdx) {
-			const pos = interpolateAlongPolyline(state.polyline, state.startIdx, state.endIdx, progress);
-			m.setLatLng(pos);
-		} else if (state.nextLat && state.nextLon) {
-			const lat = state.lat + (state.nextLat - state.lat) * progress;
-			const lon = state.lon + (state.nextLon - state.lon) * progress;
-			m.setLatLng([lat, lon]);
+		if (canInterpolate) {
+			const progress = (nowSec - depSec) / (arrSec - depSec);
+			if (state.polyline && state.polyline.length >= 2 && state.endIdx > state.startIdx) {
+				m.setLatLng(interpolateAlongPolyline(state.polyline, state.startIdx, state.endIdx, progress));
+			} else if (state.nextLat && state.nextLon) {
+				m.setLatLng([
+					state.lat + (state.nextLat - state.lat) * progress,
+					state.lon + (state.nextLon - state.lon) * progress,
+				]);
+			}
 		}
 	}
 	animFrameId = requestAnimationFrame(interpolatePositions);
