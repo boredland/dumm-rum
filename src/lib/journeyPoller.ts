@@ -9,12 +9,19 @@ import { berlinTime, nowBerlin } from "./utils";
 
 type JourneyDetail = components["schemas"]["JourneyDetail"];
 
+function pickKey(apiKeys: string): string {
+	const keys = apiKeys
+		.split(",")
+		.map((k) => k.trim())
+		.filter(Boolean);
+	return keys[Math.floor(Math.random() * keys.length)];
+}
+
 export async function processJourneyBatch(
 	batch: MessageBatch<JourneyPollMessage>,
 	env: Cloudflare.Env,
 ): Promise<void> {
 	const db = createDb(env.DB);
-	const client = createHafasClient(env.RMV_API_KEY.split(",")[0].trim());
 	const now = new Date().toISOString();
 
 	for (const msg of batch.messages) {
@@ -39,6 +46,7 @@ export async function processJourneyBatch(
 				continue;
 			}
 
+			const client = createHafasClient(pickKey(env.RMV_API_KEY));
 			const { data, error } = await client.GET("/journeyDetail", {
 				params: { query: { id: journeyRef, format: "json" } },
 			});
