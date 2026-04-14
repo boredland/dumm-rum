@@ -678,16 +678,33 @@ export interface StopSummary {
 
 export async function getStopSummaries(db: Db): Promise<StopSummary[]> {
 	const rows = await db
-		.select()
+		.select({
+			stopId: sql<string>`MIN(${knownStops.stopId})`.as("stop_id"),
+			stopName: knownStops.stopName,
+			journeyCount: sql<number>`SUM(${knownStops.journeyCount})`.as(
+				"journey_count",
+			),
+			cancelled: sql<number>`SUM(${knownStops.cancelled})`.as("cancelled"),
+			lines: sql<string>`GROUP_CONCAT(DISTINCT ${knownStops.lines})`.as(
+				"lines",
+			),
+			categories:
+				sql<string>`GROUP_CONCAT(DISTINCT ${knownStops.categories})`.as(
+					"categories",
+				),
+		})
 		.from(knownStops)
-		.orderBy(desc(knownStops.journeyCount));
+		.groupBy(knownStops.stopName)
+		.orderBy(sql`journey_count DESC`);
 
 	return rows.map((r) => ({
 		stopId: r.stopId,
 		stopName: r.stopName,
 		journeyCount: r.journeyCount,
 		cancelled: r.cancelled,
-		lines: r.lines ? r.lines.split(",") : [],
-		categories: r.categories ? r.categories.split(",") : [],
+		lines: r.lines ? [...new Set(r.lines.split(","))].filter(Boolean) : [],
+		categories: r.categories
+			? [...new Set(r.categories.split(","))].filter(Boolean)
+			: [],
 	}));
 }
