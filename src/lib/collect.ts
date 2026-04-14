@@ -260,9 +260,9 @@ async function materializeOperatorStats(db: Db, date: string): Promise<void> {
 				),
 			delayed:
 				sql<number>`SUM(CASE WHEN ${journeyRuns.cancelled} = 0 AND EXISTS (
-					SELECT 1 FROM ${journeyStops} js
-					WHERE js.journey_ref = ${journeyRuns.journeyRef}
-					AND js.day_of_operation = ${journeyRuns.dayOfOperation}
+					SELECT 1 FROM journey_stops js
+					WHERE js.journey_ref = "journey_runs"."journey_ref"
+					AND js.day_of_operation = "journey_runs"."day_of_operation"
 					AND js.rt_dep_time IS NOT NULL AND js.dep_time IS NOT NULL
 					AND (strftime('%s', js.day_of_operation || 'T' || js.rt_dep_time) - strftime('%s', js.day_of_operation || 'T' || js.dep_time)) / 60.0 >= ${DELAY_THRESHOLD_MIN}
 				) THEN 1 ELSE 0 END)`.as("delayed"),
@@ -270,9 +270,9 @@ async function materializeOperatorStats(db: Db, date: string): Promise<void> {
 				number | null
 			>`AVG(CASE WHEN ${journeyRuns.cancelled} = 1 THEN ${PLANNED_FREQUENCY_MIN} ELSE (
 					SELECT (strftime('%s', js.day_of_operation || 'T' || js.rt_dep_time) - strftime('%s', js.day_of_operation || 'T' || js.dep_time)) / 60.0
-					FROM ${journeyStops} js
-					WHERE js.journey_ref = ${journeyRuns.journeyRef}
-					AND js.day_of_operation = ${journeyRuns.dayOfOperation}
+					FROM journey_stops js
+					WHERE js.journey_ref = "journey_runs"."journey_ref"
+					AND js.day_of_operation = "journey_runs"."day_of_operation"
 					AND js.rt_dep_time IS NOT NULL AND js.dep_time IS NOT NULL
 					AND js.route_idx = 0
 				) END)`.as("avg_delay"),
@@ -326,9 +326,9 @@ async function materializeLineStats(db: Db, date: string): Promise<void> {
 				),
 			delayed:
 				sql<number>`SUM(CASE WHEN ${journeyRuns.cancelled} = 0 AND EXISTS (
-					SELECT 1 FROM ${journeyStops} js
-					WHERE js.journey_ref = ${journeyRuns.journeyRef}
-					AND js.day_of_operation = ${journeyRuns.dayOfOperation}
+					SELECT 1 FROM journey_stops js
+					WHERE js.journey_ref = "journey_runs"."journey_ref"
+					AND js.day_of_operation = "journey_runs"."day_of_operation"
 					AND js.rt_dep_time IS NOT NULL AND js.dep_time IS NOT NULL
 					AND (strftime('%s', js.day_of_operation || 'T' || js.rt_dep_time) - strftime('%s', js.day_of_operation || 'T' || js.dep_time)) / 60.0 >= ${DELAY_THRESHOLD_MIN}
 				) THEN 1 ELSE 0 END)`.as("delayed"),
@@ -336,9 +336,9 @@ async function materializeLineStats(db: Db, date: string): Promise<void> {
 				number | null
 			>`AVG(CASE WHEN ${journeyRuns.cancelled} = 1 THEN ${PLANNED_FREQUENCY_MIN} ELSE (
 					SELECT (strftime('%s', js.day_of_operation || 'T' || js.rt_dep_time) - strftime('%s', js.day_of_operation || 'T' || js.dep_time)) / 60.0
-					FROM ${journeyStops} js
-					WHERE js.journey_ref = ${journeyRuns.journeyRef}
-					AND js.day_of_operation = ${journeyRuns.dayOfOperation}
+					FROM journey_stops js
+					WHERE js.journey_ref = "journey_runs"."journey_ref"
+					AND js.day_of_operation = "journey_runs"."day_of_operation"
 					AND js.rt_dep_time IS NOT NULL AND js.dep_time IS NOT NULL
 					AND js.route_idx = 0
 				) END)`.as("avg_delay"),
