@@ -42,7 +42,7 @@ async function discoverJourneys(
 				id: station.id,
 				date: start.format("YYYY-MM-DD"),
 				time: start.format("HH:mm"),
-				duration: 120,
+				duration: 45,
 				maxJourneys: -1,
 				format: "json",
 			},
