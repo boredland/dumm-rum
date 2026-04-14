@@ -1,0 +1,3 @@
+[tools]
+node = "latest"
+wrangler = "latest"
