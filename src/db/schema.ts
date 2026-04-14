@@ -134,6 +134,8 @@ export const knownStops = sqliteTable("known_stops", {
 	categories: text(),
 	journeyCount: integer("journey_count").notNull().default(0),
 	cancelled: integer().notNull().default(0),
+	ghost: integer().notNull().default(0),
+	delayed: integer().notNull().default(0),
 	updatedAt: text("updated_at").notNull(),
 });
 

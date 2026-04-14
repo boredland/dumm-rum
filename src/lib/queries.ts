@@ -355,6 +355,8 @@ export interface StopSummary {
 	stopName: string;
 	journeyCount: number;
 	cancelled: number;
+	ghost: number;
+	delayed: number;
 	lines: string[];
 	categories: string[];
 }
@@ -370,6 +372,8 @@ export async function getStopSummaries(db: Db): Promise<StopSummary[]> {
 				"journey_count",
 			),
 			cancelled: sql<number>`SUM(${knownStops.cancelled})`.as("cancelled"),
+			ghost: sql<number>`SUM(${knownStops.ghost})`.as("ghost"),
+			delayed: sql<number>`SUM(${knownStops.delayed})`.as("delayed"),
 			lines: sql<string>`GROUP_CONCAT(DISTINCT ${knownStops.lines})`.as(
 				"lines",
 			),
@@ -387,6 +391,8 @@ export async function getStopSummaries(db: Db): Promise<StopSummary[]> {
 		stopName: r.stopName,
 		journeyCount: r.journeyCount,
 		cancelled: r.cancelled,
+		ghost: r.ghost,
+		delayed: r.delayed,
 		lines: r.lines ? [...new Set(r.lines.split(","))].filter(Boolean) : [],
 		categories: r.categories
 			? [...new Set(r.categories.split(","))].filter(Boolean)

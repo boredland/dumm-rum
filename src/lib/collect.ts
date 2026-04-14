@@ -397,6 +397,14 @@ async function materializeKnownStops(db: Db): Promise<void> {
 					"journey_count",
 				),
 			cancelled: sql<number>`SUM(${journeyStops.cancelled})`.as("cancelled"),
+			ghost:
+				sql<number>`SUM(CASE WHEN ${journeyRuns.wasTracked} = 0 AND ${journeyRuns.cancelled} = 0 THEN 1 ELSE 0 END)`.as(
+					"ghost",
+				),
+			delayed:
+				sql<number>`SUM(CASE WHEN ${journeyStops.cancelled} = 0 AND ${journeyStops.rtDepTime} IS NOT NULL AND ${journeyStops.depTime} IS NOT NULL AND (strftime('%s', ${journeyStops.dayOfOperation} || 'T' || ${journeyStops.rtDepTime}) - strftime('%s', ${journeyStops.dayOfOperation} || 'T' || ${journeyStops.depTime})) / 60.0 >= ${DELAY_THRESHOLD_MIN} THEN 1 ELSE 0 END)`.as(
+					"delayed",
+				),
 			lines: sql<string>`GROUP_CONCAT(DISTINCT ${journeyRuns.line})`.as(
 				"lines",
 			),
@@ -435,6 +443,8 @@ async function materializeKnownStops(db: Db): Promise<void> {
 					categories: r.categories,
 					journeyCount: r.journeyCount,
 					cancelled: r.cancelled,
+					ghost: r.ghost,
+					delayed: r.delayed,
 					updatedAt: now,
 				})),
 			)
@@ -446,6 +456,8 @@ async function materializeKnownStops(db: Db): Promise<void> {
 					categories: excluded(knownStops.categories),
 					journeyCount: excluded(knownStops.journeyCount),
 					cancelled: excluded(knownStops.cancelled),
+					ghost: excluded(knownStops.ghost),
+					delayed: excluded(knownStops.delayed),
 					updatedAt: excluded(knownStops.updatedAt),
 				},
 			});
