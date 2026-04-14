@@ -143,7 +143,6 @@ async function fetchAndRender() {
 
 			if (markers.has(v.id)) {
 				const m = markers.get(v.id);
-				m.setLatLng([v.lat, v.lon]);
 				m.setIcon(createVehicleIcon(cat));
 				m.setPopupContent(popupContent(v));
 				m.setTooltipContent(`${v.line} → ${shortName(v.destination)}`);
@@ -166,6 +165,8 @@ async function fetchAndRender() {
 				vehicleState.delete(id);
 			}
 		}
+
+		interpolatePositions();
 
 		const visibleCount = vehicles.filter(v => matchesFilter(v.category || "Bus", activeFilter)).length;
 		const countEl = document.getElementById("vehicle-count");
