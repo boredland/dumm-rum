@@ -306,7 +306,7 @@ function interpolatePositions() {
 
 		const arrSec = timeToSeconds(state.nextArrTime);
 		const expired = (state.destArrSec !== null && nowSec > state.destArrSec)
-			|| (arrSec !== null && nowSec > arrSec + 60);
+			|| (arrSec !== null && nowSec > arrSec + 15);
 		if (expired) {
 			m.remove();
 			markers.delete(id);
@@ -343,7 +343,7 @@ function init() {
 	initMap();
 	if (!map) return;
 	fetchAndRender();
-	fetchInterval = setInterval(fetchAndRender, 60_000);
+	fetchInterval = setInterval(fetchAndRender, 30_000);
 	animFrameId = requestAnimationFrame(interpolatePositions);
 
 	for (const pill of document.querySelectorAll(".cat-pill")) {
