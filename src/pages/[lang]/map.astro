@@ -101,10 +101,16 @@ function initMap() {
 	if (!el) return;
 
 	map = L.map(el, { zoomControl: true }).setView([50.11, 8.68], 12);
-	L.tileLayer("https://tile.memomaps.de/tilegen/{z}/{x}/{y}.png", {
+	const transit = L.tileLayer("https://tile.memomaps.de/tilegen/{z}/{x}/{y}.png", {
 		attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &middot; <a href="https://memomaps.de/">memomaps.de</a>',
 		maxZoom: 18,
-	}).addTo(map);
+	});
+	const osm = L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+		attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+		maxZoom: 19,
+	});
+	transit.on("tileerror", () => { if (!map.hasLayer(osm)) { transit.remove(); osm.addTo(map); } });
+	transit.addTo(map);
 }
 
 async function fetchAndRender() {
