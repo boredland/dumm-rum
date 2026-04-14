@@ -53,8 +53,21 @@ export async function processJourneyBatch(
 			});
 
 			if (error || !data) {
+				const isQuota =
+					typeof error === "object" &&
+					error !== null &&
+					"errorCode" in error &&
+					(error as { errorCode?: string }).errorCode === "API_QUOTA";
 				console.error(`journeyDetail failed for ${journeyRef}:`, error);
-				msg.retry();
+				if (isQuota) {
+					msg.ack();
+					await env.JOURNEY_QUEUE.send(
+						{ journeyRef, dayOfOperation, pollCount },
+						{ delaySeconds: 1800 },
+					);
+				} else {
+					msg.retry();
+				}
 				continue;
 			}
 
