@@ -13,7 +13,7 @@ import {
 	getStopSummaries,
 	parseFilter,
 } from "../../lib/queries";
-import { categoryIcons, STATIONS, slugForStop } from "../../lib/stations";
+import { categoryIcons, slugForStop } from "../../lib/stations";
 import {
 	onTimeRate,
 	pct,
@@ -27,7 +27,6 @@ const lang = langFromParams(Astro.params);
 const filter = parseFilter(Astro.url);
 const coreOnly = Astro.url.searchParams.get("hours") === "core";
 const daysFilter = filter.days ?? "today";
-const category = "";
 const { stops, operators, lines, oldestDate, haiku } = await all({
 	stops: () => getStopSummaries(db),
 	operators: () => getOperatorSummaries(db, filter),
@@ -35,8 +34,6 @@ const { stops, operators, lines, oldestDate, haiku } = await all({
 	oldestDate: () => getOldestDate(db),
 	haiku: () => getHaiku(db, todayBerlin(), lang),
 });
-
-const stationById = new Map(STATIONS.map((s) => [s.id, s]));
 
 const lineStations = new Map<string, string[]>();
 for (const stop of stops) {
@@ -85,7 +82,7 @@ for (const stop of stops) {
 		</ul>
 	</details>
 
-	<HoursToggle basePath={`/${lang}`} coreOnly={coreOnly} daysFilter={daysFilter} category={category ?? ""} lang={lang} />
+	<HoursToggle basePath={`/${lang}`} coreOnly={coreOnly} daysFilter={daysFilter} lang={lang} />
 
 	{(() => {
 		let totalAll = 0, cancelledAll = 0, ghostAll = 0, delayedAll = 0;
