@@ -81,31 +81,40 @@ export const GET: APIRoute = async () => {
 		...ghostRows.map((v) => v.id),
 	];
 
-	const stopRows =
-		allIds.length > 0
-			? await db
-					.select({
-						journeyRef: journeyStops.journeyRef,
-						lat: journeyStops.lat,
-						lon: journeyStops.lon,
-						arr: coalesce<string>(
-							journeyStops.rtArrTime,
-							journeyStops.arrTime,
-							journeyStops.depTime,
-						),
-						dep: coalesce<string>(journeyStops.rtDepTime, journeyStops.depTime),
-					})
-					.from(journeyStops)
-					.where(
-						and(
-							inArray(journeyStops.dayOfOperation, [today, yesterday]),
-							inArray(journeyStops.journeyRef, allIds),
-							eq(journeyStops.cancelled, 0),
-							isNotNull(journeyStops.lat),
-						),
-					)
-					.orderBy(journeyStops.journeyRef, asc(journeyStops.routeIdx))
-			: [];
+	const BATCH = 50;
+	const stopRows: {
+		journeyRef: string;
+		lat: number | null;
+		lon: number | null;
+		arr: string;
+		dep: string;
+	}[] = [];
+	for (let i = 0; i < allIds.length; i += BATCH) {
+		const chunk = allIds.slice(i, i + BATCH);
+		const rows = await db
+			.select({
+				journeyRef: journeyStops.journeyRef,
+				lat: journeyStops.lat,
+				lon: journeyStops.lon,
+				arr: coalesce<string>(
+					journeyStops.rtArrTime,
+					journeyStops.arrTime,
+					journeyStops.depTime,
+				),
+				dep: coalesce<string>(journeyStops.rtDepTime, journeyStops.depTime),
+			})
+			.from(journeyStops)
+			.where(
+				and(
+					inArray(journeyStops.dayOfOperation, [today, yesterday]),
+					inArray(journeyStops.journeyRef, chunk),
+					eq(journeyStops.cancelled, 0),
+					isNotNull(journeyStops.lat),
+				),
+			)
+			.orderBy(journeyStops.journeyRef, asc(journeyStops.routeIdx));
+		stopRows.push(...rows);
+	}
 
 	const stopsByJourney = new Map<string, typeof stopRows>();
 	for (const s of stopRows) {
