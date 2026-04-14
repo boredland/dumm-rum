@@ -1,4 +1,4 @@
-import { and, eq, getTableColumns, inArray, isNotNull } from "drizzle-orm";
+import { and, count, eq, getTableColumns, isNotNull, sql } from "drizzle-orm";
 import type { Db } from "../db/client";
 import { excluded } from "../db/helpers";
 import { departures, journeyRuns } from "../db/schema";
@@ -8,14 +8,24 @@ import type { components } from "./hafas-types";
 type JourneyDetail = components["schemas"]["JourneyDetail"];
 type JourneyRunRow = typeof journeyRuns.$inferInsert;
 
+interface DepStats {
+	cancelledCount: number;
+	depCount: number;
+	trackedCount: number;
+}
+
 const FETCH_BATCH = 10;
 
 /**
- * Pull distinct journey refs for a date and snapshot their canonical
- * outcome from /journeyDetail into `journey_runs`. RMV retains
- * cancellation metadata after a journey ages out but strips all
- * realtime times/positions, so this is intended for end-of-day runs
- * over yesterday's data.
+ * Pull distinct journey refs for a date and snapshot their route
+ * topology from /journeyDetail + operational outcome from our own
+ * departures table into `journey_runs`.
+ *
+ * RMV strips ALL operational metadata (cancellations, rt data, status)
+ * from /journeyDetail overnight, so the /journeyDetail call only
+ * provides route geometry (origin, dest, stop list). Cancellation and
+ * tracking data is derived from our departures table which captured
+ * the live flags during the day.
  */
 export async function snapshotJourneys(
 	db: Db,
@@ -30,19 +40,33 @@ export async function snapshotJourneys(
 
 	if (refs.length === 0) return { discovered: 0, upserted: 0, failed: 0 };
 
-	const trackedRefRows = await db
-		.selectDistinct({ ref: departures.journeyRef })
-		.from(departures)
-		.where(
-			and(
-				eq(departures.date, date),
-				isNotNull(departures.journeyRef),
-				inArray(departures.journeyStatus, ["R", "A", "S"]),
+	// Derive operational data from our own departures (authoritative source).
+	// RMV strips cancellation flags from /journeyDetail overnight.
+	const depStatsRows = await db
+		.select({
+			ref: departures.journeyRef,
+			cancelledCount: sql<number>`SUM(${departures.cancelled})`.as(
+				"cancelled_count",
 			),
-		);
-	const trackedRefs = new Set(
-		trackedRefRows.map((r) => r.ref).filter((r): r is string => r !== null),
-	);
+			depCount: count().as("dep_count"),
+			trackedCount:
+				sql<number>`SUM(CASE WHEN ${departures.rtTime} IS NOT NULL THEN 1 ELSE 0 END)`.as(
+					"tracked_count",
+				),
+		})
+		.from(departures)
+		.where(and(eq(departures.date, date), isNotNull(departures.journeyRef)))
+		.groupBy(departures.journeyRef);
+
+	const depStats = new Map<string, DepStats>();
+	for (const row of depStatsRows) {
+		if (row.ref)
+			depStats.set(row.ref, {
+				cancelledCount: row.cancelledCount,
+				depCount: row.depCount,
+				trackedCount: row.trackedCount,
+			});
+	}
 
 	const client = createHafasClient(apiKey);
 	const snapshotAt = new Date().toISOString();
@@ -67,10 +91,15 @@ export async function snapshotJourneys(
 				failed++;
 				continue;
 			}
+			const stats = depStats.get(ref) ?? {
+				cancelledCount: 0,
+				depCount: 0,
+				trackedCount: 0,
+			};
 			const row = buildRow(
 				ref,
 				result.data as JourneyDetail,
-				trackedRefs.has(ref),
+				stats,
 				snapshotAt,
 			);
 			if (row) rows.push(row);
@@ -125,7 +154,7 @@ export async function snapshotJourneys(
 function buildRow(
 	ref: string,
 	detail: JourneyDetail,
-	wasTracked: boolean,
+	stats: DepStats,
 	snapshotAt: string,
 ): JourneyRunRow | null {
 	const stops = detail.Stops?.Stop ?? [];
@@ -141,10 +170,10 @@ function buildRow(
 	const line = product?.line ?? product?.name;
 	if (!line) return null;
 
-	const cancelledStopCount = stops.reduce(
-		(n, s) => (s.cancelled ? n + 1 : n),
-		0,
-	);
+	// Cancellation data from /journeyDetail is unreliable (RMV strips it
+	// overnight). Use our departures table as source of truth instead.
+	// Note: this only covers stops at tracked stations, not the full route.
+	const { cancelledCount, depCount, trackedCount } = stats;
 
 	return {
 		journeyRef: ref,
@@ -160,11 +189,11 @@ function buildRow(
 		destName: dest.name,
 		destArrTime,
 		status: detail.JourneyStatus ?? "P",
-		cancelled: cancelledStopCount === stops.length ? 1 : 0,
-		partCancelled: detail.partCancelled ? 1 : 0,
-		cancelledStopCount,
+		cancelled: depCount > 0 && cancelledCount === depCount ? 1 : 0,
+		partCancelled: cancelledCount > 0 ? 1 : 0,
+		cancelledStopCount: cancelledCount,
 		totalStopCount: stops.length,
-		wasTracked: wasTracked ? 1 : 0,
+		wasTracked: trackedCount > 0 ? 1 : 0,
 		snapshotAt,
 	};
 }

@@ -13,14 +13,16 @@ Goal: move beyond per-stop-visit accounting in `departures` toward per-vehicle-r
 
 From probing `/departureBoard` and `/journeyDetail` on RMV's HAFAS deployment:
 
-1. **`journey_ref` is stable across stations on the same day.** Verified with 5 S1 journeys × 4 stations = 20 observations; all byte-identical. The `ZI#<N>` component in the ref identifies the journey-run; `TA#<N>` encodes the origin route index, not the reporting station.
+1. **RMV strips ALL operational metadata from `/journeyDetail` overnight — cancellations, rt times, positions, AND per-stop `cancelled` flags.** A journey that showed `partCancelled: true` + all stops cancelled on the same evening returns `cancelled: None, partCancelled: None, 0 cancelled stops` the next morning. This means the nightly snapshot can only provide **route topology** (origin, dest, stop list) from `/journeyDetail`; all operational data (was it cancelled, was it tracked, how late was it) must be derived from the `departures` table which captured live flags.
+2. **`journey_ref` is stable across stations on the same day.** Verified with 5 S1 journeys × 4 stations = 20 observations; all byte-identical. The `ZI#<N>` component in the ref identifies the journey-run; `TA#<N>` encodes the origin route index, not the reporting station.
 2. **`(journey_ref, day_of_operation)` is a safe PK.** The ref token embeds `DA#YYMMDD`, but the explicit column protects against midnight-crossing edge cases.
 3. **RMV strips realtime data once a journey ages out.** Per-stop `rtDepTime`/`rtArrTime` and journey-level `lastPos`/`rtLastPassRouteIdx` are only present while the journey is live. Yesterday's `/journeyDetail` returns planned times only.
-4. **Journey-level cancellation metadata IS preserved.** `partCancelled` and per-stop `cancelled` flags remain queryable after the fact, so after-hours snapshotting is viable for cancellation archival.
+4. **~~Journey-level cancellation metadata IS preserved.~~** WRONG — cancellation flags are stripped overnight, same as rt data. The `departures` table is the authoritative source for cancellations.
 5. **`JourneyStatus` is volatile.** RMV reports `R`/`A`/`S` while live and flips back to `P` after the journey completes. Phase 1's sticky-status rule in `src/lib/collect.ts` preserves the most informative status ever seen.
 6. **RMV only accepts `rtMode=OFF` or `rtMode=SERVER_DEFAULT`.** `FULL`/`REALTIME`/`INFOS` are rejected with `API_PARAM` despite the OpenAPI spec listing them.
+7. **RMV never reports `JourneyStatus = 'R'` on `/departureBoard`.** Only `P` (planned) and `A` (additional) have been observed. `R` (realtime-created journey) may be RMV-unused or only visible in `/journeyDetail` while live.
 
-These shape the plan below: the board cron is load-bearing (can't be replaced by journey polling because rt data only exists live), cancellations are archival-friendly (can be batched nightly), and ghost verification must be **same-day** (position data doesn't survive).
+These shape the plan below: the board cron is load-bearing (can't be replaced by journey polling because rt data only exists live), cancellation and tracking data must come from our own `departures` table (RMV strips everything overnight), and any live-quality data (position, per-stop rt times, cancellation chain) must be captured **same-day via inline or queued `/journeyDetail` calls**.
 
 ## Phase 1 — Capture journey identity on each departure ✅
 
