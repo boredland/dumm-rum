@@ -26,31 +26,32 @@ export const GET: APIRoute = async () => {
 			destArrTime: journeyRuns.destArrTime,
 			nextLat: sql<number | null>`(
 				SELECT js.lat FROM journey_stops js
-				WHERE js.journey_ref = ${journeyRuns.journeyRef}
-				AND js.day_of_operation = ${journeyRuns.dayOfOperation}
-				AND js.route_idx > COALESCE(${journeyPositions.routeIdx}, -1)
+				WHERE js.journey_ref = "journey_runs"."journey_ref"
+				AND js.day_of_operation = "journey_runs"."day_of_operation"
+				AND js.dep_time > ${now}
 				AND js.cancelled = 0 AND js.lat IS NOT NULL
 				ORDER BY js.route_idx LIMIT 1
 			)`.as("next_lat"),
 			nextLon: sql<number | null>`(
 				SELECT js.lon FROM journey_stops js
-				WHERE js.journey_ref = ${journeyRuns.journeyRef}
-				AND js.day_of_operation = ${journeyRuns.dayOfOperation}
-				AND js.route_idx > COALESCE(${journeyPositions.routeIdx}, -1)
+				WHERE js.journey_ref = "journey_runs"."journey_ref"
+				AND js.day_of_operation = "journey_runs"."day_of_operation"
+				AND js.dep_time > ${now}
 				AND js.cancelled = 0 AND js.lon IS NOT NULL
 				ORDER BY js.route_idx LIMIT 1
 			)`.as("next_lon"),
 			lastDepTime: sql<string | null>`(
 				SELECT COALESCE(js.rt_dep_time, js.dep_time) FROM journey_stops js
-				WHERE js.journey_ref = ${journeyRuns.journeyRef}
-				AND js.day_of_operation = ${journeyRuns.dayOfOperation}
-				AND js.route_idx = ${journeyPositions.routeIdx}
+				WHERE js.journey_ref = "journey_runs"."journey_ref"
+				AND js.day_of_operation = "journey_runs"."day_of_operation"
+				AND js.dep_time <= ${now} AND js.cancelled = 0
+				ORDER BY js.route_idx DESC LIMIT 1
 			)`.as("last_dep_time"),
 			nextArrTime: sql<string | null>`(
 				SELECT COALESCE(js.rt_arr_time, js.arr_time, js.dep_time) FROM journey_stops js
-				WHERE js.journey_ref = ${journeyRuns.journeyRef}
-				AND js.day_of_operation = ${journeyRuns.dayOfOperation}
-				AND js.route_idx > COALESCE(${journeyPositions.routeIdx}, -1)
+				WHERE js.journey_ref = "journey_runs"."journey_ref"
+				AND js.day_of_operation = "journey_runs"."day_of_operation"
+				AND js.dep_time > ${now}
 				AND js.cancelled = 0
 				ORDER BY js.route_idx LIMIT 1
 			)`.as("next_arr_time"),
