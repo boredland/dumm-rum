@@ -223,9 +223,9 @@ async function fetchAndRender() {
 			}
 		}
 
-		const visibleCount = vehicles.filter(v => matchesFilter(v.category || "Bus", activeFilter)).length;
+		const visibleCount = [...markers.values()].filter(m => map.hasLayer(m)).length;
 		const countEl = document.getElementById("vehicle-count");
-		if (countEl) countEl.textContent = vehicles.length === 0 ? noVehiclesText : `${visibleCount} ${vehiclesText}`;
+		if (countEl) countEl.textContent = visibleCount === 0 ? noVehiclesText : `${visibleCount} ${vehiclesText}`;
 
 		const updateEl = document.getElementById("last-update");
 		if (updateEl) {
