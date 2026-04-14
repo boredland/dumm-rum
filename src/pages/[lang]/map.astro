@@ -170,11 +170,12 @@ async function fetchAndRender() {
 			const sleeping = depSec !== null && depSec > nowSec;
 
 			const poly = v.polyline ? JSON.parse(v.polyline) : null;
+			const nextArrSec = timeToSeconds(v.nextArrTime);
 			vehicleState.set(v.id, {
 				lat: v.lat, lon: v.lon,
 				nextLat: v.nextLat, nextLon: v.nextLon,
 				lastDepTime: v.lastDepTime, nextArrTime: v.nextArrTime,
-				destArrSec: destSec,
+				destArrSec: destSec, nextArrSec, cat,
 				polyline: poly,
 				startIdx: poly ? nearestPolylineIndex(poly, v.lat, v.lon) : 0,
 				endIdx: (poly && v.nextLat && v.nextLon) ? nearestPolylineIndex(poly, v.nextLat, v.nextLon) : 0,
@@ -315,6 +316,11 @@ function interpolatePositions() {
 
 		const depSec = timeToSeconds(state.lastDepTime);
 		const canInterpolate = depSec !== null && arrSec !== null && arrSec > depSec && nowSec >= depSec && nowSec <= arrSec;
+		const stale = arrSec !== null && nowSec > arrSec;
+		if (stale !== state._stale) {
+			state._stale = stale;
+			m.setIcon(getVehicleIcon(state.cat, stale));
+		}
 
 		if (canInterpolate) {
 			const progress = (nowSec - depSec) / (arrSec - depSec);
