@@ -161,7 +161,8 @@ async function fetchAndRender() {
 
 		const nowSec = new Date().getHours() * 3600 + new Date().getMinutes() * 60 + new Date().getSeconds();
 		for (const v of vehicles) {
-			if (!v.nextArrTime) { continue; }
+			const stops = v.stops ? JSON.parse(v.stops) : [];
+			if (stops.length < 2) { continue; }
 			seen.add(v.id);
 			const cat = v.category || "Bus";
 			const visible = matchesFilter(cat, activeFilter);
@@ -170,15 +171,15 @@ async function fetchAndRender() {
 			const sleeping = depSec !== null && depSec > nowSec;
 
 			const poly = v.polyline ? JSON.parse(v.polyline) : null;
-			const nextArrSec = timeToSeconds(v.nextArrTime);
+			const parsedStops = stops.map(s => ({
+				lat: s.lat, lon: s.lon,
+				arrSec: timeToSeconds(s.arr),
+				depSec: timeToSeconds(s.dep),
+			}));
 			vehicleState.set(v.id, {
 				lat: v.lat, lon: v.lon,
-				nextLat: v.nextLat, nextLon: v.nextLon,
-				lastDepTime: v.lastDepTime, nextArrTime: v.nextArrTime,
-				destArrSec: destSec, nextArrSec, cat,
-				polyline: poly,
-				startIdx: poly ? nearestPolylineIndex(poly, v.lat, v.lon) : 0,
-				endIdx: (poly && v.nextLat && v.nextLon) ? nearestPolylineIndex(poly, v.nextLat, v.nextLon) : 0,
+				destArrSec: destSec, cat,
+				polyline: poly, stops: parsedStops,
 			});
 
 			if (markers.has(v.id)) {
@@ -297,6 +298,24 @@ function interpolateAlongPolyline(poly, startIdx, endIdx, progress) {
 	];
 }
 
+function findCurrentSegment(stops, nowSec) {
+	for (let i = 0; i < stops.length - 1; i++) {
+		const dep = stops[i].depSec;
+		const arr = stops[i + 1].arrSec;
+		if (dep !== null && arr !== null && arr > dep && nowSec >= dep && nowSec <= arr) {
+			return { from: stops[i], to: stops[i + 1], progress: (nowSec - dep) / (arr - dep) };
+		}
+	}
+	for (let i = stops.length - 2; i >= 0; i--) {
+		const dep = stops[i].depSec;
+		if (dep !== null && nowSec >= dep) {
+			const arr = stops[i + 1].arrSec ?? dep + 60;
+			return { from: stops[i], to: stops[i + 1], progress: Math.min(1, (nowSec - dep) / (arr - dep)) };
+		}
+	}
+	return null;
+}
+
 function interpolatePositions() {
 	const now = new Date();
 	const nowSec = now.getHours() * 3600 + now.getMinutes() * 60 + now.getSeconds() + now.getMilliseconds() / 1000;
@@ -304,32 +323,36 @@ function interpolatePositions() {
 		const m = markers.get(id);
 		if (!m) continue;
 
-		const arrSec = timeToSeconds(state.nextArrTime);
-		const expired = (state.destArrSec !== null && nowSec > state.destArrSec)
-			|| (arrSec !== null && nowSec > arrSec + 15);
-		if (expired) {
+		if (state.destArrSec !== null && nowSec > state.destArrSec + 15) {
 			m.remove();
 			markers.delete(id);
 			vehicleState.delete(id);
 			continue;
 		}
 
-		const depSec = timeToSeconds(state.lastDepTime);
-		const canInterpolate = depSec !== null && arrSec !== null && arrSec > depSec && nowSec >= depSec && nowSec <= arrSec;
-		const stale = arrSec !== null && nowSec > arrSec;
+		const seg = findCurrentSegment(state.stops, nowSec);
+		const stale = !seg;
 		if (stale !== state._stale) {
 			state._stale = stale;
 			m.setIcon(getVehicleIcon(state.cat, stale));
 		}
 
-		if (canInterpolate) {
-			const progress = (nowSec - depSec) / (arrSec - depSec);
-			if (state.polyline && state.polyline.length >= 2 && state.endIdx > state.startIdx) {
-				m.setLatLng(interpolateAlongPolyline(state.polyline, state.startIdx, state.endIdx, progress));
-			} else if (state.nextLat && state.nextLon) {
+		if (seg) {
+			if (state.polyline && state.polyline.length >= 2) {
+				const startIdx = nearestPolylineIndex(state.polyline, seg.from.lat, seg.from.lon);
+				const endIdx = nearestPolylineIndex(state.polyline, seg.to.lat, seg.to.lon);
+				if (endIdx > startIdx) {
+					m.setLatLng(interpolateAlongPolyline(state.polyline, startIdx, endIdx, seg.progress));
+				} else {
+					m.setLatLng([
+						seg.from.lat + (seg.to.lat - seg.from.lat) * seg.progress,
+						seg.from.lon + (seg.to.lon - seg.from.lon) * seg.progress,
+					]);
+				}
+			} else {
 				m.setLatLng([
-					state.lat + (state.nextLat - state.lat) * progress,
-					state.lon + (state.nextLon - state.lon) * progress,
+					seg.from.lat + (seg.to.lat - seg.from.lat) * seg.progress,
+					seg.from.lon + (seg.to.lon - seg.from.lon) * seg.progress,
 				]);
 			}
 		}
