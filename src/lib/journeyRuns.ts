@@ -1,9 +1,10 @@
-import { and, eq, getTableColumns, sql } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import type { Db } from "../db/client";
-import { excluded } from "../db/helpers";
+import { d1BatchSize, excluded } from "../db/helpers";
 import { journeyRuns } from "../db/schema";
 import { createHafasClient } from "./hafas";
 import type { components } from "./hafas-types";
+import { extractPolyline } from "./utils";
 
 type JourneyDetail = components["schemas"]["JourneyDetail"];
 type JourneyRunRow = typeof journeyRuns.$inferInsert;
@@ -72,9 +73,7 @@ export async function snapshotJourneys(
 	if (rows.length === 0)
 		return { discovered: refs.length, upserted: 0, failed };
 
-	const D1_MAX_PARAMS = 100;
-	const colCount = Object.keys(getTableColumns(journeyRuns)).length;
-	const writeBatch = Math.max(1, Math.floor(D1_MAX_PARAMS / colCount));
+	const writeBatch = d1BatchSize(journeyRuns);
 
 	for (let i = 0; i < rows.length; i += writeBatch) {
 		const batch = rows.slice(i, i + writeBatch);
@@ -135,17 +134,7 @@ function buildRow(
 
 	const cancelledStops = stops.filter((s) => s.cancelled).length;
 
-	const polyDesc = detail.PolylineGroup?.polylineDesc?.[0];
-	const polyCrd = polyDesc?.crd;
-	const dim = polyDesc?.dim ?? 2;
-	let polyline: string | null = null;
-	if (polyCrd && polyCrd.length >= dim * 2) {
-		const points: [number, number][] = [];
-		for (let k = 0; k < polyCrd.length; k += dim) {
-			points.push([polyCrd[k + 1], polyCrd[k]]);
-		}
-		polyline = JSON.stringify(points);
-	}
+	const polyline = extractPolyline(detail);
 
 	return {
 		journeyRef: ref,
@@ -162,7 +151,7 @@ function buildRow(
 		destArrTime,
 		status: detail.JourneyStatus ?? "P",
 		cancelled: Math.max(detail.cancelled ? 1 : 0, existing.cancelled),
-		partCancelled: detail.partCancelled || cancelledStops > 0 ? 1 : 0,
+		partCancelled: Number(detail.partCancelled || cancelledStops > 0),
 		cancelledStopCount: cancelledStops,
 		totalStopCount: stops.length,
 		wasTracked: existing.wasTracked,

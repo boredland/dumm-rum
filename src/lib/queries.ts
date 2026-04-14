@@ -1,6 +1,7 @@
 import type { InferSelectModel } from "drizzle-orm";
 import { and, count, desc, eq, gte, isNotNull, sql, sum } from "drizzle-orm";
 import type { Db } from "../db/client";
+import { sqlIdList } from "../db/helpers";
 import {
 	haikus,
 	journeyRuns,
@@ -14,6 +15,8 @@ import {
 	PLANNED_FREQUENCY_MIN,
 	todayBerlin,
 } from "./utils";
+
+export const ghostCaseSql = sql<number>`CASE WHEN ${journeyRuns.wasTracked} = 0 AND ${journeyRuns.cancelled} = 0 THEN 1 ELSE 0 END`;
 
 export type DaysFilter = "" | "all" | "today" | "weekdays" | "weekends";
 
@@ -38,16 +41,12 @@ const validDays = new Set<DaysFilter>([
 export function parseFilter(url: URL): QueryFilter {
 	const days = url.searchParams.get("days") ?? "today";
 	return {
-		coreOnly: url.searchParams.get("hours") === "core",
 		days: validDays.has(days as DaysFilter) ? (days as DaysFilter) : "today",
-		category: "",
 	};
 }
 
 export interface QueryFilter {
-	coreOnly?: boolean;
 	days?: DaysFilter;
-	category?: string;
 }
 
 export interface DayStats {
@@ -307,17 +306,13 @@ export async function getOperatorStats(
 export async function getOldestDate(
 	db: Db,
 	entity?: {
-		station?: string;
 		stopIds?: string[];
 		line?: string;
 		operator?: string;
 	},
 ): Promise<string | null> {
 	if (entity?.stopIds) {
-		const stopIdList = sql.join(
-			entity.stopIds.map((id) => sql`${id}`),
-			sql`, `,
-		);
+		const stopIdList = sqlIdList(entity.stopIds);
 		const rows = await db
 			.select({
 				date: sql<string>`MIN(${journeyStops.dayOfOperation})`,
@@ -447,10 +442,7 @@ export async function getStopStats(
 	stopIds: string[],
 	filter: QueryFilter = {},
 ): Promise<Stats> {
-	const stopIdList = sql.join(
-		stopIds.map((id) => sql`${id}`),
-		sql`, `,
-	);
+	const stopIdList = sqlIdList(stopIds);
 	const daysCond = daysCondition(journeyStops.dayOfOperation, filter.days);
 	const conditions = [sql`${journeyStops.stopId} IN (${stopIdList})`];
 	if (daysCond) conditions.push(daysCond);
@@ -461,10 +453,7 @@ export async function getStopStats(
 				date: journeyStops.dayOfOperation,
 				total: count().as("total"),
 				cancelled: sql<number>`SUM(${journeyStops.cancelled})`.as("cancelled"),
-				ghost:
-					sql<number>`SUM(CASE WHEN ${journeyRuns.wasTracked} = 0 AND ${journeyRuns.cancelled} = 0 THEN 1 ELSE 0 END)`.as(
-						"ghost",
-					),
+				ghost: sql<number>`SUM(${ghostCaseSql})`.as("ghost"),
 				delayed:
 					sql<number>`SUM(CASE WHEN ${journeyStops.cancelled} = 0 AND ${journeyStops.rtDepTime} IS NOT NULL AND ${journeyStops.depTime} IS NOT NULL AND (strftime('%s', ${journeyStops.dayOfOperation} || 'T' || ${journeyStops.rtDepTime}) - strftime('%s', ${journeyStops.dayOfOperation} || 'T' || ${journeyStops.depTime})) / 60.0 >= ${DELAY_THRESHOLD_MIN} THEN 1 ELSE 0 END)`.as(
 						"delayed",
@@ -495,7 +484,6 @@ export async function getStopStats(
 
 	return {
 		days: dayRows.map((d) => ({
-			stationId: stopIds[0],
 			date: d.date,
 			total: d.total,
 			cancelled: d.cancelled,
@@ -514,10 +502,7 @@ export async function getStopDayDepartures(
 	stopIds: string[],
 	date: string,
 ) {
-	const stopIdList = sql.join(
-		stopIds.map((id) => sql`${id}`),
-		sql`, `,
-	);
+	const stopIdList = sqlIdList(stopIds);
 	return db
 		.select({
 			date: journeyStops.dayOfOperation,
@@ -533,10 +518,7 @@ export async function getStopDayDepartures(
 			line: journeyRuns.line,
 			direction: journeyRuns.destName,
 			cancelled: journeyStops.cancelled,
-			ghost:
-				sql<number>`CASE WHEN ${journeyRuns.wasTracked} = 0 AND ${journeyRuns.cancelled} = 0 THEN 1 ELSE 0 END`.as(
-					"ghost",
-				),
+			ghost: ghostCaseSql.as("ghost"),
 		})
 		.from(journeyStops)
 		.innerJoin(
@@ -568,10 +550,7 @@ export async function getLineDayJourneys(db: Db, line: string, date: string) {
 			),
 			direction: journeyRuns.destName,
 			cancelled: journeyRuns.cancelled,
-			ghost:
-				sql<number>`CASE WHEN ${journeyRuns.wasTracked} = 0 AND ${journeyRuns.cancelled} = 0 THEN 1 ELSE 0 END`.as(
-					"ghost",
-				),
+			ghost: ghostCaseSql.as("ghost"),
 			operator: journeyRuns.operator,
 			category: journeyRuns.category,
 			stop: journeyRuns.originName,
@@ -602,10 +581,7 @@ export async function getOperatorDayJourneys(
 			category: journeyRuns.category,
 			direction: journeyRuns.destName,
 			cancelled: journeyRuns.cancelled,
-			ghost:
-				sql<number>`CASE WHEN ${journeyRuns.wasTracked} = 0 AND ${journeyRuns.cancelled} = 0 THEN 1 ELSE 0 END`.as(
-					"ghost",
-				),
+			ghost: ghostCaseSql.as("ghost"),
 			stop: journeyRuns.originName,
 		})
 		.from(journeyRuns)

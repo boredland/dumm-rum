@@ -1,22 +1,14 @@
-import { and, eq, getTableColumns, sql } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import type { Db } from "../db/client";
 import { createDb } from "../db/client";
-import { coalesce, excluded } from "../db/helpers";
+import { coalesce, d1BatchSize, excluded } from "../db/helpers";
 import { journeyPositions, journeyRuns, journeyStops } from "../db/schema";
 import { createHafasClient } from "./hafas";
 import type { components } from "./hafas-types";
 import { notifyJourneyIssues } from "./telegram";
-import { berlinTime, nowBerlin } from "./utils";
+import { berlinTime, extractPolyline, nowBerlin, pickKey } from "./utils";
 
 type JourneyDetail = components["schemas"]["JourneyDetail"];
-
-function pickKey(apiKeys: string): string {
-	const keys = apiKeys
-		.split(",")
-		.map((k) => k.trim())
-		.filter(Boolean);
-	return keys[Math.floor(Math.random() * keys.length)];
-}
 
 export async function processJourneyBatch(
 	batch: MessageBatch<JourneyPollMessage>,
@@ -194,17 +186,7 @@ async function upsertJourneyRun(
 	const hasRtData =
 		stops.some((s) => s.rtDepTime || s.rtArrTime) || detail.lastPos != null;
 
-	const polyDesc = detail.PolylineGroup?.polylineDesc?.[0];
-	const polyCrd = polyDesc?.crd;
-	const dim = polyDesc?.dim ?? 2;
-	let polyline: string | null = null;
-	if (polyCrd && polyCrd.length >= dim * 2) {
-		const points: [number, number][] = [];
-		for (let i = 0; i < polyCrd.length; i += dim) {
-			points.push([polyCrd[i + 1], polyCrd[i]]);
-		}
-		polyline = JSON.stringify(points);
-	}
+	const polyline = extractPolyline(detail);
 
 	await db
 		.insert(journeyRuns)
@@ -223,7 +205,7 @@ async function upsertJourneyRun(
 			destArrTime,
 			status: detail.JourneyStatus ?? "P",
 			cancelled: detail.cancelled ? 1 : 0,
-			partCancelled: detail.partCancelled || cancelledStops > 0 ? 1 : 0,
+			partCancelled: Number(detail.partCancelled || cancelledStops > 0),
 			cancelledStopCount: cancelledStops,
 			totalStopCount: stops.length,
 			wasTracked: hasRtData ? 1 : 0,
@@ -267,9 +249,7 @@ async function upsertJourneyStops(
 ): Promise<void> {
 	if (stops.length === 0) return;
 
-	const D1_MAX_PARAMS = 100;
-	const colCount = Object.keys(getTableColumns(journeyStops)).length;
-	const batchSize = Math.max(1, Math.floor(D1_MAX_PARAMS / colCount));
+	const batchSize = d1BatchSize(journeyStops);
 
 	for (let i = 0; i < stops.length; i += batchSize) {
 		const batch = stops.slice(i, i + batchSize);

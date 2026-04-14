@@ -17,7 +17,8 @@ const db = createDb(env.DB);
 const lang = langFromParams(Astro.params);
 const operator = decodeURIComponent(Astro.params.operator!);
 const filter = parseFilter(Astro.url);
-const { coreOnly, days: daysFilter } = filter;
+const coreOnly = Astro.url.searchParams.get("hours") === "core";
+const daysFilter = filter.days ?? "today";
 
 const { opStats, oldestDate } = await all({
 	opStats: () => getOperatorStats(db, operator, filter),

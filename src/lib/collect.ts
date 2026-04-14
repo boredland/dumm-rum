@@ -1,6 +1,6 @@
-import { and, count, eq, getTableColumns, isNotNull, sql } from "drizzle-orm";
+import { and, count, eq, isNotNull, sql } from "drizzle-orm";
 import type { Db } from "../db/client";
-import { excluded } from "../db/helpers";
+import { d1BatchSize, excluded } from "../db/helpers";
 import {
 	haikus,
 	journeyRuns,
@@ -11,12 +11,14 @@ import {
 } from "../db/schema";
 import { createHafasClient } from "./hafas";
 import type { components } from "./hafas-types";
+import { ghostCaseSql } from "./queries";
 import type { Station } from "./stations";
 import { STATIONS } from "./stations";
 import {
 	DELAY_THRESHOLD_MIN,
 	nowBerlin,
 	PLANNED_FREQUENCY_MIN,
+	pickKey,
 	todayBerlin,
 } from "./utils";
 
@@ -110,23 +112,11 @@ async function discoverJourneys(
 		});
 	}
 
-	const D1_MAX_PARAMS = 100;
-	const colCount = Object.keys(getTableColumns(journeyRuns)).length;
-	const batchSize = Math.max(1, Math.floor(D1_MAX_PARAMS / colCount));
+	const batchSize = d1BatchSize(journeyRuns);
 
 	for (let i = 0; i < rows.length; i += batchSize) {
 		const batch = rows.slice(i, i + batchSize);
-		await db
-			.insert(journeyRuns)
-			.values(batch)
-			.onConflictDoUpdate({
-				target: [journeyRuns.journeyRef, journeyRuns.dayOfOperation],
-				set: {
-					wasTracked: sql`MAX(${journeyRuns.wasTracked}, ${excluded(journeyRuns.wasTracked)})`,
-					cancelled: excluded(journeyRuns.cancelled),
-					snapshotAt: excluded(journeyRuns.snapshotAt),
-				},
-			});
+		await db.insert(journeyRuns).values(batch).onConflictDoNothing();
 	}
 
 	return rows.length;
@@ -254,10 +244,7 @@ async function materializeOperatorStats(db: Db, date: string): Promise<void> {
 			operator: journeyRuns.operator,
 			total: count().as("total"),
 			cancelled: sql<number>`SUM(${journeyRuns.cancelled})`.as("cancelled"),
-			ghost:
-				sql<number>`SUM(CASE WHEN ${journeyRuns.wasTracked} = 0 AND ${journeyRuns.cancelled} = 0 THEN 1 ELSE 0 END)`.as(
-					"ghost",
-				),
+			ghost: sql<number>`SUM(${ghostCaseSql})`.as("ghost"),
 			delayed:
 				sql<number>`SUM(CASE WHEN ${journeyRuns.cancelled} = 0 AND EXISTS (
 					SELECT 1 FROM journey_stops js
@@ -320,10 +307,7 @@ async function materializeLineStats(db: Db, date: string): Promise<void> {
 			category: journeyRuns.category,
 			total: count().as("total"),
 			cancelled: sql<number>`SUM(${journeyRuns.cancelled})`.as("cancelled"),
-			ghost:
-				sql<number>`SUM(CASE WHEN ${journeyRuns.wasTracked} = 0 AND ${journeyRuns.cancelled} = 0 THEN 1 ELSE 0 END)`.as(
-					"ghost",
-				),
+			ghost: sql<number>`SUM(${ghostCaseSql})`.as("ghost"),
 			delayed:
 				sql<number>`SUM(CASE WHEN ${journeyRuns.cancelled} = 0 AND EXISTS (
 					SELECT 1 FROM journey_stops js
@@ -397,10 +381,7 @@ async function materializeKnownStops(db: Db): Promise<void> {
 					"journey_count",
 				),
 			cancelled: sql<number>`SUM(${journeyStops.cancelled})`.as("cancelled"),
-			ghost:
-				sql<number>`SUM(CASE WHEN ${journeyRuns.wasTracked} = 0 AND ${journeyRuns.cancelled} = 0 THEN 1 ELSE 0 END)`.as(
-					"ghost",
-				),
+			ghost: sql<number>`SUM(${ghostCaseSql})`.as("ghost"),
 			delayed:
 				sql<number>`SUM(CASE WHEN ${journeyStops.cancelled} = 0 AND ${journeyStops.rtDepTime} IS NOT NULL AND ${journeyStops.depTime} IS NOT NULL AND (strftime('%s', ${journeyStops.dayOfOperation} || 'T' || ${journeyStops.rtDepTime}) - strftime('%s', ${journeyStops.dayOfOperation} || 'T' || ${journeyStops.depTime})) / 60.0 >= ${DELAY_THRESHOLD_MIN} THEN 1 ELSE 0 END)`.as(
 					"delayed",
@@ -427,9 +408,7 @@ async function materializeKnownStops(db: Db): Promise<void> {
 	if (rows.length === 0) return;
 
 	const now = new Date().toISOString();
-	const D1_MAX_PARAMS = 100;
-	const colCount = Object.keys(getTableColumns(knownStops)).length;
-	const batchSize = Math.max(1, Math.floor(D1_MAX_PARAMS / colCount));
+	const batchSize = d1BatchSize(knownStops);
 
 	for (let i = 0; i < rows.length; i += batchSize) {
 		const batch = rows.slice(i, i + batchSize);
@@ -462,14 +441,6 @@ async function materializeKnownStops(db: Db): Promise<void> {
 				},
 			});
 	}
-}
-
-function pickKey(apiKeys: string): string {
-	const keys = apiKeys
-		.split(",")
-		.map((k) => k.trim())
-		.filter(Boolean);
-	return keys[Math.floor(Math.random() * keys.length)];
 }
 
 export interface CollectionResult {

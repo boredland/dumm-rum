@@ -86,3 +86,27 @@ export function scoreBorderColor(otp: number): string {
 			? "border-warning"
 			: "border-success";
 }
+
+export function pickKey(apiKeys: string): string {
+	const keys = apiKeys
+		.split(",")
+		.map((k) => k.trim())
+		.filter(Boolean);
+	return keys[Math.floor(Math.random() * keys.length)];
+}
+
+export function extractPolyline(detail: {
+	PolylineGroup?: { polylineDesc?: { crd?: number[]; dim?: number }[] };
+}): string | null {
+	const polyDesc = detail.PolylineGroup?.polylineDesc?.[0];
+	const polyCrd = polyDesc?.crd;
+	const dim = polyDesc?.dim ?? 2;
+	if (polyCrd && polyCrd.length >= dim * 2) {
+		const points: [number, number][] = [];
+		for (let i = 0; i < polyCrd.length; i += dim) {
+			points.push([polyCrd[i + 1], polyCrd[i]]);
+		}
+		return JSON.stringify(points);
+	}
+	return null;
+}

@@ -25,7 +25,9 @@ import {
 const db = createDb(env.DB);
 const lang = langFromParams(Astro.params);
 const filter = parseFilter(Astro.url);
-const { coreOnly, days: daysFilter, category } = filter;
+const coreOnly = Astro.url.searchParams.get("hours") === "core";
+const daysFilter = filter.days ?? "today";
+const category = "";
 const { stops, operators, lines, oldestDate, haiku } = await all({
 	stops: () => getStopSummaries(db),
 	operators: () => getOperatorSummaries(db, filter),

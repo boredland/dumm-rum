@@ -45,7 +45,8 @@ const stopSlug = slug;
 const stopIds = configured ? [configured.id] : dynamicStop!.stopIds;
 
 const filter = parseFilter(Astro.url);
-const { coreOnly, days: daysFilter } = filter;
+const coreOnly = Astro.url.searchParams.get("hours") === "core";
+const daysFilter = filter.days ?? "today";
 const { stats, oldestDate } = await all({
 	stats: () => getStopStats(db, stopIds, filter),
 	oldestDate: () => getOldestDate(db, { stopIds }),

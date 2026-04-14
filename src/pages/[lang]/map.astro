@@ -70,6 +70,12 @@ function createVehicleIcon(cat) {
 	});
 }
 
+const iconCache = new Map();
+function getVehicleIcon(cat) {
+	if (!iconCache.has(cat)) iconCache.set(cat, createVehicleIcon(cat));
+	return iconCache.get(cat);
+}
+
 function formatTime(isoString) {
 	if (!isoString) return "?";
 	try {
@@ -155,7 +161,6 @@ async function fetchAndRender() {
 			const cat = v.category || "Bus";
 			const visible = matchesFilter(cat, activeFilter);
 
-			const prev = vehicleState.get(v.id);
 			const poly = v.polyline ? JSON.parse(v.polyline) : null;
 			vehicleState.set(v.id, {
 				lat: v.lat, lon: v.lon,
@@ -168,13 +173,12 @@ async function fetchAndRender() {
 
 			if (markers.has(v.id)) {
 				const m = markers.get(v.id);
-				m.setIcon(createVehicleIcon(cat));
 				m.setPopupContent(popupContent(v));
 				m.setTooltipContent(`${v.line} → ${shortName(v.destination)}`);
 				if (visible && !map.hasLayer(m)) m.addTo(map);
 				else if (!visible && map.hasLayer(m)) m.remove();
 			} else {
-				const m = L.marker([v.lat, v.lon], { icon: createVehicleIcon(cat) });
+				const m = L.marker([v.lat, v.lon], { icon: getVehicleIcon(cat) });
 				m.bindPopup(popupContent(v));
 				m.bindTooltip(`${v.line} → ${shortName(v.destination)}`, { direction: "top" });
 				m._vehicleCategory = cat;

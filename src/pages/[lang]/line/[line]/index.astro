@@ -17,7 +17,8 @@ const db = createDb(env.DB);
 const lang = langFromParams(Astro.params);
 const line = decodeURIComponent(Astro.params.line!);
 const filter = parseFilter(Astro.url);
-const { coreOnly, days: daysFilter } = filter;
+const coreOnly = Astro.url.searchParams.get("hours") === "core";
+const daysFilter = filter.days ?? "today";
 
 const { lineStats, oldestDate } = await all({
 	lineStats: () => getLineStats(db, line, filter),
