@@ -514,7 +514,7 @@ export async function runCollection(
 
 	await markGhosts(db, today);
 
-	const enqueued = await enqueueInterestingJourneys(db, queue, today);
+	const enqueued = await enqueueJourneys(db, queue, today);
 	if (enqueued > 0) console.log(`enqueued ${enqueued} journeys for polling`);
 
 	await Promise.all([
@@ -739,7 +739,7 @@ async function markGhosts(db: Db, today: string): Promise<void> {
 		);
 }
 
-async function enqueueInterestingJourneys(
+async function enqueueJourneys(
 	db: Db,
 	queue: Queue<JourneyPollMessage>,
 	today: string,
@@ -754,11 +754,6 @@ async function enqueueInterestingJourneys(
 			and(
 				eq(journeyRuns.dayOfOperation, today),
 				sql`${journeyRuns.pollState} IS NULL`,
-				or(
-					eq(journeyRuns.cancelled, 1),
-					eq(journeyRuns.partCancelled, 1),
-					and(eq(journeyRuns.wasTracked, 0), eq(journeyRuns.cancelled, 0)),
-				),
 			),
 		);
 
@@ -783,7 +778,7 @@ async function enqueueInterestingJourneys(
 	}
 
 	const QUEUE_BATCH_LIMIT = 100;
-	const STAGGER_WINDOW_S = 600;
+	const STAGGER_WINDOW_S = 5400;
 	for (let i = 0; i < candidates.length; i += QUEUE_BATCH_LIMIT) {
 		const batch = candidates.slice(i, i + QUEUE_BATCH_LIMIT);
 		await queue.sendBatch(
