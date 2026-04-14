@@ -1,0 +1,196 @@
+---
+import Layout from "../../layouts/Layout.astro";
+import { langFromParams, t } from "../../lib/i18n";
+
+const lang = langFromParams(Astro.params);
+---
+
+<Layout title={t(lang, "map.title")} lang={lang}>
+	<div class="mb-3 flex items-center justify-between">
+		<a href={`/${lang}`} class="text-sm text-muted hover:text-emphasis transition-colors">&larr; {t(lang, "nav.back")}</a>
+		<span id="vehicle-count" class="text-sm text-muted"></span>
+	</div>
+
+	<div id="map" class="rounded-lg border border-border overflow-hidden" style="height: calc(100dvh - 180px); min-height: 400px;"></div>
+
+	<div class="mt-3 flex flex-wrap items-center gap-2">
+		<button data-cat="all" class="cat-pill px-2.5 py-1 text-xs font-medium rounded-full border border-border cursor-pointer transition-colors bg-surface-hover text-emphasis">{t(lang, "filter.all")}</button>
+		<button data-cat="U-Bahn" class="cat-pill px-2.5 py-1 text-xs font-medium rounded-full border border-border cursor-pointer transition-colors text-muted">U-Bahn</button>
+		<button data-cat="S" class="cat-pill px-2.5 py-1 text-xs font-medium rounded-full border border-border cursor-pointer transition-colors text-muted">S-Bahn</button>
+		<button data-cat="Tram" class="cat-pill px-2.5 py-1 text-xs font-medium rounded-full border border-border cursor-pointer transition-colors text-muted">Tram</button>
+		<button data-cat="Bus" class="cat-pill px-2.5 py-1 text-xs font-medium rounded-full border border-border cursor-pointer transition-colors text-muted">Bus</button>
+		<button data-cat="RE,RB" class="cat-pill px-2.5 py-1 text-xs font-medium rounded-full border border-border cursor-pointer transition-colors text-muted">RE/RB</button>
+		<span class="ml-auto text-xs text-dimmed" id="last-update"></span>
+	</div>
+</Layout>
+
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<script is:inline src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+<script is:inline define:vars={{ lang, noVehiclesText: t(lang, "map.no_vehicles"), vehiclesText: t(lang, "map.vehicles"), lastUpdateText: t(lang, "map.last_update") }}>
+const CATEGORY_COLORS = {
+	"U-Bahn": "#0065ae",
+	"S": "#00843d",
+	"S-Bahn": "#00843d",
+	"Tram": "#c4122e",
+	"Bus": "#93559a",
+	"RE": "#ec6608",
+	"RB": "#ec6608",
+	"RE,RB": "#ec6608",
+};
+
+const CATEGORY_RADIUS = {
+	"U-Bahn": 7,
+	"S": 7,
+	"S-Bahn": 7,
+	"Tram": 6,
+	"Bus": 5,
+	"RE": 7,
+	"RB": 7,
+};
+
+function categoryColor(cat) {
+	return CATEGORY_COLORS[cat] || "#6e7681";
+}
+
+function categoryRadius(cat) {
+	return CATEGORY_RADIUS[cat] || 6;
+}
+
+function formatTime(isoString) {
+	if (!isoString) return "?";
+	try {
+		const d = new Date(isoString);
+		if (isNaN(d.getTime())) {
+			const match = isoString.match(/(\d{2}):(\d{2})/);
+			return match ? `${match[1]}:${match[2]}` : isoString;
+		}
+		return d.toLocaleTimeString(lang, { hour: "2-digit", minute: "2-digit" });
+	} catch {
+		return isoString;
+	}
+}
+
+function matchesFilter(cat, filter) {
+	if (filter === "all") return true;
+	if (filter === "RE,RB") return cat === "RE" || cat === "RB";
+	return cat === filter || (filter === "S" && cat === "S-Bahn");
+}
+
+let map;
+let markers = new Map();
+let activeFilter = "all";
+
+function initMap() {
+	if (map) return;
+	const el = document.getElementById("map");
+	if (!el) return;
+
+	map = L.map(el, { zoomControl: true }).setView([50.11, 8.68], 12);
+	L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+		attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+		maxZoom: 18,
+	}).addTo(map);
+}
+
+async function fetchAndRender() {
+	try {
+		const resp = await fetch("/api/live-map");
+		if (!resp.ok) return;
+		const data = await resp.json();
+		const vehicles = data.vehicles || [];
+
+		const seen = new Set();
+
+		for (const v of vehicles) {
+			seen.add(v.id);
+			const cat = v.category || "Bus";
+			const visible = matchesFilter(cat, activeFilter);
+
+			if (markers.has(v.id)) {
+				const m = markers.get(v.id);
+				m.setLatLng([v.lat, v.lon]);
+				m.setStyle({ color: categoryColor(cat), fillColor: categoryColor(cat) });
+				m.setPopupContent(popupContent(v));
+				m.setTooltipContent(`${v.line} → ${shortName(v.destination)}`);
+				if (visible && !map.hasLayer(m)) m.addTo(map);
+				else if (!visible && map.hasLayer(m)) m.remove();
+			} else {
+				const m = L.circleMarker([v.lat, v.lon], {
+					radius: categoryRadius(cat),
+					color: categoryColor(cat),
+					fillColor: categoryColor(cat),
+					fillOpacity: 0.85,
+					weight: 1.5,
+				});
+				m.bindPopup(popupContent(v));
+				m.bindTooltip(`${v.line} → ${shortName(v.destination)}`, { direction: "top", offset: [0, -8] });
+				m._vehicleCategory = cat;
+				if (visible) m.addTo(map);
+				markers.set(v.id, m);
+			}
+		}
+
+		for (const [id, m] of markers) {
+			if (!seen.has(id)) {
+				m.remove();
+				markers.delete(id);
+			}
+		}
+
+		const visibleCount = vehicles.filter(v => matchesFilter(v.category || "Bus", activeFilter)).length;
+		const countEl = document.getElementById("vehicle-count");
+		if (countEl) countEl.textContent = vehicles.length === 0 ? noVehiclesText : `${visibleCount} ${vehiclesText}`;
+
+		const updateEl = document.getElementById("last-update");
+		if (updateEl) {
+			const now = new Date();
+			updateEl.textContent = `${lastUpdateText}: ${now.toLocaleTimeString(lang, { hour: "2-digit", minute: "2-digit", second: "2-digit" })}`;
+		}
+	} catch (e) {
+		console.error("live-map fetch failed:", e);
+	}
+}
+
+function popupContent(v) {
+	return `<strong>${v.line}</strong> → ${shortName(v.destination)}<br/>${v.operator || ""}<br/><span style="color:#656d76">Position: ${formatTime(v.reportedAt)}</span>`;
+}
+
+function shortName(name) {
+	return (name || "").replace(/Frankfurt \(Main\)\s*/g, "");
+}
+
+function applyFilter(cat) {
+	activeFilter = cat;
+	for (const pill of document.querySelectorAll(".cat-pill")) {
+		const match = pill.dataset.cat === cat;
+		pill.classList.toggle("bg-surface-hover", match);
+		pill.classList.toggle("text-emphasis", match);
+		pill.classList.toggle("text-muted", !match);
+	}
+	for (const [, m] of markers) {
+		const visible = matchesFilter(m._vehicleCategory, cat);
+		if (visible && !map.hasLayer(m)) m.addTo(map);
+		else if (!visible && map.hasLayer(m)) m.remove();
+	}
+	const total = markers.size;
+	let visibleCount = 0;
+	for (const [, m] of markers) {
+		if (matchesFilter(m._vehicleCategory, activeFilter)) visibleCount++;
+	}
+	const countEl = document.getElementById("vehicle-count");
+	if (countEl) countEl.textContent = total === 0 ? noVehiclesText : `${visibleCount} ${vehiclesText}`;
+}
+
+function init() {
+	initMap();
+	fetchAndRender();
+	setInterval(fetchAndRender, 60_000);
+
+	for (const pill of document.querySelectorAll(".cat-pill")) {
+		pill.addEventListener("click", () => applyFilter(pill.dataset.cat));
+	}
+}
+
+document.addEventListener("astro:page-load", init);
+</script>

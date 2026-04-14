@@ -102,6 +102,11 @@ const translations = {
 
 		"home.ghost": "Geisterfahrten",
 
+		"map.title": "Livekarte",
+		"map.vehicles": "Fahrzeuge",
+		"map.last_update": "Letztes Update",
+		"map.no_vehicles": "Keine aktiven Fahrzeuge",
+
 		"status.cancelled": "❌",
 		"status.ghost": "👻",
 		"status.delayed": "⏳",
@@ -207,6 +212,11 @@ const translations = {
 		"filter.on_time": "On time",
 
 		"home.ghost": "ghost departures",
+
+		"map.title": "Live Map",
+		"map.vehicles": "Vehicles",
+		"map.last_update": "Last update",
+		"map.no_vehicles": "No active vehicles",
 
 		"status.cancelled": "❌",
 		"status.ghost": "👻",
