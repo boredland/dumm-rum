@@ -83,7 +83,7 @@ export async function processJourneyBatch(
 					});
 				}
 
-				await upsertJourneyRun(db, journeyRef, detail, now);
+				await upsertJourneyRun(db, journeyRef, dayOfOperation, detail, now);
 				await upsertJourneyStops(db, journeyRef, dayOfOperation, stops);
 
 				const product = detail.Product?.[0];
@@ -122,7 +122,13 @@ export async function processJourneyBatch(
 				});
 			}
 
-			await upsertJourneyRunFromMgate(db, journeyRef, mgateResult, now);
+			await upsertJourneyRunFromMgate(
+				db,
+				journeyRef,
+				dayOfOperation,
+				mgateResult,
+				now,
+			);
 			await upsertMgateStops(db, journeyRef, dayOfOperation, mgStops);
 
 			const mgLine = mgateResult.product?.line ?? mgateResult.product?.name;
@@ -232,6 +238,7 @@ async function handlePollResult(
 async function upsertJourneyRun(
 	db: Db,
 	ref: string,
+	dayOfOperation: string,
 	detail: JourneyDetail,
 	snapshotAt: string,
 ): Promise<void> {
@@ -258,7 +265,7 @@ async function upsertJourneyRun(
 		.insert(journeyRuns)
 		.values({
 			journeyRef: ref,
-			dayOfOperation: detail.dayOfOperation,
+			dayOfOperation,
 			line,
 			category: product?.catOut ?? null,
 			operator: product?.operator ?? null,
@@ -363,6 +370,7 @@ async function upsertJourneyStops(
 async function upsertJourneyRunFromMgate(
 	db: Db,
 	ref: string,
+	dayOfOperation: string,
 	mg: import("./mgate").MgateJourneyDetail,
 	snapshotAt: string,
 ): Promise<void> {
@@ -397,7 +405,7 @@ async function upsertJourneyRunFromMgate(
 		.insert(journeyRuns)
 		.values({
 			journeyRef: ref,
-			dayOfOperation: mg.dayOfOperation ?? "",
+			dayOfOperation,
 			line,
 			category: mg.product?.catOut ?? null,
 			operator: mg.product?.operator ?? null,
