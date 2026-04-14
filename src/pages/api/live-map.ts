@@ -70,6 +70,7 @@ export const GET: APIRoute = async () => {
 					eq(journeyRuns.dayOfOperation, today),
 					eq(journeyRuns.cancelled, 0),
 					eq(journeyRuns.wasTracked, 0),
+					eq(journeyRuns.pollState, "done"),
 					sql`(${journeyRuns.destArrTime} >= ${nowTime} OR ${journeyRuns.destArrTime} = ${journeyRuns.originDepTime})`,
 					sql`${journeyRuns.originDepTime} <= ${nowTime}`,
 				),
