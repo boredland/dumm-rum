@@ -537,7 +537,7 @@ export async function getLineDayJourneys(db: Db, line: string, date: string) {
 			rtDate: journeyRuns.dayOfOperation,
 			rtTime: sql<
 				string | null
-			>`(SELECT js.rt_dep_time FROM journey_stops js WHERE js.journey_ref = ${journeyRuns.journeyRef} AND js.day_of_operation = ${journeyRuns.dayOfOperation} AND js.route_idx = 0)`.as(
+			>`(SELECT js.rt_dep_time FROM journey_stops js WHERE js.journey_ref = "journey_runs"."journey_ref" AND js.day_of_operation = "journey_runs"."day_of_operation" AND js.route_idx = 0)`.as(
 				"rt_time",
 			),
 			direction: journeyRuns.destName,
@@ -566,7 +566,7 @@ export async function getOperatorDayJourneys(
 			rtDate: journeyRuns.dayOfOperation,
 			rtTime: sql<
 				string | null
-			>`(SELECT js.rt_dep_time FROM journey_stops js WHERE js.journey_ref = ${journeyRuns.journeyRef} AND js.day_of_operation = ${journeyRuns.dayOfOperation} AND js.route_idx = 0)`.as(
+			>`(SELECT js.rt_dep_time FROM journey_stops js WHERE js.journey_ref = "journey_runs"."journey_ref" AND js.day_of_operation = "journey_runs"."day_of_operation" AND js.route_idx = 0)`.as(
 				"rt_time",
 			),
 			line: journeyRuns.line,
