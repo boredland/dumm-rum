@@ -54,17 +54,16 @@ function categoryColor(cat) {
 }
 
 function createVehicleIcon(cat, sleeping) {
-	const color = categoryColor(cat);
 	const iconUrl = CATEGORY_ICON_URLS[cat] || CATEGORY_ICON_URLS["Bus"];
 	const opacity = sleeping ? "opacity:0.5;" : "";
 	const zzz = sleeping ? `<span style="position:absolute;top:-8px;right:-6px;font-size:10px;line-height:1">💤</span>` : "";
 	return L.divIcon({
 		className: "",
-		html: `<div style="position:relative;${opacity}background:${color};border-radius:50%;width:32px;height:32px;display:flex;align-items:center;justify-content:center;border:2px solid white;box-shadow:0 2px 6px rgba(0,0,0,.35)"><img src="${iconUrl}" width="20" height="20" style="filter:brightness(0) invert(1)" />${zzz}</div>`,
-		iconSize: [32, 32],
-		iconAnchor: [16, 16],
-		popupAnchor: [0, -18],
-		tooltipAnchor: [0, -18],
+		html: `<div style="position:relative;${opacity}"><img src="${iconUrl}" width="30" height="30" style="border-radius:50%;box-shadow:0 2px 6px rgba(0,0,0,.35)" />${zzz}</div>`,
+		iconSize: [30, 30],
+		iconAnchor: [15, 15],
+		popupAnchor: [0, -17],
+		tooltipAnchor: [0, -17],
 	});
 }
 
