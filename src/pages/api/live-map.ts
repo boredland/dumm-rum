@@ -1,8 +1,9 @@
 import { env } from "cloudflare:workers";
 import type { APIRoute } from "astro";
-import { and, eq, gte, sql } from "drizzle-orm";
+import { and, asc, eq, gte, inArray, isNotNull, sql } from "drizzle-orm";
 import { createDb } from "../../db/client";
-import { journeyPositions, journeyRuns } from "../../db/schema";
+import { coalesce } from "../../db/helpers";
+import { journeyPositions, journeyRuns, journeyStops } from "../../db/schema";
 import { nowBerlin, todayBerlin } from "../../lib/utils";
 
 export const GET: APIRoute = async () => {
@@ -11,22 +12,7 @@ export const GET: APIRoute = async () => {
 	const cutoff = new Date(Date.now() - 10 * 60 * 1000).toISOString();
 	const nowTime = nowBerlin().format("HH:mm:ss");
 
-	const stopsSubquery = sql<string | null>`(
-		SELECT json_group_array(json_object(
-			'lat', js.lat, 'lon', js.lon,
-			'arr', COALESCE(js.rt_arr_time, js.arr_time, js.dep_time),
-			'dep', COALESCE(js.rt_dep_time, js.dep_time)
-		)) FROM (
-			SELECT js.lat, js.lon, js.rt_arr_time, js.arr_time, js.dep_time, js.rt_dep_time
-			FROM journey_stops js
-			WHERE js.journey_ref = "journey_runs"."journey_ref"
-			AND js.day_of_operation = "journey_runs"."day_of_operation"
-			AND js.cancelled = 0 AND js.lat IS NOT NULL
-			ORDER BY js.route_idx
-		) js
-	)`;
-
-	const [vehicles, ghosts] = await Promise.all([
+	const [trackedRows, ghostRows] = await Promise.all([
 		db
 			.select({
 				id: journeyRuns.journeyRef,
@@ -41,8 +27,6 @@ export const GET: APIRoute = async () => {
 				destArrTime: journeyRuns.destArrTime,
 				originDepTime: journeyRuns.originDepTime,
 				polyline: journeyRuns.polyline,
-				stops: stopsSubquery.as("stops"),
-				ghost: sql<number>`0`.as("ghost"),
 			})
 			.from(journeyRuns)
 			.innerJoin(
@@ -59,7 +43,7 @@ export const GET: APIRoute = async () => {
 					eq(journeyRuns.cancelled, 0),
 					eq(
 						journeyPositions.id,
-						sql`(SELECT jp2.id FROM journey_positions jp2 WHERE jp2.journey_ref = ${journeyRuns.journeyRef} AND jp2.day_of_operation = ${journeyRuns.dayOfOperation} ORDER BY jp2.captured_at DESC LIMIT 1)`,
+						sql`(SELECT jp2.id FROM journey_positions jp2 WHERE jp2.journey_ref = "journey_runs"."journey_ref" AND jp2.day_of_operation = "journey_runs"."day_of_operation" ORDER BY jp2.captured_at DESC LIMIT 1)`,
 					),
 					gte(journeyPositions.capturedAt, cutoff),
 					sql`${journeyRuns.destArrTime} >= ${nowTime}`,
@@ -74,14 +58,9 @@ export const GET: APIRoute = async () => {
 				operator: journeyRuns.operator,
 				origin: journeyRuns.originName,
 				destination: journeyRuns.destName,
-				lat: sql<number>`NULL`.as("lat"),
-				lon: sql<number>`NULL`.as("lon"),
-				reportedAt: sql<string>`NULL`.as("reported_at"),
 				destArrTime: journeyRuns.destArrTime,
 				originDepTime: journeyRuns.originDepTime,
 				polyline: journeyRuns.polyline,
-				stops: stopsSubquery.as("stops"),
-				ghost: sql<number>`1`.as("ghost"),
 			})
 			.from(journeyRuns)
 			.where(
@@ -94,6 +73,73 @@ export const GET: APIRoute = async () => {
 				),
 			),
 	]);
+
+	const allIds = [
+		...trackedRows.map((v) => v.id),
+		...ghostRows.map((v) => v.id),
+	];
+
+	const stopRows =
+		allIds.length > 0
+			? await db
+					.select({
+						journeyRef: journeyStops.journeyRef,
+						lat: journeyStops.lat,
+						lon: journeyStops.lon,
+						arr: coalesce<string>(
+							journeyStops.rtArrTime,
+							journeyStops.arrTime,
+							journeyStops.depTime,
+						),
+						dep: coalesce<string>(journeyStops.rtDepTime, journeyStops.depTime),
+					})
+					.from(journeyStops)
+					.where(
+						and(
+							eq(journeyStops.dayOfOperation, today),
+							inArray(journeyStops.journeyRef, allIds),
+							eq(journeyStops.cancelled, 0),
+							isNotNull(journeyStops.lat),
+						),
+					)
+					.orderBy(journeyStops.journeyRef, asc(journeyStops.routeIdx))
+			: [];
+
+	const stopsByJourney = new Map<string, typeof stopRows>();
+	for (const s of stopRows) {
+		const arr = stopsByJourney.get(s.journeyRef) ?? [];
+		arr.push(s);
+		stopsByJourney.set(s.journeyRef, arr);
+	}
+
+	const vehicles = trackedRows.map((v) => ({
+		...v,
+		stops: JSON.stringify(
+			(stopsByJourney.get(v.id) ?? []).map((s) => ({
+				lat: s.lat,
+				lon: s.lon,
+				arr: s.arr,
+				dep: s.dep,
+			})),
+		),
+		ghost: 0,
+	}));
+
+	const ghosts = ghostRows.map((v) => ({
+		...v,
+		lat: null as number | null,
+		lon: null as number | null,
+		reportedAt: null as string | null,
+		stops: JSON.stringify(
+			(stopsByJourney.get(v.id) ?? []).map((s) => ({
+				lat: s.lat,
+				lon: s.lon,
+				arr: s.arr,
+				dep: s.dep,
+			})),
+		),
+		ghost: 1,
+	}));
 
 	return Response.json(
 		{ vehicles: [...vehicles, ...ghosts], updatedAt: new Date().toISOString() },
