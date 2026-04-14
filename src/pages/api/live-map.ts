@@ -4,7 +4,7 @@ import { and, asc, eq, gte, inArray, isNotNull, sql } from "drizzle-orm";
 import { createDb } from "../../db/client";
 import { coalesce } from "../../db/helpers";
 import { journeyPositions, journeyRuns, journeyStops } from "../../db/schema";
-import { nowBerlin, todayBerlin } from "../../lib/utils";
+import { nowBerlin } from "../../lib/utils";
 
 export const GET: APIRoute = async () => {
 	const db = createDb(env.DB);
@@ -71,7 +71,7 @@ export const GET: APIRoute = async () => {
 					eq(journeyRuns.cancelled, 0),
 					eq(journeyRuns.wasTracked, 0),
 					eq(journeyRuns.pollState, "done"),
-					sql`(${journeyRuns.destArrTime} >= ${nowTime} OR ${journeyRuns.destArrTime} = ${journeyRuns.originDepTime})`,
+					sql`(${journeyRuns.destArrTime} >= ${nowTime} OR (${journeyRuns.destArrTime} = ${journeyRuns.originDepTime} AND ${journeyRuns.originDepTime} >= time(${nowTime}, '-3 hours')))`,
 					sql`${journeyRuns.originDepTime} <= ${nowTime}`,
 				),
 			),
