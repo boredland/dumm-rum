@@ -191,109 +191,6 @@ async function getStatsFallback(
 	};
 }
 
-export interface StationSummary {
-	cancelled: number;
-	ghost: number;
-	delayed: number;
-	total: number;
-	avgDelay: number | null;
-	categories: string[];
-}
-
-async function getStationSummaries(
-	db: Db,
-	stations: Station[],
-	filter: QueryFilter = {},
-): Promise<Map<string, StationSummary>> {
-	const depDaysCond = daysCondition(departures.date, filter.days);
-	const statsDaysCond = daysCondition(stationDailyStats.date, filter.days);
-	const catCond = categoryCondition(filter.category);
-	const useDepartures = filter.coreOnly || !!catCond;
-
-	const [statsRows, catRows] = await Promise.all([
-		useDepartures
-			? db
-					.select({
-						stationId: departures.stationId,
-						cancelled: sum(departures.cancelled).as("cancelled"),
-						ghost: ghostSql.as("ghost"),
-						delayed: delayedSql.as("delayed"),
-						total: count().as("total"),
-						avgDelay: avgDelaySql.as("avg_delay"),
-					})
-					.from(departures)
-					.where(
-						and(filter.coreOnly ? CORE_HOURS : undefined, depDaysCond, catCond),
-					)
-					.groupBy(departures.stationId)
-			: db
-					.select({
-						stationId: stationDailyStats.stationId,
-						cancelled: sum(stationDailyStats.cancelled).as("cancelled"),
-						ghost: sum(stationDailyStats.ghost).as("ghost"),
-						delayed: sum(stationDailyStats.delayed).as("delayed"),
-						total: sum(stationDailyStats.total).as("total"),
-						avgDelay: sql<
-							number | null
-						>`SUM(${stationDailyStats.avgDelay} * ${stationDailyStats.total}) / NULLIF(SUM(CASE WHEN ${stationDailyStats.avgDelay} IS NOT NULL THEN ${stationDailyStats.total} END), 0)`.as(
-							"avg_delay",
-						),
-					})
-					.from(stationDailyStats)
-					.where(statsDaysCond)
-					.groupBy(stationDailyStats.stationId),
-		db
-			.selectDistinct({
-				stationId: departures.stationId,
-				category: departures.category,
-			})
-			.from(departures)
-			.where(
-				and(
-					isNotNull(departures.category),
-					gte(departures.date, sql`date('now', '-30 days')`),
-				),
-			),
-	]);
-
-	const statsMap = new Map(
-		statsRows.map((r) => [
-			r.stationId,
-			{
-				cancelled: Number(r.cancelled ?? 0),
-				ghost: Number(r.ghost ?? 0),
-				delayed: Number(r.delayed ?? 0),
-				total: Number(r.total ?? 0),
-				avgDelay: r.avgDelay,
-			},
-		]),
-	);
-
-	const catMap = new Map<string, string[]>();
-	for (const row of catRows) {
-		const cats = catMap.get(row.stationId) ?? [];
-		if (row.category) cats.push(row.category);
-		catMap.set(row.stationId, cats);
-	}
-
-	return new Map(
-		stations.map((s) => {
-			const st = statsMap.get(s.id);
-			return [
-				s.id,
-				{
-					cancelled: st?.cancelled ?? 0,
-					ghost: st?.ghost ?? 0,
-					delayed: st?.delayed ?? 0,
-					total: st?.total ?? 0,
-					avgDelay: st?.avgDelay ?? null,
-					categories: catMap.get(s.id) ?? [],
-				},
-			];
-		}),
-	);
-}
-
 export async function getDayDepartures(db: Db, station: Station, date: string) {
 	return db
 		.select({
@@ -768,24 +665,6 @@ export async function getOldestDate(
 		.select({ date: sql<string>`MIN(${stationDailyStats.date})` })
 		.from(stationDailyStats);
 	return rows[0]?.date ?? null;
-}
-
-async function getStationLineMap(db: Db): Promise<Map<string, string[]>> {
-	const rows = await db
-		.selectDistinct({
-			stationId: departures.stationId,
-			line: departures.line,
-		})
-		.from(departures)
-		.where(gte(departures.date, sql`date('now', '-7 days')`));
-
-	const map = new Map<string, string[]>();
-	for (const r of rows) {
-		const lines = map.get(r.stationId) ?? [];
-		lines.push(r.line);
-		map.set(r.stationId, lines);
-	}
-	return map;
 }
 
 export interface StopSummary {

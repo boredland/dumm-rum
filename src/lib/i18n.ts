@@ -7,7 +7,7 @@ const translations = {
 		"home.subtitle": "Wissen, ob man dumm rumsteht",
 		"home.methodology_title": "Wie wir messen",
 		"home.methodology_collection":
-			"Alle 3 Minuten fragen wir die RMV-Echtzeitdaten f\u00fcr zwei Haltestellen ab (ca. alle 15 Minuten pro Haltestelle) und speichern Abfahrten, Ausf\u00e4lle und Versp\u00e4tungen.",
+			"Alle zwei Stunden rufen wir den RMV-Echtzeit-Feed f\u00fcr alle erfassten Haltestellen ab und speichern die Abfahrtszeiten. Anschlie\u00dfend wird jede Fahrt einzeln \u00fcber die HAFAS-API f\u00fcr Fahrtdetails abgefragt, um Echtzeitdaten f\u00fcr jede Haltestelle, Ausf\u00e4lle und Fahrzeugpositionen zu erfassen.",
 		"home.methodology_cancellation":
 			"Die Ausfallquote ist der Anteil der ausgefallenen Abfahrten an der Gesamtzahl.",
 		"home.methodology_ghost":
@@ -113,7 +113,7 @@ const translations = {
 		"home.subtitle": "Know if you\u2019re standing around for nothing",
 		"home.methodology_title": "How we measure",
 		"home.methodology_collection":
-			"Every 3 minutes we poll the RMV realtime feed for two stations (approximately every 15 minutes per station) and store departures, cancellations, and delays.",
+			"Every 2 hours we poll the RMV realtime feed for all tracked stations and store departures. Each journey is then polled individually via the HAFAS journey detail API to capture per-stop realtime data, cancellations, and vehicle positions.",
 		"home.methodology_cancellation":
 			"The cancellation rate is the share of cancelled departures out of the total.",
 		"home.methodology_ghost":

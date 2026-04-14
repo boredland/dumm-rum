@@ -483,16 +483,22 @@ async function materializeKnownStops(db: Db): Promise<void> {
 					"journey_count",
 				),
 			cancelled: sql<number>`SUM(${journeyStops.cancelled})`.as("cancelled"),
-			lines:
-				sql<string>`(SELECT GROUP_CONCAT(DISTINCT ${journeyRuns.line}) FROM ${journeyRuns} WHERE ${journeyRuns.journeyRef} = ${journeyStops.journeyRef} AND ${journeyRuns.dayOfOperation} = ${journeyStops.dayOfOperation})`.as(
-					"lines",
-				),
+			lines: sql<string>`GROUP_CONCAT(DISTINCT ${journeyRuns.line})`.as(
+				"lines",
+			),
 			categories:
-				sql<string>`(SELECT GROUP_CONCAT(DISTINCT ${journeyRuns.category}) FROM ${journeyRuns} WHERE ${journeyRuns.journeyRef} = ${journeyStops.journeyRef} AND ${journeyRuns.dayOfOperation} = ${journeyStops.dayOfOperation})`.as(
+				sql<string>`GROUP_CONCAT(DISTINCT ${journeyRuns.category})`.as(
 					"categories",
 				),
 		})
 		.from(journeyStops)
+		.leftJoin(
+			journeyRuns,
+			and(
+				eq(journeyRuns.journeyRef, journeyStops.journeyRef),
+				eq(journeyRuns.dayOfOperation, journeyStops.dayOfOperation),
+			),
+		)
 		.where(sql`${journeyStops.dayOfOperation} >= date('now', '-7 days')`)
 		.groupBy(journeyStops.stopId);
 
@@ -821,23 +827,15 @@ async function enqueueJourneys(
 
 	if (candidates.length === 0) return 0;
 
-	const refs = candidates.map((c) => c.journeyRef);
-	for (let i = 0; i < refs.length; i += 50) {
-		const batch = refs.slice(i, i + 50);
-		await db
-			.update(journeyRuns)
-			.set({ pollState: "queued" })
-			.where(
-				and(
-					eq(journeyRuns.dayOfOperation, today),
-					sql`${journeyRuns.pollState} IS NULL`,
-					sql`${journeyRuns.journeyRef} IN (${sql.join(
-						batch.map((r) => sql`${r}`),
-						sql`,`,
-					)})`,
-				),
-			);
-	}
+	await db
+		.update(journeyRuns)
+		.set({ pollState: "queued" })
+		.where(
+			and(
+				eq(journeyRuns.dayOfOperation, today),
+				sql`${journeyRuns.pollState} IS NULL`,
+			),
+		);
 
 	const QUEUE_BATCH_LIMIT = 100;
 	const STAGGER_WINDOW_S = 5400;
