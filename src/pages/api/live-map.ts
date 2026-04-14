@@ -1,6 +1,6 @@
 import { env } from "cloudflare:workers";
 import type { APIRoute } from "astro";
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq, gte, sql } from "drizzle-orm";
 import { createDb } from "../../db/client";
 import { journeyPositions, journeyRuns } from "../../db/schema";
 import { todayBerlin } from "../../lib/utils";
@@ -8,6 +8,7 @@ import { todayBerlin } from "../../lib/utils";
 export const GET: APIRoute = async () => {
 	const db = createDb(env.DB);
 	const today = todayBerlin();
+	const cutoff = new Date(Date.now() - 30 * 60 * 1000).toISOString();
 
 	const vehicles = await db
 		.select({
@@ -39,6 +40,7 @@ export const GET: APIRoute = async () => {
 					journeyPositions.id,
 					sql`(SELECT jp2.id FROM journey_positions jp2 WHERE jp2.journey_ref = ${journeyRuns.journeyRef} AND jp2.day_of_operation = ${journeyRuns.dayOfOperation} ORDER BY jp2.captured_at DESC LIMIT 1)`,
 				),
+				gte(journeyPositions.capturedAt, cutoff),
 			),
 		);
 
