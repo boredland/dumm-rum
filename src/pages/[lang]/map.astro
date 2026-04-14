@@ -148,11 +148,15 @@ async function fetchAndRender() {
 			const cat = v.category || "Bus";
 			const visible = matchesFilter(cat, activeFilter);
 
+			const prev = vehicleState.get(v.id);
+			const poly = v.polyline ? JSON.parse(v.polyline) : null;
 			vehicleState.set(v.id, {
 				lat: v.lat, lon: v.lon,
 				nextLat: v.nextLat, nextLon: v.nextLon,
 				lastDepTime: v.lastDepTime, nextArrTime: v.nextArrTime,
-				polyline: v.polyline ? JSON.parse(v.polyline) : null,
+				polyline: poly,
+				startIdx: poly ? nearestPolylineIndex(poly, v.lat, v.lon) : 0,
+				endIdx: (poly && v.nextLat && v.nextLon) ? nearestPolylineIndex(poly, v.nextLat, v.nextLon) : 0,
 			});
 
 			if (markers.has(v.id)) {
@@ -269,10 +273,8 @@ function interpolatePositions() {
 
 		const progress = Math.max(0, Math.min(1, (nowSec - depSec) / (arrSec - depSec)));
 
-		if (state.polyline && state.polyline.length >= 2 && state.nextLat && state.nextLon) {
-			const startIdx = nearestPolylineIndex(state.polyline, state.lat, state.lon);
-			const endIdx = nearestPolylineIndex(state.polyline, state.nextLat, state.nextLon);
-			const pos = interpolateAlongPolyline(state.polyline, startIdx, endIdx, progress);
+		if (state.polyline && state.polyline.length >= 2 && state.endIdx > state.startIdx) {
+			const pos = interpolateAlongPolyline(state.polyline, state.startIdx, state.endIdx, progress);
 			m.setLatLng(pos);
 		} else if (state.nextLat && state.nextLon) {
 			const lat = state.lat + (state.nextLat - state.lat) * progress;
