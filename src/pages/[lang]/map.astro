@@ -11,7 +11,10 @@ const lang = langFromParams(Astro.params);
 		<span id="vehicle-count" class="text-sm text-muted"></span>
 	</div>
 
-	<div id="map" class="rounded-lg border border-border overflow-hidden" style="height: calc(100dvh - 180px); min-height: 400px;"></div>
+	<div id="map-wrap" class="relative">
+		<div id="map" class="rounded-lg border border-border overflow-hidden" style="height: calc(100dvh - 180px); min-height: 400px;"></div>
+		<button id="fullscreen-btn" class="absolute top-2 right-2 z-[1000] bg-white border border-border rounded px-2 py-1 text-sm cursor-pointer shadow hover:bg-surface-hover" aria-label="Fullscreen">&#x26F6;</button>
+	</div>
 
 	<div class="mt-3 flex flex-wrap items-center gap-2">
 		<button data-cat="all" class="cat-pill px-2.5 py-1 text-xs font-medium rounded-full border border-border cursor-pointer transition-colors bg-surface-hover text-emphasis">{t(lang, "filter.all")}</button>
@@ -397,6 +400,25 @@ function init() {
 
 	for (const pill of document.querySelectorAll(".cat-pill")) {
 		pill.addEventListener("click", () => applyFilter(pill.dataset.cat));
+	}
+
+	const fsBtn = document.getElementById("fullscreen-btn");
+	const mapWrap = document.getElementById("map-wrap");
+	if (fsBtn && mapWrap) {
+		fsBtn.addEventListener("click", () => {
+			if (document.fullscreenElement) {
+				document.exitFullscreen();
+			} else {
+				mapWrap.requestFullscreen();
+			}
+		});
+		mapWrap.addEventListener("fullscreenchange", () => {
+			const isFs = !!document.fullscreenElement;
+			const mapEl = document.getElementById("map");
+			if (mapEl) mapEl.style.height = isFs ? "100vh" : "calc(100dvh - 180px)";
+			fsBtn.textContent = isFs ? "\u2716" : "\u26F6";
+			setTimeout(() => map?.invalidateSize(), 100);
+		});
 	}
 }
 
