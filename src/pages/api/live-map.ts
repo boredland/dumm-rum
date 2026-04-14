@@ -2,7 +2,7 @@ import { env } from "cloudflare:workers";
 import type { APIRoute } from "astro";
 import { and, eq, gte, sql } from "drizzle-orm";
 import { createDb } from "../../db/client";
-import { journeyPositions, journeyRuns } from "../../db/schema";
+import { journeyPositions, journeyRuns, journeyStops } from "../../db/schema";
 import { nowBerlin, todayBerlin } from "../../lib/utils";
 
 export const GET: APIRoute = async () => {
@@ -11,7 +11,55 @@ export const GET: APIRoute = async () => {
 	const cutoff = new Date(Date.now() - 15 * 60 * 1000).toISOString();
 	const nowTime = nowBerlin().format("HH:mm:ss");
 
+	const nextStop = db.$with("next_stop").as(
+		db
+			.select({
+				journeyRef: journeyStops.journeyRef,
+				dayOfOperation: journeyStops.dayOfOperation,
+				lat: journeyStops.lat,
+				lon: journeyStops.lon,
+				arrTime:
+					sql<string>`COALESCE(${journeyStops.rtArrTime}, ${journeyStops.arrTime}, ${journeyStops.depTime})`.as(
+						"arr_time_resolved",
+					),
+				routeIdx: sql<number>`MIN(${journeyStops.routeIdx})`.as("min_idx"),
+			})
+			.from(journeyStops)
+			.where(
+				and(
+					eq(journeyStops.dayOfOperation, today),
+					eq(journeyStops.cancelled, 0),
+					sql`${journeyStops.depTime} > ${nowTime}`,
+					sql`${journeyStops.lat} IS NOT NULL`,
+				),
+			)
+			.groupBy(journeyStops.journeyRef, journeyStops.dayOfOperation),
+	);
+
+	const lastStop = db.$with("last_stop").as(
+		db
+			.select({
+				journeyRef: journeyStops.journeyRef,
+				dayOfOperation: journeyStops.dayOfOperation,
+				depTime:
+					sql<string>`COALESCE(${journeyStops.rtDepTime}, ${journeyStops.depTime})`.as(
+						"dep_time_resolved",
+					),
+				routeIdx: sql<number>`MAX(${journeyStops.routeIdx})`.as("max_idx"),
+			})
+			.from(journeyStops)
+			.where(
+				and(
+					eq(journeyStops.dayOfOperation, today),
+					eq(journeyStops.cancelled, 0),
+					sql`${journeyStops.depTime} <= ${nowTime}`,
+				),
+			)
+			.groupBy(journeyStops.journeyRef, journeyStops.dayOfOperation),
+	);
+
 	const vehicles = await db
+		.with(nextStop, lastStop)
 		.select({
 			id: journeyRuns.journeyRef,
 			line: journeyRuns.line,
@@ -25,37 +73,10 @@ export const GET: APIRoute = async () => {
 			routeIdx: journeyPositions.routeIdx,
 			destArrTime: journeyRuns.destArrTime,
 			polyline: journeyRuns.polyline,
-			nextLat: sql<number | null>`(
-				SELECT js.lat FROM journey_stops js
-				WHERE js.journey_ref = "journey_runs"."journey_ref"
-				AND js.day_of_operation = "journey_runs"."day_of_operation"
-				AND js.dep_time > ${nowTime}
-				AND js.cancelled = 0 AND js.lat IS NOT NULL
-				ORDER BY js.route_idx LIMIT 1
-			)`.as("next_lat"),
-			nextLon: sql<number | null>`(
-				SELECT js.lon FROM journey_stops js
-				WHERE js.journey_ref = "journey_runs"."journey_ref"
-				AND js.day_of_operation = "journey_runs"."day_of_operation"
-				AND js.dep_time > ${nowTime}
-				AND js.cancelled = 0 AND js.lon IS NOT NULL
-				ORDER BY js.route_idx LIMIT 1
-			)`.as("next_lon"),
-			lastDepTime: sql<string | null>`(
-				SELECT COALESCE(js.rt_dep_time, js.dep_time) FROM journey_stops js
-				WHERE js.journey_ref = "journey_runs"."journey_ref"
-				AND js.day_of_operation = "journey_runs"."day_of_operation"
-				AND js.dep_time <= ${nowTime} AND js.cancelled = 0
-				ORDER BY js.route_idx DESC LIMIT 1
-			)`.as("last_dep_time"),
-			nextArrTime: sql<string | null>`(
-				SELECT COALESCE(js.rt_arr_time, js.arr_time, js.dep_time) FROM journey_stops js
-				WHERE js.journey_ref = "journey_runs"."journey_ref"
-				AND js.day_of_operation = "journey_runs"."day_of_operation"
-				AND js.dep_time > ${nowTime}
-				AND js.cancelled = 0
-				ORDER BY js.route_idx LIMIT 1
-			)`.as("next_arr_time"),
+			nextLat: nextStop.lat,
+			nextLon: nextStop.lon,
+			lastDepTime: lastStop.depTime,
+			nextArrTime: nextStop.arrTime,
 		})
 		.from(journeyRuns)
 		.innerJoin(
@@ -63,6 +84,20 @@ export const GET: APIRoute = async () => {
 			and(
 				eq(journeyPositions.journeyRef, journeyRuns.journeyRef),
 				eq(journeyPositions.dayOfOperation, journeyRuns.dayOfOperation),
+			),
+		)
+		.leftJoin(
+			nextStop,
+			and(
+				eq(nextStop.journeyRef, journeyRuns.journeyRef),
+				eq(nextStop.dayOfOperation, journeyRuns.dayOfOperation),
+			),
+		)
+		.leftJoin(
+			lastStop,
+			and(
+				eq(lastStop.journeyRef, journeyRuns.journeyRef),
+				eq(lastStop.dayOfOperation, journeyRuns.dayOfOperation),
 			),
 		)
 		.where(
