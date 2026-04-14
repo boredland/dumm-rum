@@ -24,9 +24,6 @@ const lang = langFromParams(Astro.params);
 	</div>
 </Layout>
 
-<style>
-	.dark-tiles { filter: invert(1) hue-rotate(180deg) brightness(0.9) contrast(1.1); }
-</style>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
 <script is:inline src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
@@ -138,32 +135,9 @@ function initMap() {
 	}
 
 	map = L.map(el, { zoomControl: true }).setView([initLat, initLon], initZoom);
-	const FFM_LAT = 50.11, FFM_LON = 8.68;
-	function getSunTimes(lat, lon) {
-		const now = new Date();
-		const J0 = 2451545, D = Math.floor(now.getTime() / 86400000) - 10957;
-		const n = D - J0 + 2451545.0009 - lon / 360;
-		const Js = Math.round(n) + 0.0009 + lon / 360;
-		const M = (357.5291 + 0.98560028 * (Js - J0)) % 360;
-		const Mr = M * Math.PI / 180;
-		const C = 1.9148 * Math.sin(Mr) + 0.02 * Math.sin(2 * Mr) + 0.0003 * Math.sin(3 * Mr);
-		const L = (M + C + 180 + 102.9372) % 360;
-		const Lr = L * Math.PI / 180;
-		const decl = Math.asin(Math.sin(Lr) * Math.sin(23.4397 * Math.PI / 180));
-		const latR = lat * Math.PI / 180;
-		const cosH = (Math.sin(-0.833 * Math.PI / 180) - Math.sin(latR) * Math.sin(decl)) / (Math.cos(latR) * Math.cos(decl));
-		const H = Math.acos(Math.max(-1, Math.min(1, cosH))) * 180 / Math.PI;
-		const Jt = Js + H / 360;
-		const rise = new Date((Js - H / 360 - 2440587.5) * 86400000);
-		const set = new Date((Jt - 2440587.5) * 86400000);
-		return { rise, set };
-	}
-	const sun = getSunTimes(FFM_LAT, FFM_LON);
-	const isDark = new Date() < sun.rise || new Date() > sun.set;
 	const tiles = L.tileLayer("https://tile.memomaps.de/tilegen/{z}/{x}/{y}.png", {
 		attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &middot; <a href="https://memomaps.de/">memomaps.de</a>',
 		maxZoom: 18,
-		className: isDark ? "dark-tiles" : "",
 	});
 	const osm = L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
 		attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
