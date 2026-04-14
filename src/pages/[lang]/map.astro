@@ -24,6 +24,9 @@ const lang = langFromParams(Astro.params);
 	</div>
 </Layout>
 
+<style>
+	@keyframes ghost-shimmer { 0%, 100% { opacity: 0.3; } 50% { opacity: 0.8; } }
+</style>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
 <script is:inline src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
@@ -38,13 +41,19 @@ const CATEGORY_ICON_URLS = {
 	"RB": "/icons/reg.svg",
 };
 
-function createVehicleIcon(cat, sleeping) {
+function createVehicleIcon(cat, sleeping, ghost, delayed) {
+	if (ghost) return createGhostIcon(cat);
 	const iconUrl = CATEGORY_ICON_URLS[cat] || CATEGORY_ICON_URLS["Bus"];
 	const opacity = sleeping ? "opacity:0.5;" : "";
-	const zzz = sleeping ? `<span style="position:absolute;top:-8px;right:-6px;font-size:10px;line-height:1">💤</span>` : "";
+	const badge = sleeping
+		? `<span style="position:absolute;top:-8px;right:-6px;font-size:10px;line-height:1">💤</span>`
+		: delayed
+			? `<span style="position:absolute;top:-6px;right:-6px;font-size:9px;line-height:1;background:#cf222e;color:white;border-radius:4px;padding:1px 3px;font-weight:bold">+${delayed}</span>`
+			: "";
+	const border = delayed ? "outline:2px solid #cf222e;outline-offset:1px;" : "";
 	return L.divIcon({
 		className: "",
-		html: `<div style="position:relative;${opacity}"><img src="${iconUrl}" width="30" height="30" style="border-radius:50%;box-shadow:0 2px 6px rgba(0,0,0,.35)" />${zzz}</div>`,
+		html: `<div style="position:relative;${opacity}"><img src="${iconUrl}" width="30" height="30" style="border-radius:50%;box-shadow:0 2px 6px rgba(0,0,0,.35);${border}" />${badge}</div>`,
 		iconSize: [30, 30],
 		iconAnchor: [15, 15],
 		popupAnchor: [0, -17],
@@ -52,27 +61,25 @@ function createVehicleIcon(cat, sleeping) {
 	});
 }
 
-function createGhostIcon() {
+function createGhostIcon(cat) {
+	const iconUrl = CATEGORY_ICON_URLS[cat] || CATEGORY_ICON_URLS["Bus"];
 	return L.divIcon({
 		className: "",
-		html: `<div style="position:relative;opacity:0.6;background:#484f58;border-radius:50%;width:28px;height:28px;display:flex;align-items:center;justify-content:center;border:2px solid white;box-shadow:0 2px 6px rgba(0,0,0,.35)"><span style="font-size:16px;line-height:1">👻</span></div>`,
-		iconSize: [28, 28],
-		iconAnchor: [14, 14],
-		popupAnchor: [0, -16],
-		tooltipAnchor: [0, -16],
+		html: `<div style="position:relative;animation:ghost-shimmer 2s ease-in-out infinite"><img src="${iconUrl}" width="30" height="30" style="border-radius:50%;box-shadow:0 2px 6px rgba(0,0,0,.35)" /></div>`,
+		iconSize: [30, 30],
+		iconAnchor: [15, 15],
+		popupAnchor: [0, -17],
+		tooltipAnchor: [0, -17],
 	});
 }
 
 const iconCache = new Map();
-function getVehicleIcon(cat, sleeping, ghost) {
-	if (ghost) {
-		if (!iconCache.has("ghost")) iconCache.set("ghost", createGhostIcon());
-		return iconCache.get("ghost");
-	}
-	const key = sleeping ? `${cat}:zzz` : cat;
-	if (!iconCache.has(key)) iconCache.set(key, createVehicleIcon(cat, sleeping));
+function getVehicleIcon(cat, sleeping, ghost, delayMin) {
+	const key = ghost ? `${cat}:ghost` : delayed(delayMin) ? `${cat}:delay:${delayMin}` : sleeping ? `${cat}:zzz` : cat;
+	if (!iconCache.has(key)) iconCache.set(key, createVehicleIcon(cat, sleeping, ghost, delayMin));
 	return iconCache.get(key);
 }
+function delayed(min) { return min && min >= 8; }
 
 function formatTime(isoString) {
 	if (!isoString) return "?";
@@ -182,20 +189,25 @@ async function fetchAndRender() {
 			const initLat = v.lat ?? parsedStops[0]?.lat ?? 50.11;
 			const initLon = v.lon ?? parsedStops[0]?.lon ?? 8.68;
 
+			const firstStopDep = parsedStops[0]?.depSec;
+			const delayMin = (depSec !== null && firstStopDep !== null && firstStopDep > depSec)
+				? Math.round((firstStopDep - depSec) / 60)
+				: 0;
+
 			vehicleState.set(v.id, {
 				lat: initLat, lon: initLon,
-				destArrSec: destSec, cat, isGhost,
+				destArrSec: destSec, cat, isGhost, delayMin,
 				polyline: poly, stops: parsedStops,
 			});
 
 			if (markers.has(v.id)) {
 				const m = markers.get(v.id);
-				m.setIcon(getVehicleIcon(cat, sleeping, isGhost));
+				m.setIcon(getVehicleIcon(cat, sleeping, isGhost, delayMin));
 				m.setPopupContent(popupContent(v));
 				if (visible && !map.hasLayer(m)) m.addTo(map);
 				else if (!visible && map.hasLayer(m)) m.remove();
 			} else {
-				const m = L.marker([initLat, initLon], { icon: getVehicleIcon(cat, sleeping, isGhost) });
+				const m = L.marker([initLat, initLon], { icon: getVehicleIcon(cat, sleeping, isGhost, delayMin) });
 				m.bindPopup(popupContent(v));
 				m._vehicleCategory = cat;
 				if (visible) m.addTo(map);
@@ -348,7 +360,7 @@ function interpolatePositions() {
 		const stale = !seg && !state.isGhost;
 		if (stale !== state._stale) {
 			state._stale = stale;
-			m.setIcon(getVehicleIcon(state.cat, stale, state.isGhost));
+			m.setIcon(getVehicleIcon(state.cat, stale, state.isGhost, state.delayMin));
 		}
 
 		if (seg) {
