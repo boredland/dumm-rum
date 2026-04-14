@@ -13,6 +13,8 @@ import {
 	departures,
 	haikus,
 	journeyRuns,
+	journeyStops,
+	knownStops,
 	lineDailyStats,
 	operatorDailyStats,
 	stationDailyStats,
@@ -471,6 +473,65 @@ async function materializeLineStats(db: Db, date: string): Promise<void> {
 	);
 }
 
+async function materializeKnownStops(db: Db): Promise<void> {
+	const rows = await db
+		.select({
+			stopId: journeyStops.stopId,
+			stopName: sql<string>`MIN(${journeyStops.stopName})`.as("stop_name"),
+			journeyCount:
+				sql<number>`COUNT(DISTINCT ${journeyStops.journeyRef} || '|' || ${journeyStops.dayOfOperation})`.as(
+					"journey_count",
+				),
+			cancelled: sql<number>`SUM(${journeyStops.cancelled})`.as("cancelled"),
+			lines:
+				sql<string>`(SELECT GROUP_CONCAT(DISTINCT ${journeyRuns.line}) FROM ${journeyRuns} WHERE ${journeyRuns.journeyRef} = ${journeyStops.journeyRef} AND ${journeyRuns.dayOfOperation} = ${journeyStops.dayOfOperation})`.as(
+					"lines",
+				),
+			categories:
+				sql<string>`(SELECT GROUP_CONCAT(DISTINCT ${journeyRuns.category}) FROM ${journeyRuns} WHERE ${journeyRuns.journeyRef} = ${journeyStops.journeyRef} AND ${journeyRuns.dayOfOperation} = ${journeyStops.dayOfOperation})`.as(
+					"categories",
+				),
+		})
+		.from(journeyStops)
+		.where(sql`${journeyStops.dayOfOperation} >= date('now', '-7 days')`)
+		.groupBy(journeyStops.stopId);
+
+	if (rows.length === 0) return;
+
+	const now = new Date().toISOString();
+	const D1_MAX_PARAMS = 100;
+	const colCount = Object.keys(getTableColumns(knownStops)).length;
+	const batchSize = Math.max(1, Math.floor(D1_MAX_PARAMS / colCount));
+
+	for (let i = 0; i < rows.length; i += batchSize) {
+		const batch = rows.slice(i, i + batchSize);
+		await db
+			.insert(knownStops)
+			.values(
+				batch.map((r) => ({
+					stopId: r.stopId,
+					stopName: r.stopName,
+					lines: r.lines,
+					categories: r.categories,
+					journeyCount: r.journeyCount,
+					cancelled: r.cancelled,
+					updatedAt: now,
+				})),
+			)
+			.onConflictDoUpdate({
+				target: knownStops.stopId,
+				set: {
+					stopName: excluded(knownStops.stopName),
+					lines: excluded(knownStops.lines),
+					categories: excluded(knownStops.categories),
+					journeyCount: excluded(knownStops.journeyCount),
+					cancelled: excluded(knownStops.cancelled),
+					updatedAt: excluded(knownStops.updatedAt),
+				},
+			});
+	}
+}
+
 function pickKey(apiKeys: string): string {
 	const keys = apiKeys
 		.split(",")
@@ -521,6 +582,7 @@ export async function runCollection(
 		materializeStationStats(db, today),
 		materializeOperatorStats(db, today),
 		materializeLineStats(db, today),
+		materializeKnownStops(db),
 	]);
 
 	const [lineRows, operatorRows] = await Promise.all([

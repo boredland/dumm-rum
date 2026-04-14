@@ -4,6 +4,7 @@ import type { Db } from "../db/client";
 import {
 	departures,
 	haikus,
+	knownStops,
 	lineDailyStats,
 	operatorDailyStats,
 	stationDailyStats,
@@ -199,7 +200,7 @@ export interface StationSummary {
 	categories: string[];
 }
 
-export async function getStationSummaries(
+async function getStationSummaries(
 	db: Db,
 	stations: Station[],
 	filter: QueryFilter = {},
@@ -769,9 +770,7 @@ export async function getOldestDate(
 	return rows[0]?.date ?? null;
 }
 
-export async function getStationLineMap(
-	db: Db,
-): Promise<Map<string, string[]>> {
+async function getStationLineMap(db: Db): Promise<Map<string, string[]>> {
 	const rows = await db
 		.selectDistinct({
 			stationId: departures.stationId,
@@ -787,4 +786,29 @@ export async function getStationLineMap(
 		map.set(r.stationId, lines);
 	}
 	return map;
+}
+
+export interface StopSummary {
+	stopId: string;
+	stopName: string;
+	journeyCount: number;
+	cancelled: number;
+	lines: string[];
+	categories: string[];
+}
+
+export async function getStopSummaries(db: Db): Promise<StopSummary[]> {
+	const rows = await db
+		.select()
+		.from(knownStops)
+		.orderBy(desc(knownStops.journeyCount));
+
+	return rows.map((r) => ({
+		stopId: r.stopId,
+		stopName: r.stopName,
+		journeyCount: r.journeyCount,
+		cancelled: r.cancelled,
+		lines: r.lines ? r.lines.split(",") : [],
+		categories: r.categories ? r.categories.split(",") : [],
+	}));
 }

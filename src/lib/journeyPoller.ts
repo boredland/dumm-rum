@@ -1,8 +1,8 @@
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq, getTableColumns, sql } from "drizzle-orm";
 import type { Db } from "../db/client";
 import { createDb } from "../db/client";
-import { excluded } from "../db/helpers";
-import { journeyPositions, journeyRuns } from "../db/schema";
+import { coalesce, excluded } from "../db/helpers";
+import { journeyPositions, journeyRuns, journeyStops } from "../db/schema";
 import { createHafasClient } from "./hafas";
 import type { components } from "./hafas-types";
 import { berlinTime, nowBerlin } from "./utils";
@@ -74,6 +74,7 @@ export async function processJourneyBatch(
 			}
 
 			await upsertJourneyRun(db, journeyRef, detail, now);
+			await upsertJourneyStops(db, journeyRef, dayOfOperation, stops);
 
 			const lastStopIdx = stops.length - 1;
 			const passedLastStop =
@@ -191,4 +192,57 @@ async function upsertJourneyRun(
 				snapshotAt: excluded(journeyRuns.snapshotAt),
 			},
 		});
+}
+
+type StopType = components["schemas"]["StopType"];
+
+async function upsertJourneyStops(
+	db: Db,
+	journeyRef: string,
+	dayOfOperation: string,
+	stops: StopType[],
+): Promise<void> {
+	if (stops.length === 0) return;
+
+	const D1_MAX_PARAMS = 100;
+	const colCount = Object.keys(getTableColumns(journeyStops)).length;
+	const batchSize = Math.max(1, Math.floor(D1_MAX_PARAMS / colCount));
+
+	for (let i = 0; i < stops.length; i += batchSize) {
+		const batch = stops.slice(i, i + batchSize);
+		await db
+			.insert(journeyStops)
+			.values(
+				batch.map((s, j) => ({
+					journeyRef,
+					dayOfOperation,
+					routeIdx: s.routeIdx ?? i + j,
+					stopId: s.extId,
+					stopName: s.name,
+					depTime: s.depTime ?? null,
+					arrTime: s.arrTime ?? null,
+					rtDepTime: s.rtDepTime ?? null,
+					rtArrTime: s.rtArrTime ?? null,
+					cancelled: s.cancelled ? 1 : 0,
+				})),
+			)
+			.onConflictDoUpdate({
+				target: [
+					journeyStops.journeyRef,
+					journeyStops.dayOfOperation,
+					journeyStops.routeIdx,
+				],
+				set: {
+					rtDepTime: coalesce(
+						excluded(journeyStops.rtDepTime),
+						journeyStops.rtDepTime,
+					),
+					rtArrTime: coalesce(
+						excluded(journeyStops.rtArrTime),
+						journeyStops.rtArrTime,
+					),
+					cancelled: sql`MAX(${journeyStops.cancelled}, ${excluded(journeyStops.cancelled)})`,
+				},
+			});
+	}
 }

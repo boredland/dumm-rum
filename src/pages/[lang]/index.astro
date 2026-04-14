@@ -10,8 +10,7 @@ import {
 	getLineSummaries,
 	getOldestDate,
 	getOperatorSummaries,
-	getStationLineMap,
-	getStationSummaries,
+	getStopSummaries,
 	parseFilter,
 } from "../../lib/queries";
 import { categoryIcons, STATIONS } from "../../lib/stations";
@@ -27,21 +26,21 @@ const db = createDb(env.DB);
 const lang = langFromParams(Astro.params);
 const filter = parseFilter(Astro.url);
 const { coreOnly, days: daysFilter, category } = filter;
-const { stationStats, operators, lines, oldestDate, haiku, stationLines } =
-	await all({
-		stationStats: () => getStationSummaries(db, STATIONS, filter),
-		operators: () => getOperatorSummaries(db, filter),
-		lines: () => getLineSummaries(db, filter),
-		oldestDate: () => getOldestDate(db),
-		haiku: () => getHaiku(db, todayBerlin(), lang),
-		stationLines: () => getStationLineMap(db),
-	});
+const { stops, operators, lines, oldestDate, haiku } = await all({
+	stops: () => getStopSummaries(db),
+	operators: () => getOperatorSummaries(db, filter),
+	lines: () => getLineSummaries(db, filter),
+	oldestDate: () => getOldestDate(db),
+	haiku: () => getHaiku(db, todayBerlin(), lang),
+});
+
+const stationById = new Map(STATIONS.map((s) => [s.id, s]));
 
 const lineStations = new Map<string, string[]>();
-for (const s of STATIONS) {
-	for (const l of stationLines.get(s.id) ?? []) {
+for (const stop of stops) {
+	for (const l of stop.lines) {
 		const stations = lineStations.get(l) ?? [];
-		stations.push(shortStationName(s.name));
+		stations.push(shortStationName(stop.stopName));
 		lineStations.set(l, stations);
 	}
 }
@@ -117,11 +116,10 @@ for (const s of STATIONS) {
 		let worstStationCancelled: Worst | null = null;
 		let worstStationGhost: Worst | null = null;
 		let worstStationDelayed: Worst | null = null;
-		for (const [id, st] of stationStats) {
-			const name = shortStationName(STATIONS.find((s) => s.id === id)?.name ?? id);
-			if (isWorse(st.cancelled, st.total, worstStationCancelled)) worstStationCancelled = { name, count: st.cancelled, rate: st.total > 0 ? st.cancelled / st.total : 0 };
-			if (isWorse(st.ghost, st.total, worstStationGhost)) worstStationGhost = { name, count: st.ghost, rate: st.total > 0 ? st.ghost / st.total : 0 };
-			if (isWorse(st.delayed, st.total, worstStationDelayed)) worstStationDelayed = { name, count: st.delayed, rate: st.total > 0 ? st.delayed / st.total : 0 };
+		for (const stop of stops) {
+			const name = shortStationName(stop.stopName);
+			const total = stop.journeyCount;
+			if (isWorse(stop.cancelled, total, worstStationCancelled)) worstStationCancelled = { name, count: stop.cancelled, rate: total > 0 ? stop.cancelled / total : 0 };
 		}
 		let worstOperatorCancelled: Worst | null = null;
 		let worstOperatorGhost: Worst | null = null;
@@ -236,52 +234,44 @@ for (const s of STATIONS) {
 
 	<details id="sec-stations" class="group mb-8">
 		<summary class="text-xs uppercase tracking-wide text-muted font-semibold mb-3 cursor-pointer select-none">
-			{t(lang, "home.stations")}
+			{t(lang, "home.stations")} ({stops.length})
 		</summary>
 		<div class="grid grid-cols-[repeat(auto-fit,minmax(180px,1fr))] gap-4 max-sm:grid-cols-1 mt-3">
 		{
-			[...STATIONS].sort((a, b) => {
-				const ra = stationStats.get(a.id);
-				const rb = stationStats.get(b.id);
-				const scoreA = ra ? onTimeRate(ra.cancelled, ra.delayed, ra.total) : 100;
-				const scoreB = rb ? onTimeRate(rb.cancelled, rb.delayed, rb.total) : 100;
-				return scoreA - scoreB || a.name.localeCompare(b.name);
-			}).map((s) => {
-				const st = stationStats.get(s.id);
-				const score = st ? onTimeRate(st.cancelled, st.delayed, st.total) : 100;
-				const borderColor = scoreBorderColor(score);
+			stops.map((stop) => {
+				const configured = stationById.get(stop.stopId);
+				const href = configured ? `/${lang}/${configured.slug}${Astro.url.search}` : undefined;
+				const cancRate = stop.journeyCount > 0 ? stop.cancelled / stop.journeyCount : 0;
+				const borderColor = cancRate > 0.1 ? "border-danger" : cancRate > 0.05 ? "border-warning" : "border-success";
+				const Tag = href ? "a" : "div";
 				return (
-					<a
-						href={`/${lang}/${s.slug}${Astro.url.search}`}
-						data-search={`${shortStationName(s.name)} ${(stationLines.get(s.id) ?? []).join(" ")}`.toLowerCase()}
-						data-categories={(st?.categories ?? []).join(",")}
+					<Tag
+						href={href}
+						data-search={`${shortStationName(stop.stopName)} ${stop.lines.join(" ")}`.toLowerCase()}
+						data-categories={stop.categories.join(",")}
 						class:list={[
-							"bg-surface border rounded-xl p-5 no-underline hover:bg-surface-hover transition-colors",
+							"bg-surface border rounded-xl p-5 no-underline transition-colors",
 							borderColor,
+							href && "hover:bg-surface-hover",
 						]}
 					>
 						<div class="text-[0.7rem] uppercase tracking-wide text-muted mb-1">
-							{categoryIcons(st?.categories ?? [])}
+							{categoryIcons(stop.categories)}
 						</div>
 						<div class="text-lg font-bold text-emphasis">
-							{shortStationName(s.name)}
+							{shortStationName(stop.stopName)}
 						</div>
-						{(stationLines.get(s.id) ?? []).length > 0 && (
-							<div class="text-xs text-muted truncate" title={(stationLines.get(s.id) ?? []).join(", ")}>{(stationLines.get(s.id) ?? []).join(", ")}</div>
+						{stop.lines.length > 0 && (
+							<div class="text-xs text-muted truncate" title={stop.lines.join(", ")}>{stop.lines.join(", ")}</div>
 						)}
-						{st && st.total > 0 ? (
-							<>
-								<div class="text-sm text-muted mt-1">
-									{pct(st.cancelled, st.total)}% {t(lang, "home.cancelled")} &middot; {st.ghost > 0 && <>{pct(st.ghost, st.total)}% 👻 &middot; </>}{pct(st.delayed, st.total)}% {t(lang, "home.delayed")}
-								</div>
-								<div class="text-xs text-muted mt-1">
-									{t(lang, "stat.reliability")}: {onTimeRate(st.cancelled, st.delayed, st.total)}%{st.ghost > 0 && <span class="text-purple-400"> (👻 {onTimeRate(st.cancelled + st.ghost, st.delayed, st.total)}%)</span>}
-								</div>
-							</>
+						{stop.journeyCount > 0 ? (
+							<div class="text-sm text-muted mt-1">
+								{stop.journeyCount} {t(lang, "stat.departures").toLowerCase()} &middot; {pct(stop.cancelled, stop.journeyCount)}% {t(lang, "home.cancelled")}
+							</div>
 						) : (
 							<div class="text-sm text-dimmed mt-1">{t(lang, "table.no_data")}</div>
 						)}
-					</a>
+					</Tag>
 				);
 			})
 		}
