@@ -175,7 +175,13 @@ async function fetchAndRender() {
 				lat: s.lat, lon: s.lon,
 				arrSec: timeToSeconds(s.arr),
 				depSec: timeToSeconds(s.dep),
+				polyIdx: 0,
 			}));
+			if (poly) {
+				for (const s of parsedStops) {
+					s.polyIdx = nearestPolylineIndex(poly, s.lat, s.lon);
+				}
+			}
 			vehicleState.set(v.id, {
 				lat: v.lat, lon: v.lon,
 				destArrSec: destSec, cat,
@@ -298,17 +304,27 @@ function interpolateAlongPolyline(poly, startIdx, endIdx, progress) {
 	];
 }
 
-function findCurrentSegment(stops, nowSec) {
+function findCurrentSegment(stops, nowSec, state) {
+	const cached = state._segIdx;
+	if (cached != null && cached < stops.length - 1) {
+		const dep = stops[cached].depSec;
+		const arr = stops[cached + 1].arrSec;
+		if (dep !== null && arr !== null && arr > dep && nowSec >= dep && nowSec <= arr) {
+			return { from: stops[cached], to: stops[cached + 1], progress: (nowSec - dep) / (arr - dep) };
+		}
+	}
 	for (let i = 0; i < stops.length - 1; i++) {
 		const dep = stops[i].depSec;
 		const arr = stops[i + 1].arrSec;
 		if (dep !== null && arr !== null && arr > dep && nowSec >= dep && nowSec <= arr) {
+			state._segIdx = i;
 			return { from: stops[i], to: stops[i + 1], progress: (nowSec - dep) / (arr - dep) };
 		}
 	}
 	for (let i = stops.length - 2; i >= 0; i--) {
 		const dep = stops[i].depSec;
 		if (dep !== null && nowSec >= dep) {
+			state._segIdx = i;
 			const arr = stops[i + 1].arrSec ?? dep + 60;
 			return { from: stops[i], to: stops[i + 1], progress: Math.min(1, (nowSec - dep) / (arr - dep)) };
 		}
@@ -330,7 +346,7 @@ function interpolatePositions() {
 			continue;
 		}
 
-		const seg = findCurrentSegment(state.stops, nowSec);
+		const seg = findCurrentSegment(state.stops, nowSec, state);
 		const stale = !seg;
 		if (stale !== state._stale) {
 			state._stale = stale;
@@ -339,8 +355,8 @@ function interpolatePositions() {
 
 		if (seg) {
 			if (state.polyline && state.polyline.length >= 2) {
-				const startIdx = nearestPolylineIndex(state.polyline, seg.from.lat, seg.from.lon);
-				const endIdx = nearestPolylineIndex(state.polyline, seg.to.lat, seg.to.lon);
+				const startIdx = seg.from.polyIdx ?? 0;
+				const endIdx = seg.to.polyIdx ?? 0;
 				if (endIdx > startIdx) {
 					m.setLatLng(interpolateAlongPolyline(state.polyline, startIdx, endIdx, seg.progress));
 				} else {
@@ -375,4 +391,8 @@ function init() {
 }
 
 document.addEventListener("astro:page-load", init);
+document.addEventListener("astro:before-swap", () => {
+	clearInterval(fetchInterval);
+	cancelAnimationFrame(animFrameId);
+});
 </script>

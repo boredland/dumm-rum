@@ -2,7 +2,7 @@ import { env } from "cloudflare:workers";
 import type { APIRoute } from "astro";
 import { and, eq, gte, sql } from "drizzle-orm";
 import { createDb } from "../../db/client";
-import { journeyPositions, journeyRuns, journeyStops } from "../../db/schema";
+import { journeyPositions, journeyRuns } from "../../db/schema";
 import { nowBerlin, todayBerlin } from "../../lib/utils";
 
 export const GET: APIRoute = async () => {

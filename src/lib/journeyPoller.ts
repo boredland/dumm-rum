@@ -23,17 +23,14 @@ export async function processJourneyBatch(
 
 		try {
 			const [row] = await db
-				.update(journeyRuns)
-				.set({
-					pollState: sql`CASE WHEN ${journeyRuns.pollState} = 'done' THEN 'done' ELSE 'polling' END`,
-				})
+				.select({ pollState: journeyRuns.pollState })
+				.from(journeyRuns)
 				.where(
 					and(
 						eq(journeyRuns.journeyRef, journeyRef),
 						eq(journeyRuns.dayOfOperation, dayOfOperation),
 					),
-				)
-				.returning({ pollState: journeyRuns.pollState });
+				);
 
 			if (row?.pollState === "done") {
 				msg.ack();
@@ -61,7 +58,7 @@ export async function processJourneyBatch(
 					if (isQuota) {
 						msg.ack();
 						await env.JOURNEY_QUEUE.send(
-							{ journeyRef, dayOfOperation, pollCount },
+							{ journeyRef, dayOfOperation, pollCount: pollCount + 1 },
 							{ delaySeconds: 1800 },
 						);
 					} else {
@@ -90,59 +87,23 @@ export async function processJourneyBatch(
 				await upsertJourneyStops(db, journeyRef, dayOfOperation, stops);
 
 				const product = detail.Product?.[0];
-				const line = product?.line ?? product?.name;
-				const lastStopIdx = stops.length - 1;
-				const passedLastStop =
-					detail.lastPassRouteIdx != null &&
-					lastStopIdx >= 0 &&
-					detail.lastPassRouteIdx >= lastStopIdx;
-				const hasRtData =
+				const restLine = product?.line ?? product?.name;
+				const restHasRtData =
 					detail.lastPos != null ||
 					stops.some((s) => s.rtDepTime || s.rtArrTime);
-				const origin = stops[0];
-				const dest = stops[lastStopIdx];
-				const hardCapReached = isHardCapReached(
-					origin?.depTime,
-					dest?.arrTime,
+
+				await handlePollResult(
+					db,
+					env,
+					msg,
+					journeyRef,
 					dayOfOperation,
+					pollCount,
+					restLine,
+					stops,
+					restHasRtData,
+					detail.lastPassRouteIdx,
 				);
-				const noRtAfterMaxPolls = !hasRtData && pollCount >= 2;
-				const maxPollsReached = pollCount >= 15;
-
-				if (pollCount === 0 && line && env.TELEGRAM_BOT_TOKEN) {
-					await notifyJourneyIssues(
-						db,
-						env.TELEGRAM_BOT_TOKEN,
-						journeyRef,
-						dayOfOperation,
-						line,
-						dest?.name ?? "",
-					);
-				}
-
-				if (
-					passedLastStop ||
-					hardCapReached ||
-					noRtAfterMaxPolls ||
-					maxPollsReached
-				) {
-					await db
-						.update(journeyRuns)
-						.set({ pollState: "done" })
-						.where(
-							and(
-								eq(journeyRuns.journeyRef, journeyRef),
-								eq(journeyRuns.dayOfOperation, dayOfOperation),
-							),
-						);
-					msg.ack();
-				} else {
-					msg.ack();
-					await env.JOURNEY_QUEUE.send(
-						{ journeyRef, dayOfOperation, pollCount: pollCount + 1 },
-						{ delaySeconds: 300 },
-					);
-				}
 				continue;
 			}
 
@@ -164,63 +125,23 @@ export async function processJourneyBatch(
 			await upsertJourneyRunFromMgate(db, journeyRef, mgateResult, now);
 			await upsertMgateStops(db, journeyRef, dayOfOperation, mgStops);
 
-			const line = mgateResult.product?.line ?? mgateResult.product?.name;
-			const lastStopIdx = mgStops.length - 1;
-			const passedLastStop =
-				mgateResult.lastPassRouteIdx != null &&
-				lastStopIdx >= 0 &&
-				mgateResult.lastPassRouteIdx >= lastStopIdx;
-
-			const hasRtData =
+			const mgLine = mgateResult.product?.line ?? mgateResult.product?.name;
+			const mgHasRtData =
 				mgateResult.lastPos != null ||
 				mgStops.some((s) => s.rtDepTime || s.rtArrTime);
 
-			const origin = mgStops[0];
-			const dest = mgStops[lastStopIdx];
-			const hardCapReached = isHardCapReached(
-				origin?.depTime,
-				dest?.arrTime,
+			await handlePollResult(
+				db,
+				env,
+				msg,
+				journeyRef,
 				dayOfOperation,
+				pollCount,
+				mgLine,
+				mgStops,
+				mgHasRtData,
+				mgateResult.lastPassRouteIdx,
 			);
-
-			const noRtAfterMaxPolls = !hasRtData && pollCount >= 2;
-			const maxPollsReached = pollCount >= 15;
-
-			if (pollCount === 0 && line && env.TELEGRAM_BOT_TOKEN) {
-				await notifyJourneyIssues(
-					db,
-					env.TELEGRAM_BOT_TOKEN,
-					journeyRef,
-					dayOfOperation,
-					line,
-					dest?.name ?? "",
-				);
-			}
-
-			if (
-				passedLastStop ||
-				hardCapReached ||
-				noRtAfterMaxPolls ||
-				maxPollsReached
-			) {
-				await db
-					.update(journeyRuns)
-					.set({ pollState: "done" })
-					.where(
-						and(
-							eq(journeyRuns.journeyRef, journeyRef),
-							eq(journeyRuns.dayOfOperation, dayOfOperation),
-						),
-					);
-				msg.ack();
-			} else {
-				msg.ack();
-				const delaySeconds = 300;
-				await env.JOURNEY_QUEUE.send(
-					{ journeyRef, dayOfOperation, pollCount: pollCount + 1 },
-					{ delaySeconds },
-				);
-			}
 		} catch (e) {
 			console.error(`Failed to process journey ${journeyRef}:`, e);
 			msg.retry();
@@ -240,6 +161,69 @@ function isHardCapReached(
 		: 0;
 	const buffer = Math.max(durationMin, 15);
 	return nowBerlin().isAfter(arr.add(buffer, "minute"));
+}
+
+async function handlePollResult(
+	db: Db,
+	env: Cloudflare.Env,
+	msg: Message<JourneyPollMessage>,
+	journeyRef: string,
+	dayOfOperation: string,
+	pollCount: number,
+	line: string | undefined,
+	stops: { depTime?: string; arrTime?: string; name: string }[],
+	hasRtData: boolean,
+	lastPassRouteIdx: number | null | undefined,
+): Promise<void> {
+	const lastStopIdx = stops.length - 1;
+	const passedLastStop =
+		lastPassRouteIdx != null &&
+		lastStopIdx >= 0 &&
+		lastPassRouteIdx >= lastStopIdx;
+	const origin = stops[0];
+	const dest = stops[lastStopIdx];
+	const hardCapReached = isHardCapReached(
+		origin?.depTime,
+		dest?.arrTime,
+		dayOfOperation,
+	);
+	const noRtAfterMaxPolls = !hasRtData && pollCount >= 2;
+	const maxPollsReached = pollCount >= 15;
+
+	if (pollCount === 0 && line && env.TELEGRAM_BOT_TOKEN) {
+		await notifyJourneyIssues(
+			db,
+			env.TELEGRAM_BOT_TOKEN,
+			journeyRef,
+			dayOfOperation,
+			line,
+			dest?.name ?? "",
+		);
+	}
+
+	if (
+		passedLastStop ||
+		hardCapReached ||
+		noRtAfterMaxPolls ||
+		maxPollsReached
+	) {
+		await db
+			.update(journeyRuns)
+			.set({ pollState: "done" })
+			.where(
+				and(
+					eq(journeyRuns.journeyRef, journeyRef),
+					eq(journeyRuns.dayOfOperation, dayOfOperation),
+				),
+			);
+		msg.ack();
+	} else {
+		msg.ack();
+		await env.JOURNEY_QUEUE.send(
+			{ journeyRef, dayOfOperation, pollCount: pollCount + 1 },
+			{ delaySeconds: 300 },
+		);
+	}
 }
 
 async function upsertJourneyRun(
@@ -401,7 +385,7 @@ async function upsertJourneyRunFromMgate(
 			: mg.polylineCrd;
 		const points: [number, number][] = [];
 		for (let i = 0; i < raw.length; i += dim) {
-			points.push([raw[i] / 1_000_000, raw[i + 1] / 1_000_000]);
+			points.push([raw[i + 1] / 1_000_000, raw[i] / 1_000_000]);
 		}
 		polyline = JSON.stringify(points);
 	}
@@ -492,8 +476,8 @@ async function upsertMgateStops(
 					rtDepTime: s.rtDepTime ?? null,
 					rtArrTime: s.rtArrTime ?? null,
 					cancelled: s.cancelled ? 1 : 0,
-					lat: s.lat || null,
-					lon: s.lon || null,
+					lat: s.lat ?? null,
+					lon: s.lon ?? null,
 				})),
 			)
 			.onConflictDoUpdate({

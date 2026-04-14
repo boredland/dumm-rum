@@ -42,16 +42,6 @@ function parseTime(t?: string): string | undefined {
 	return `${t.slice(0, 2)}:${t.slice(2, 4)}:${t.slice(4, 6)}`;
 }
 
-function decodeDelta(encoded: number[]): number[] {
-	const result: number[] = [];
-	let acc = 0;
-	for (const v of encoded) {
-		acc += v;
-		result.push(acc);
-	}
-	return result;
-}
-
 export async function mgateJourneyDetail(
 	journeyId: string,
 ): Promise<MgateJourneyDetail | null> {
