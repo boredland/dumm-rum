@@ -87,12 +87,10 @@ export const GET: APIRoute = async () => {
 			.where(
 				and(
 					eq(journeyRuns.dayOfOperation, today),
-					eq(journeyRuns.pollState, "polling"),
 					eq(journeyRuns.cancelled, 0),
 					eq(journeyRuns.wasTracked, 0),
 					sql`${journeyRuns.destArrTime} >= ${nowTime}`,
 					sql`${journeyRuns.originDepTime} <= ${nowTime}`,
-					sql`NOT EXISTS (SELECT 1 FROM journey_positions jp WHERE jp.journey_ref = ${journeyRuns.journeyRef} AND jp.day_of_operation = ${journeyRuns.dayOfOperation})`,
 				),
 			),
 	]);
