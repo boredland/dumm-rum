@@ -1,7 +1,12 @@
-import { and, eq, gte, inArray, isNotNull, sql } from "drizzle-orm";
+import { and, eq, gte, inArray, isNotNull, or, sql } from "drizzle-orm";
 import type { Db } from "../db/client";
-import { departures, telegramSubscriptions } from "../db/schema";
-import { nowBerlin } from "./utils";
+import {
+	departures,
+	journeyStops,
+	knownStops,
+	telegramSubscriptions,
+} from "../db/schema";
+import { DELAY_THRESHOLD_MIN, nowBerlin } from "./utils";
 
 interface TelegramUpdate {
 	message?: {
@@ -161,18 +166,20 @@ export async function handleTelegramWebhook(
 				"Get notified about cancellations & delays on Frankfurt public transport.\n\n" +
 				"<b>Commands:</b>\n" +
 				"/subscribe S1 — show destinations for S1\n" +
-				"/subscribe S1 Wiesbaden — alerts for S1 towards Wiesbaden\n" +
+				"/subscribe S1 Wiesbaden — alerts for S1 towards Wiesbaden (all stops)\n" +
+				"/subscribe S1 Wiesbaden @Konstablerwache — only at a specific stop\n" +
 				"/subscribe S1 Wiesbaden+Ober-Roden — both directions\n" +
 				"/unsubscribe — list your subscriptions to remove\n" +
 				"/unsubscribe all — remove all subscriptions\n" +
 				"/list — show all subscriptions\n" +
 				"/lang de|en — change notification language\n\n" +
 				"<b>Options (add after direction):</b>\n" +
+				"Stop: <code>@Konstablerwache</code>\n" +
 				"Time: <code>7:50-8:30</code> or <code>06:00-09:00,16:00-19:00</code>\n" +
 				"Days: <code>Mo-Fr</code> or <code>Mo,Mi,Fr</code> or <code>Mo-We,Fr</code>\n\n" +
 				"<b>Example:</b>\n" +
-				"<code>/subscribe S1 Wiesbaden+Ober-Roden 06:00-09:00,16:00-19:00 Mo-Fr</code>\n\n" +
-				"Direction is matched as a substring (e.g. 'Wiesbaden' matches 'Wiesbaden Hauptbahnhof').",
+				"<code>/subscribe S1 Wiesbaden @Konstablerwache 06:00-09:00 Mo-Fr</code>\n\n" +
+				"Direction and stop are matched as substrings.",
 		);
 		return;
 	}
@@ -199,11 +206,14 @@ export async function handleTelegramWebhook(
 		const remaining = args.slice(1);
 
 		let direction = "";
+		let stopFilter = "";
 		const timeRanges: string[] = [];
 		let weekdays: string | null = null;
 
 		for (const arg of remaining) {
-			if (
+			if (arg.startsWith("@")) {
+				stopFilter += (stopFilter ? " " : "") + arg.slice(1);
+			} else if (
 				/^\d{1,2}:\d{2}-\d{1,2}:\d{2}(,\d{1,2}:\d{2}-\d{1,2}:\d{2})*$/.test(arg)
 			) {
 				timeRanges.push(
@@ -264,6 +274,36 @@ export async function handleTelegramWebhook(
 			return;
 		}
 
+		let resolvedStopId = "";
+		let resolvedStopName = "";
+		if (stopFilter) {
+			const stopRows = await db
+				.select({ stopId: knownStops.stopId, stopName: knownStops.stopName })
+				.from(knownStops)
+				.where(
+					sql`LOWER(${knownStops.stopName}) LIKE ${"%" + stopFilter.toLowerCase() + "%"}`,
+				);
+			if (stopRows.length === 0) {
+				await reply(
+					`No stop matching "<b>${stopFilter}</b>".\n\nTry a different name or omit @stop to subscribe to all stops.`,
+				);
+				return;
+			}
+			if (stopRows.length > 1) {
+				const list = stopRows
+					.slice(0, 10)
+					.map(
+						(s) =>
+							`• <code>/subscribe ${line} ${direction} @${s.stopName.replace(/Frankfurt \(Main\) /i, "")}</code>`,
+					)
+					.join("\n");
+				await reply(`Multiple stops match "<b>${stopFilter}</b>":\n\n${list}`);
+				return;
+			}
+			resolvedStopId = stopRows[0].stopId;
+			resolvedStopName = stopRows[0].stopName;
+		}
+
 		const tr = timeRanges.length > 0 ? timeRanges.join(",") : null;
 		let updated = false;
 		for (const dir of matched) {
@@ -275,6 +315,7 @@ export async function handleTelegramWebhook(
 						eq(telegramSubscriptions.chatId, chatId),
 						eq(telegramSubscriptions.line, line),
 						eq(telegramSubscriptions.direction, dir),
+						eq(telegramSubscriptions.stopId, resolvedStopId),
 					),
 				)
 				.limit(1);
@@ -286,6 +327,7 @@ export async function handleTelegramWebhook(
 					lang,
 					line,
 					direction: dir,
+					stopId: resolvedStopId,
 					timeRanges: tr,
 					weekdays,
 					createdAt: new Date().toISOString(),
@@ -295,12 +337,15 @@ export async function handleTelegramWebhook(
 						telegramSubscriptions.chatId,
 						telegramSubscriptions.line,
 						telegramSubscriptions.direction,
+						telegramSubscriptions.stopId,
 					],
 					set: { timeRanges: tr, weekdays },
 				});
 		}
 
 		let details = `<b>${line}</b> → ${matched.join(" + ")}`;
+		if (resolvedStopName)
+			details += `\n📍 ${resolvedStopName.replace(/Frankfurt \(Main\) /i, "")}`;
 		if (timeRanges.length > 0) details += `\n⏰ ${timeRanges.join(", ")}`;
 		if (weekdays) details += `\n📅 ${formatWeekdays(weekdays)}`;
 		await reply(`✅ ${updated ? "Updated" : "Subscribed"}:\n${details}`);
@@ -404,6 +449,7 @@ export async function handleTelegramWebhook(
 
 		const lines = subs.map((s) => {
 			let desc = `• <b>${s.line}</b> → ${s.direction}`;
+			if (s.stopId) desc += ` 📍 ${s.stopId}`;
 			if (s.timeRanges) desc += ` ⏰ ${s.timeRanges.split(",").join(", ")}`;
 			if (s.weekdays) desc += ` 📅 ${formatWeekdays(s.weekdays)}`;
 			return desc;
@@ -420,6 +466,7 @@ interface Issue {
 	direction: string;
 	time: string;
 	stop: string;
+	stopId: string;
 	cancelled: boolean;
 	delayMin: number | null;
 }
@@ -455,6 +502,8 @@ export async function notifySubscribers(
 		for (const sub of lineSubs) {
 			if (!issue.direction.toLowerCase().includes(sub.direction.toLowerCase()))
 				continue;
+
+			if (sub.stopId && sub.stopId !== issue.stopId) continue;
 
 			if (sub.weekdays) {
 				const allowedDays = sub.weekdays.split(",").map(Number);
@@ -495,4 +544,61 @@ export async function notifySubscribers(
 			),
 		),
 	);
+}
+
+export async function notifyJourneyIssues(
+	db: Db,
+	token: string,
+	journeyRef: string,
+	dayOfOperation: string,
+	line: string,
+	destName: string,
+): Promise<void> {
+	if (!token) return;
+
+	const stops = await db
+		.select()
+		.from(journeyStops)
+		.where(
+			and(
+				eq(journeyStops.journeyRef, journeyRef),
+				eq(journeyStops.dayOfOperation, dayOfOperation),
+			),
+		);
+
+	const issues: Issue[] = [];
+	for (const stop of stops) {
+		if (stop.cancelled) {
+			issues.push({
+				line,
+				direction: destName,
+				time: stop.depTime ?? stop.arrTime ?? "",
+				stop: stop.stopName.replace(/Frankfurt \(Main\) /i, ""),
+				stopId: stop.stopId,
+				cancelled: true,
+				delayMin: null,
+			});
+			continue;
+		}
+		if (stop.rtDepTime && stop.depTime) {
+			const planned = new Date(`${dayOfOperation}T${stop.depTime}`).getTime();
+			const actual = new Date(`${dayOfOperation}T${stop.rtDepTime}`).getTime();
+			const delayMin = (actual - planned) / 60000;
+			if (delayMin >= DELAY_THRESHOLD_MIN) {
+				issues.push({
+					line,
+					direction: destName,
+					time: stop.depTime,
+					stop: stop.stopName.replace(/Frankfurt \(Main\) /i, ""),
+					stopId: stop.stopId,
+					cancelled: false,
+					delayMin: Math.round(delayMin),
+				});
+			}
+		}
+	}
+
+	if (issues.length > 0) {
+		await notifySubscribers(db, token, issues);
+	}
 }

@@ -609,6 +609,7 @@ export async function runCollection(
 			const recentIssues = await db
 				.select({
 					id: departures.id,
+					stationId: departures.stationId,
 					line: departures.line,
 					direction: departures.direction,
 					time: departures.time,
@@ -664,6 +665,7 @@ export async function runCollection(
 						direction: d.direction,
 						time: d.time,
 						stop: d.stop ?? "",
+						stopId: d.stationId,
 						cancelled: !!d.cancelled,
 						delayMin:
 							d.rtTime && d.rtDate

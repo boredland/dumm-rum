@@ -192,12 +192,13 @@ export const telegramSubscriptions = sqliteTable(
 		lang: text().notNull().default("de"),
 		line: text().notNull(),
 		direction: text().notNull(),
+		stopId: text("stop_id").notNull().default(""),
 		timeRanges: text("time_ranges"),
 		weekdays: text(),
 		createdAt: text("created_at").notNull(),
 	},
 	(t) => [
-		unique().on(t.chatId, t.line, t.direction),
+		unique().on(t.chatId, t.line, t.direction, t.stopId),
 		index("idx_telegram_line_dir").on(t.line, t.direction),
 	],
 );

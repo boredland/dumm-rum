@@ -5,6 +5,7 @@ import { coalesce, excluded } from "../db/helpers";
 import { journeyPositions, journeyRuns, journeyStops } from "../db/schema";
 import { createHafasClient } from "./hafas";
 import type { components } from "./hafas-types";
+import { notifyJourneyIssues } from "./telegram";
 import { berlinTime, nowBerlin } from "./utils";
 
 type JourneyDetail = components["schemas"]["JourneyDetail"];
@@ -76,6 +77,8 @@ export async function processJourneyBatch(
 			await upsertJourneyRun(db, journeyRef, detail, now);
 			await upsertJourneyStops(db, journeyRef, dayOfOperation, stops);
 
+			const product = detail.Product?.[0];
+			const line = product?.line ?? product?.name;
 			const lastStopIdx = stops.length - 1;
 			const passedLastStop =
 				detail.lastPassRouteIdx != null &&
@@ -89,6 +92,18 @@ export async function processJourneyBatch(
 			const hardCapReached = isHardCapReached(dest?.arrTime, dayOfOperation);
 
 			const noRtAfterMaxPolls = !hasRtData && pollCount >= 2;
+
+			if (pollCount === 0 && line && env.TELEGRAM_BOT_TOKEN) {
+				const dest = stops[lastStopIdx];
+				await notifyJourneyIssues(
+					db,
+					env.TELEGRAM_BOT_TOKEN,
+					journeyRef,
+					dayOfOperation,
+					line,
+					dest?.name ?? "",
+				);
+			}
 
 			if (passedLastStop || hardCapReached || noRtAfterMaxPolls) {
 				await db
