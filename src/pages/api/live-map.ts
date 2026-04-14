@@ -71,7 +71,7 @@ export const GET: APIRoute = async () => {
 					eq(journeyRuns.cancelled, 0),
 					eq(journeyRuns.wasTracked, 0),
 					eq(journeyRuns.pollState, "done"),
-					sql`(${journeyRuns.destArrTime} >= ${nowTime} OR (${journeyRuns.destArrTime} = ${journeyRuns.originDepTime} AND ${journeyRuns.originDepTime} >= time(${nowTime}, '-3 hours')))`,
+					sql`(${journeyRuns.destArrTime} >= ${nowTime} OR (${journeyRuns.destArrTime} = ${journeyRuns.originDepTime} AND (${journeyRuns.originDepTime} >= time(${nowTime}, '-3 hours') OR time(${nowTime}, '-3 hours') > ${nowTime})))`,
 					sql`${journeyRuns.originDepTime} <= ${nowTime}`,
 				),
 			),
