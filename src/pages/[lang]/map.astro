@@ -72,8 +72,23 @@ function createVehicleIcon(cat, sleeping) {
 	});
 }
 
+function createGhostIcon() {
+	return L.divIcon({
+		className: "",
+		html: `<div style="position:relative;opacity:0.6;background:#484f58;border-radius:50%;width:28px;height:28px;display:flex;align-items:center;justify-content:center;border:2px solid white;box-shadow:0 2px 6px rgba(0,0,0,.35)"><span style="font-size:16px;line-height:1">👻</span></div>`,
+		iconSize: [28, 28],
+		iconAnchor: [14, 14],
+		popupAnchor: [0, -16],
+		tooltipAnchor: [0, -16],
+	});
+}
+
 const iconCache = new Map();
-function getVehicleIcon(cat, sleeping) {
+function getVehicleIcon(cat, sleeping, ghost) {
+	if (ghost) {
+		if (!iconCache.has("ghost")) iconCache.set("ghost", createGhostIcon());
+		return iconCache.get("ghost");
+	}
 	const key = sleeping ? `${cat}:zzz` : cat;
 	if (!iconCache.has(key)) iconCache.set(key, createVehicleIcon(cat, sleeping));
 	return iconCache.get(key);
@@ -168,7 +183,8 @@ async function fetchAndRender() {
 			const visible = matchesFilter(cat, activeFilter);
 			const depSec = timeToSeconds(v.originDepTime);
 			const destSec = timeToSeconds(v.destArrTime);
-			const sleeping = depSec !== null && depSec > nowSec;
+			const sleeping = !v.ghost && depSec !== null && depSec > nowSec;
+			const isGhost = !!v.ghost;
 
 			const poly = v.polyline ? JSON.parse(v.polyline) : null;
 			const parsedStops = stops.map(s => ({
@@ -182,20 +198,24 @@ async function fetchAndRender() {
 					s.polyIdx = nearestPolylineIndex(poly, s.lat, s.lon);
 				}
 			}
+
+			const initLat = v.lat ?? parsedStops[0]?.lat ?? 50.11;
+			const initLon = v.lon ?? parsedStops[0]?.lon ?? 8.68;
+
 			vehicleState.set(v.id, {
-				lat: v.lat, lon: v.lon,
-				destArrSec: destSec, cat,
+				lat: initLat, lon: initLon,
+				destArrSec: destSec, cat, isGhost,
 				polyline: poly, stops: parsedStops,
 			});
 
 			if (markers.has(v.id)) {
 				const m = markers.get(v.id);
-				m.setIcon(getVehicleIcon(cat, sleeping));
+				m.setIcon(getVehicleIcon(cat, sleeping, isGhost));
 				m.setPopupContent(popupContent(v));
 				if (visible && !map.hasLayer(m)) m.addTo(map);
 				else if (!visible && map.hasLayer(m)) m.remove();
 			} else {
-				const m = L.marker([v.lat, v.lon], { icon: getVehicleIcon(cat, sleeping) });
+				const m = L.marker([initLat, initLon], { icon: getVehicleIcon(cat, sleeping, isGhost) });
 				m.bindPopup(popupContent(v));
 				m._vehicleCategory = cat;
 				if (visible) m.addTo(map);
@@ -234,14 +254,12 @@ function popupContent(v) {
 	const dep = fmtTime(v.originDepTime);
 	const arr = fmtTime(v.destArrTime);
 	const schedule = dep && arr ? `${dep} → ${arr}` : "";
-	const nextArr = fmtTime(v.nextArrTime);
 	const lines = [
 		`<strong>${v.line}</strong> → ${shortName(v.destination)}`,
 		shortName(v.origin),
 		v.operator || "",
 		schedule ? `<span style="color:#656d76">${schedule}</span>` : "",
-		nextArr ? `<span style="color:#656d76">Next stop: ${nextArr}</span>` : "",
-		`<span style="color:#656d76">GPS: ${formatTime(v.reportedAt)}</span>`,
+		v.ghost ? `<span style="color:#93559a">👻 scheduled position</span>` : `<span style="color:#656d76">GPS: ${formatTime(v.reportedAt)}</span>`,
 	].filter(Boolean);
 	return lines.join("<br/>");
 }
@@ -347,10 +365,10 @@ function interpolatePositions() {
 		}
 
 		const seg = findCurrentSegment(state.stops, nowSec, state);
-		const stale = !seg;
+		const stale = !seg && !state.isGhost;
 		if (stale !== state._stale) {
 			state._stale = stale;
-			m.setIcon(getVehicleIcon(state.cat, stale));
+			m.setIcon(getVehicleIcon(state.cat, stale, state.isGhost));
 		}
 
 		if (seg) {
