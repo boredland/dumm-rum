@@ -88,8 +88,13 @@ export async function processJourneyBatch(
 			const hasRtData =
 				detail.lastPos != null || stops.some((s) => s.rtDepTime || s.rtArrTime);
 
+			const origin = stops[0];
 			const dest = stops[lastStopIdx];
-			const hardCapReached = isHardCapReached(dest?.arrTime, dayOfOperation);
+			const hardCapReached = isHardCapReached(
+				origin?.depTime,
+				dest?.arrTime,
+				dayOfOperation,
+			);
 
 			const noRtAfterMaxPolls = !hasRtData && pollCount >= 2;
 			const maxPollsReached = pollCount >= 15;
@@ -137,10 +142,18 @@ export async function processJourneyBatch(
 	}
 }
 
-function isHardCapReached(destArr?: string, dayOfOp?: string): boolean {
+function isHardCapReached(
+	originDep?: string,
+	destArr?: string,
+	dayOfOp?: string,
+): boolean {
 	if (!destArr || !dayOfOp) return false;
-	const hardCap = berlinTime(dayOfOp, destArr).add(15, "minute");
-	return nowBerlin().isAfter(hardCap);
+	const arr = berlinTime(dayOfOp, destArr);
+	const durationMin = originDep
+		? arr.diff(berlinTime(dayOfOp, originDep), "minute")
+		: 0;
+	const buffer = Math.max(durationMin, 15);
+	return nowBerlin().isAfter(arr.add(buffer, "minute"));
 }
 
 async function upsertJourneyRun(
