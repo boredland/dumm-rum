@@ -80,6 +80,11 @@ export async function mgateJourneyDetail(
 						line?: string;
 						catOut?: string;
 						oprX?: number;
+						prodCtx?: {
+							catOut?: string;
+							catOutL?: string;
+							line?: string;
+						};
 					}[];
 					opL?: { name: string }[];
 					polyL?: {
@@ -144,11 +149,12 @@ export async function mgateJourneyDetail(
 	});
 
 	const prod = prods[0];
+	const ctx = prod?.prodCtx;
 	const product: MgateProduct | undefined = prod
 		? {
 				name: prod.name,
-				line: prod.line ?? prod.name,
-				catOut: prod.catOut,
+				line: ctx?.line ?? prod.line ?? prod.name,
+				catOut: ctx?.catOutL?.trim() ?? ctx?.catOut?.trim() ?? prod.catOut,
 				operator: prod.oprX != null ? ops[prod.oprX]?.name : undefined,
 			}
 		: undefined;
