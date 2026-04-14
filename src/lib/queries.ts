@@ -668,7 +668,7 @@ export async function getOldestDate(
 }
 
 export interface StopSummary {
-	stopId: string;
+	stopIds: string[];
 	stopName: string;
 	journeyCount: number;
 	cancelled: number;
@@ -679,7 +679,9 @@ export interface StopSummary {
 export async function getStopSummaries(db: Db): Promise<StopSummary[]> {
 	const rows = await db
 		.select({
-			stopId: sql<string>`MIN(${knownStops.stopId})`.as("stop_id"),
+			stopIds: sql<string>`GROUP_CONCAT(DISTINCT ${knownStops.stopId})`.as(
+				"stop_ids",
+			),
 			stopName: knownStops.stopName,
 			journeyCount: sql<number>`SUM(${knownStops.journeyCount})`.as(
 				"journey_count",
@@ -698,7 +700,7 @@ export async function getStopSummaries(db: Db): Promise<StopSummary[]> {
 		.orderBy(sql`journey_count DESC`);
 
 	return rows.map((r) => ({
-		stopId: r.stopId,
+		stopIds: r.stopIds ? r.stopIds.split(",") : [],
 		stopName: r.stopName,
 		journeyCount: r.journeyCount,
 		cancelled: r.cancelled,

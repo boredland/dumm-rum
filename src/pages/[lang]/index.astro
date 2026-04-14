@@ -231,7 +231,7 @@ for (const stop of stops) {
 		<div class="grid grid-cols-[repeat(auto-fit,minmax(180px,1fr))] gap-4 max-sm:grid-cols-1 mt-3">
 		{
 			stops.map((stop) => {
-				const configured = stationById.get(stop.stopId);
+				const configured = stop.stopIds.map((id) => stationById.get(id)).find(Boolean);
 				const href = configured ? `/${lang}/${configured.slug}${Astro.url.search}` : undefined;
 				const cancRate = stop.journeyCount > 0 ? stop.cancelled / stop.journeyCount : 0;
 				const borderColor = cancRate > 0.1 ? "border-danger" : cancRate > 0.05 ? "border-warning" : "border-success";
