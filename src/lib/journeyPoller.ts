@@ -92,6 +92,7 @@ export async function processJourneyBatch(
 			const hardCapReached = isHardCapReached(dest?.arrTime, dayOfOperation);
 
 			const noRtAfterMaxPolls = !hasRtData && pollCount >= 2;
+			const maxPollsReached = pollCount >= 15;
 
 			if (pollCount === 0 && line && env.TELEGRAM_BOT_TOKEN) {
 				const dest = stops[lastStopIdx];
@@ -105,7 +106,12 @@ export async function processJourneyBatch(
 				);
 			}
 
-			if (passedLastStop || hardCapReached || noRtAfterMaxPolls) {
+			if (
+				passedLastStop ||
+				hardCapReached ||
+				noRtAfterMaxPolls ||
+				maxPollsReached
+			) {
 				await db
 					.update(journeyRuns)
 					.set({ pollState: "done" })

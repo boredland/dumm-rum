@@ -13,7 +13,7 @@ invocation_logs = true
 enabled = true
 
 [triggers]
-crons = ["0 * * * *"]
+crons = ["0 */2 * * *"]
 
 [[queues.producers]]
 binding = "JOURNEY_QUEUE"
