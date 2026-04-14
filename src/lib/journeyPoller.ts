@@ -49,7 +49,9 @@ export async function processJourneyBatch(
 
 			const client = createHafasClient(pickKey(env.RMV_API_KEY));
 			const { data, error } = await client.GET("/journeyDetail", {
-				params: { query: { id: journeyRef, format: "json" } },
+				params: {
+					query: { id: journeyRef, poly: "1", format: "json" },
+				},
 			});
 
 			if (error || !data) {
@@ -192,6 +194,18 @@ async function upsertJourneyRun(
 	const hasRtData =
 		stops.some((s) => s.rtDepTime || s.rtArrTime) || detail.lastPos != null;
 
+	const polyDesc = detail.PolylineGroup?.polylineDesc?.[0];
+	const polyCrd = polyDesc?.crd;
+	const dim = polyDesc?.dim ?? 2;
+	let polyline: string | null = null;
+	if (polyCrd && polyCrd.length >= dim * 2) {
+		const points: [number, number][] = [];
+		for (let i = 0; i < polyCrd.length; i += dim) {
+			points.push([polyCrd[i + 1], polyCrd[i]]);
+		}
+		polyline = JSON.stringify(points);
+	}
+
 	await db
 		.insert(journeyRuns)
 		.values({
@@ -214,6 +228,7 @@ async function upsertJourneyRun(
 			totalStopCount: stops.length,
 			wasTracked: hasRtData ? 1 : 0,
 			pollState: "polling",
+			polyline,
 			snapshotAt,
 		})
 		.onConflictDoUpdate({
@@ -236,6 +251,7 @@ async function upsertJourneyRun(
 				totalStopCount: excluded(journeyRuns.totalStopCount),
 				wasTracked: sql`MAX(${journeyRuns.wasTracked}, ${excluded(journeyRuns.wasTracked)})`,
 				pollState: sql`'polling'`,
+				polyline: sql`COALESCE(${excluded(journeyRuns.polyline)}, ${journeyRuns.polyline})`,
 				snapshotAt: excluded(journeyRuns.snapshotAt),
 			},
 		});

@@ -24,6 +24,7 @@ export const GET: APIRoute = async () => {
 			reportedAt: journeyPositions.reportedAt,
 			routeIdx: journeyPositions.routeIdx,
 			destArrTime: journeyRuns.destArrTime,
+			polyline: journeyRuns.polyline,
 			nextLat: sql<number | null>`(
 				SELECT js.lat FROM journey_stops js
 				WHERE js.journey_ref = "journey_runs"."journey_ref"

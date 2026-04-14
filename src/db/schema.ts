@@ -123,6 +123,7 @@ export const journeyRuns = sqliteTable(
 		totalStopCount: integer("total_stop_count").notNull(),
 		wasTracked: integer("was_tracked").notNull().default(0),
 		pollState: text("poll_state"),
+		polyline: text(),
 		snapshotAt: text("snapshot_at").notNull(),
 	},
 	(t) => [
