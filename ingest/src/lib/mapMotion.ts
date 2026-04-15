@@ -153,21 +153,40 @@ export function findCurrentSegment(
 }
 
 /**
- * Ease a marker 15% of the remaining distance per frame. At ~60 fps, ~99% of
- * the gap closes over ~30 frames (~500ms). Small frame-to-frame deltas are
- * invisible; the big post-poll GPS correction visibly slides into place.
+ * Ease a marker toward the target using a dt-based exponential. At tau=150ms,
+ * ~99% of the gap closes in ~700ms regardless of frame-rate. Frame-rate
+ * independence matters: a fixed per-frame factor gives jerky easing on slow
+ * devices and too-slow settling on fast ones.
  */
 export function easeMarkerTo(
 	getCurrent: () => LatLon,
 	setNext: (next: LatLon) => void,
 	target: LatLon,
+	dtMs: number,
 ): void {
 	const [lat, lon] = getCurrent();
 	const dLat = target[0] - lat;
 	const dLon = target[1] - lon;
 	if (Math.abs(dLat) < 1e-6 && Math.abs(dLon) < 1e-6) return;
-	setNext([lat + dLat * 0.15, lon + dLon * 0.15]);
+	const tauMs = 150;
+	const factor = 1 - Math.exp(-Math.max(0, dtMs) / tauMs);
+	setNext([lat + dLat * factor, lon + dLon * factor]);
 }
+
+// How long a single prev/current GPS pair remains usable for deriving
+// observed velocity. Beyond this the derived idxPerSec is too stale to
+// trust — fall back to schedule-paced interp.
+const MAX_PREV_AGE_SEC = 180;
+
+// Hard cap on extrapolation duration. When a fix hasn't refreshed for a
+// while (RMV hiccup, vehicle at a station with no data, etc), the marker
+// should hold position rather than slide forever into a phantom location.
+const MAX_EXTRAPOLATION_SEC = 120;
+
+// Realistic per-second polyline-index rate. Jittery GPS snaps can produce
+// huge spikes (e.g., momentary wrong-side snapping on a U-turn). Cap the
+// extrapolation velocity so those spikes don't launch the marker ahead.
+const MAX_IDX_PER_SEC = 2;
 
 /**
  * Initialize or refresh per-vehicle motion state from a server payload entry.
@@ -226,11 +245,13 @@ export function upsertVehicleState(
 			? nearestPolylineIndex(polyline, v.lat, v.lon)
 			: null;
 
-	// Rotate prev/current when the GPS fix timestamp has advanced.
+	// Rotate prev/current when the GPS fix timestamp has advanced. Reject
+	// the pair if the gap is too old to yield a usable velocity estimate.
 	const gpsAdvanced =
 		prev?.gpsReportedSec != null &&
 		gpsReportedSec != null &&
-		gpsReportedSec > prev.gpsReportedSec;
+		gpsReportedSec > prev.gpsReportedSec &&
+		gpsReportedSec - prev.gpsReportedSec <= MAX_PREV_AGE_SEC;
 
 	return {
 		id: v.id,
@@ -293,10 +314,18 @@ export function computeTarget(
 				}
 			}
 			if (idxPerSec !== null && idxPerSec >= 0) {
-				const elapsed = Math.max(0, nowSec - (state.gpsReportedSec ?? nowSec));
+				// Cap both the derived velocity (noisy GPS can spike) and the
+				// elapsed time we extrapolate over (stale fixes shouldn't fling
+				// markers into phantom locations).
+				const clampedIdxPerSec = Math.min(idxPerSec, MAX_IDX_PER_SEC);
+				const rawElapsed = Math.max(
+					0,
+					nowSec - (state.gpsReportedSec ?? nowSec),
+				);
+				const elapsed = Math.min(rawElapsed, MAX_EXTRAPOLATION_SEC);
 				const projIdx = Math.min(
 					targetIdx,
-					state.gpsPolyIdx + idxPerSec * elapsed,
+					state.gpsPolyIdx + clampedIdxPerSec * elapsed,
 				);
 				if (projIdx > state.gpsPolyIdx) {
 					const walkProgress =

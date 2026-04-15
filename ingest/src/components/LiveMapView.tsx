@@ -354,14 +354,24 @@ export function LiveMapView({
 
 			let entry = existing.get(v.id);
 			if (!entry) {
-				// Initial position: GPS if known, else first scheduled stop with
-				// coordinates. The RAF loop takes over on the next frame.
-				const initLat = isGhost
-					? (nextState.stops.find((s) => s.lat !== null)?.lat ?? 50.11)
-					: (v.lat ?? 50.11);
-				const initLon = isGhost
-					? (nextState.stops.find((s) => s.lon !== null)?.lon ?? 8.68)
-					: (v.lon ?? 8.68);
+				// Initial position: GPS for tracked; for ghosts, compute the
+				// correct current-segment target from the schedule so the marker
+				// doesn't land at the first stop and then slide across the map
+				// to catch up on the next frame.
+				let initLat = v.lat ?? 50.11;
+				let initLon = v.lon ?? 8.68;
+				if (isGhost) {
+					const target = computeTarget(nextState, motionSecondsNow());
+					if (target) {
+						[initLat, initLon] = target;
+					} else {
+						const anchor = nextState.stops.find((s) => s.lat !== null);
+						if (anchor) {
+							initLat = anchor.lat ?? initLat;
+							initLon = anchor.lon ?? initLon;
+						}
+					}
+				}
 				const icon = createIcon(
 					L,
 					v.category,
@@ -410,7 +420,11 @@ export function LiveMapView({
 	useEffect(() => {
 		if (!mapReady) return;
 		let rafId = 0;
+		let lastFrameMs = performance.now();
 		const tick = () => {
+			const nowMs = performance.now();
+			const dtMs = nowMs - lastFrameMs;
+			lastFrameMs = nowMs;
 			const now = motionSecondsNow();
 			const markers = markersRef.current;
 			const states = vehicleStatesRef.current;
@@ -426,6 +440,7 @@ export function LiveMapView({
 					},
 					(next) => entry.marker.setLatLng(next),
 					target,
+					dtMs,
 				);
 			}
 			rafId = window.requestAnimationFrame(tick);
