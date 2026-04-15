@@ -3,9 +3,12 @@
 	"steps": {
 		"install": {
 			"commands": ["bun install --frozen-lockfile --ignore-scripts"]
+		},
+		"build": {
+			"commands": ["bun run build"]
 		}
 	},
 	"deploy": {
-		"startCommand": "bun src/index.ts"
+		"startCommand": "bun serve.ts"
 	}
 }
