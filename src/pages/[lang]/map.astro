@@ -175,15 +175,16 @@ async function fetchAndRender() {
 
 		const nowSec = new Date().getHours() * 3600 + new Date().getMinutes() * 60 + new Date().getSeconds();
 		for (const v of vehicles) {
-			const stops = v.stops ? JSON.parse(v.stops) : [];
-			if (stops.length < 2) { continue; }
+			const isGhost = !!v.ghost;
+			const stops = isGhost && v.stops ? JSON.parse(v.stops) : [];
+			const stopCount = isGhost ? stops.length : (v.stopCount ?? 0);
+			if (stopCount < 2) { continue; }
 			seen.add(v.id);
 			const cat = v.category || "Bus";
 			const visible = matchesFilter(cat, activeFilter);
 			const depSec = timeToSeconds(v.originDepTime);
 			const destSec = timeToSeconds(v.destArrTime);
-			const sleeping = !v.ghost && depSec !== null && depSec > nowSec;
-			const isGhost = !!v.ghost;
+			const sleeping = !isGhost && depSec !== null && depSec > nowSec;
 
 			const poly = v.polyline ? JSON.parse(v.polyline) : null;
 			const parsedStops = stops.map(s => ({
@@ -206,8 +207,13 @@ async function fetchAndRender() {
 				? Math.round((firstStopDep - depSec) / 60)
 				: 0;
 
+			const gpsLat = v.lat ?? null;
+			const gpsLon = v.lon ?? null;
+			const hasGps = !isGhost && gpsLat !== null && gpsLon !== null;
+
 			vehicleState.set(v.id, {
 				lat: initLat, lon: initLon,
+				gpsLat, gpsLon, hasGps,
 				destArrSec: destSec, cat, isGhost, delayMin,
 				polyline: poly, stops: parsedStops,
 			});
@@ -216,6 +222,7 @@ async function fetchAndRender() {
 				const m = markers.get(v.id);
 				m.setIcon(getVehicleIcon(cat, sleeping, isGhost, delayMin));
 				m.setPopupContent(popupContent(v));
+				if (hasGps) m.setLatLng([gpsLat, gpsLon]);
 				if (visible && !map.hasLayer(m)) m.addTo(map);
 				else if (!visible && map.hasLayer(m)) m.remove();
 			} else {
@@ -361,12 +368,11 @@ function interpolatePositions() {
 		const m = markers.get(id);
 		if (!m) continue;
 
-		if (!state.isGhost && state.destArrSec !== null && nowSec > state.destArrSec + 15) {
-			m.remove();
-			markers.delete(id);
-			vehicleState.delete(id);
-			continue;
-		}
+		// Let the server drive removals — fetchAndRender prunes vehicles the
+		// server no longer returns. Removing client-side off of scheduled arrival
+		// time races with the 30s CDN cache on /api/live-map and can hide active
+		// vehicles mid-flight.
+		if (state.hasGps) continue;
 
 		const seg = findCurrentSegment(state.stops, nowSec, state);
 		const stale = !seg && !state.isGhost;

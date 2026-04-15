@@ -77,21 +77,44 @@ export const GET: APIRoute = async () => {
 			),
 	]);
 
-	const allIds = [
-		...trackedRows.map((v) => v.id),
-		...ghostRows.map((v) => v.id),
-	];
+	const trackedIds = new Set(trackedRows.map((v) => v.id));
+	const ghostIds = ghostRows.map((v) => v.id);
 
-	const BATCH = 50;
-	const stopRows: {
+	// Tracked vehicles snap to GPS on the client — only stopCount is needed
+	// to filter out malformed entries. Ghosts need full stop coords for
+	// schedule-based interpolation.
+	const stopCountBatch = 50;
+	const stopCountByJourney = new Map<string, number>();
+	const trackedIdArr = [...trackedIds];
+	for (let i = 0; i < trackedIdArr.length; i += stopCountBatch) {
+		const chunk = trackedIdArr.slice(i, i + stopCountBatch);
+		const rows = await db
+			.select({
+				journeyRef: journeyStops.journeyRef,
+				n: sql<number>`COUNT(*)`,
+			})
+			.from(journeyStops)
+			.where(
+				and(
+					inArray(journeyStops.dayOfOperation, [today, yesterday]),
+					inArray(journeyStops.journeyRef, chunk),
+					eq(journeyStops.cancelled, 0),
+					isNotNull(journeyStops.lat),
+				),
+			)
+			.groupBy(journeyStops.journeyRef);
+		for (const r of rows) stopCountByJourney.set(r.journeyRef, Number(r.n));
+	}
+
+	const ghostStopRows: {
 		journeyRef: string;
 		lat: number | null;
 		lon: number | null;
 		arr: string;
 		dep: string;
 	}[] = [];
-	for (let i = 0; i < allIds.length; i += BATCH) {
-		const chunk = allIds.slice(i, i + BATCH);
+	for (let i = 0; i < ghostIds.length; i += stopCountBatch) {
+		const chunk = ghostIds.slice(i, i + stopCountBatch);
 		const rows = await db
 			.select({
 				journeyRef: journeyStops.journeyRef,
@@ -114,26 +137,19 @@ export const GET: APIRoute = async () => {
 				),
 			)
 			.orderBy(journeyStops.journeyRef, asc(journeyStops.routeIdx));
-		stopRows.push(...rows);
+		ghostStopRows.push(...rows);
 	}
 
-	const stopsByJourney = new Map<string, typeof stopRows>();
-	for (const s of stopRows) {
-		const arr = stopsByJourney.get(s.journeyRef) ?? [];
+	const ghostStopsByJourney = new Map<string, typeof ghostStopRows>();
+	for (const s of ghostStopRows) {
+		const arr = ghostStopsByJourney.get(s.journeyRef) ?? [];
 		arr.push(s);
-		stopsByJourney.set(s.journeyRef, arr);
+		ghostStopsByJourney.set(s.journeyRef, arr);
 	}
 
 	const vehicles = trackedRows.map((v) => ({
 		...v,
-		stops: JSON.stringify(
-			(stopsByJourney.get(v.id) ?? []).map((s) => ({
-				lat: s.lat,
-				lon: s.lon,
-				arr: s.arr,
-				dep: s.dep,
-			})),
-		),
+		stopCount: stopCountByJourney.get(v.id) ?? 0,
 		ghost: 0,
 	}));
 
@@ -143,7 +159,7 @@ export const GET: APIRoute = async () => {
 		lon: null as number | null,
 		reportedAt: null as string | null,
 		stops: JSON.stringify(
-			(stopsByJourney.get(v.id) ?? []).map((s) => ({
+			(ghostStopsByJourney.get(v.id) ?? []).map((s) => ({
 				lat: s.lat,
 				lon: s.lon,
 				arr: s.arr,

@@ -96,17 +96,34 @@ export function pickKey(apiKeys: string): string {
 }
 
 export function extractPolyline(detail: {
-	PolylineGroup?: { polylineDesc?: { crd?: number[]; dim?: number }[] };
+	PolylineGroup?: {
+		polylineDesc?: { crd?: number[]; dim?: number; delta?: boolean }[];
+	};
 }): string | null {
 	const polyDesc = detail.PolylineGroup?.polylineDesc?.[0];
 	const polyCrd = polyDesc?.crd;
 	const dim = polyDesc?.dim ?? 2;
-	if (polyCrd && polyCrd.length >= dim * 2) {
-		const points: [number, number][] = [];
-		for (let i = 0; i < polyCrd.length; i += dim) {
-			points.push([polyCrd[i + 1], polyCrd[i]]);
-		}
-		return JSON.stringify(points);
+	if (!polyCrd || polyCrd.length < dim * 2) return null;
+
+	const raw = polyDesc.delta ? decodeDeltaCrd(polyCrd, dim) : polyCrd;
+	// HAFAS serializes WGS84 as integers scaled by 1e6; detect by magnitude
+	// so we don't re-scale already-degree values.
+	const scale = Math.abs(raw[0]) > 1000 ? 1_000_000 : 1;
+	const points: [number, number][] = [];
+	for (let i = 0; i < raw.length; i += dim) {
+		points.push([raw[i + 1] / scale, raw[i] / scale]);
 	}
-	return null;
+	return JSON.stringify(points);
+}
+
+function decodeDeltaCrd(encoded: number[], dim: number): number[] {
+	const result: number[] = [];
+	const acc = new Array(dim).fill(0);
+	for (let i = 0; i < encoded.length; i += dim) {
+		for (let d = 0; d < dim; d++) {
+			acc[d] += encoded[i + d];
+			result.push(acc[d]);
+		}
+	}
+	return result;
 }
