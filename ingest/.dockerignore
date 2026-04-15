@@ -1,0 +1,12 @@
+node_modules
+.env
+.env.*
+docker-compose.yml
+Dockerfile
+.dockerignore
+.gitignore
+.bun-version
+biome.json
+lefthook.yml
+tsconfig.json
+railpack.json
