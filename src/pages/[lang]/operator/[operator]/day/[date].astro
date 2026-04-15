@@ -14,11 +14,19 @@ import {
 	fmtDate,
 	pct,
 	shortStationName,
+	todayBerlin,
 } from "../../../../../lib/utils";
 
 const lang = langFromParams(Astro.params);
 const operator = decodeURIComponent(Astro.params.operator!);
 const date = Astro.params.date!;
+
+if (date !== todayBerlin()) {
+	Astro.response.headers.set(
+		"Cache-Control",
+		"public, s-maxage=86400, stale-while-revalidate=86400",
+	);
+}
 
 const db = createDb(env.DB);
 const { departures, haiku } = await all({
