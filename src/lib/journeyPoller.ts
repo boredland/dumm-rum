@@ -392,7 +392,7 @@ async function upsertJourneyRunFromMgate(
 	if (mg.polylineCrd && mg.polylineCrd.length >= 4) {
 		const dim = mg.polylineDim ?? 2;
 		const raw = mg.polylineDelta
-			? decodeDeltaCrd(mg.polylineCrd)
+			? decodeDeltaCrd(mg.polylineCrd, dim)
 			: mg.polylineCrd;
 		const points: [number, number][] = [];
 		for (let i = 0; i < raw.length; i += dim) {
@@ -451,12 +451,14 @@ async function upsertJourneyRunFromMgate(
 		});
 }
 
-function decodeDeltaCrd(encoded: number[]): number[] {
+function decodeDeltaCrd(encoded: number[], dim: number): number[] {
 	const result: number[] = [];
-	let acc = 0;
-	for (const v of encoded) {
-		acc += v;
-		result.push(acc);
+	const acc = new Array(dim).fill(0);
+	for (let i = 0; i < encoded.length; i += dim) {
+		for (let d = 0; d < dim; d++) {
+			acc[d] += encoded[i + d];
+			result.push(acc[d]);
+		}
 	}
 	return result;
 }
