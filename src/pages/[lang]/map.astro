@@ -232,9 +232,9 @@ async function fetchAndRender() {
 				? Math.round((firstStopDep - depSec) / 60)
 				: 0;
 
-			const gpsLat = v.lat ?? null;
-			const gpsLon = v.lon ?? null;
-			const hasGps = !isGhost && gpsLat !== null && gpsLon !== null;
+			const rawGpsLat = v.lat ?? null;
+			const rawGpsLon = v.lon ?? null;
+			const hasGps = !isGhost && rawGpsLat !== null && rawGpsLon !== null;
 			// Seconds-of-day for when the GPS fix was reported. Used to
 			// anchor the between-fetch smooth interpolation.
 			let gpsReportedSec = null;
@@ -242,12 +242,19 @@ async function fetchAndRender() {
 				const r = new Date(v.reportedAt);
 				gpsReportedSec = r.getHours() * 3600 + r.getMinutes() * 60 + r.getSeconds();
 			}
-			// Cached polyline index of the GPS fix. Lets the animation walk
-			// along the route from where the vehicle actually is instead of
-			// from the scheduled "from" stop.
-			const gpsPolyIdx = hasGps && poly
-				? nearestPolylineIndex(poly, gpsLat, gpsLon)
-				: null;
+			// When we have a polyline (the actual rails/road), snap the GPS
+			// to the nearest polyline point. Matters most for U-Bahn/S-Bahn
+			// underground sections where RMV reports schedule-derived
+			// positions that don't align with real tracks — the marker
+			// should sit on the rails, not float through parks and streets.
+			let gpsLat = rawGpsLat;
+			let gpsLon = rawGpsLon;
+			let gpsPolyIdx = null;
+			if (hasGps && poly) {
+				gpsPolyIdx = nearestPolylineIndex(poly, rawGpsLat, rawGpsLon);
+				gpsLat = poly[gpsPolyIdx][0];
+				gpsLon = poly[gpsPolyIdx][1];
+			}
 
 			vehicleState.set(v.id, {
 				lat: initLat, lon: initLon,
