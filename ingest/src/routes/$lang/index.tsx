@@ -143,8 +143,10 @@ function Section({
 function LineCard({ line, lang }: { line: LineSummary; lang: Lang }) {
 	const score = onTimeRate(line.cancelled, line.delayed, line.total);
 	return (
-		<div
-			className={`bg-surface border ${borderForScore(score)} rounded-xl p-4`}
+		<Link
+			to="/$lang/line/$line"
+			params={{ lang, line: line.line }}
+			className={`bg-surface border ${borderForScore(score)} rounded-xl p-4 no-underline text-fg hover:bg-surface-hover transition-colors`}
 		>
 			<div className="text-lg font-bold">
 				{categoryIcons([line.category])} {line.line}
@@ -166,7 +168,7 @@ function LineCard({ line, lang }: { line: LineSummary; lang: Lang }) {
 					{t(lang, "stat.reliability")}: {score}%
 				</div>
 			)}
-		</div>
+		</Link>
 	);
 }
 

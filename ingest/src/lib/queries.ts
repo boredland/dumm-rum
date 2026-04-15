@@ -389,6 +389,108 @@ export async function getStopStats(stopIds: string[]): Promise<StopStats> {
 	};
 }
 
+export interface LineDayStats {
+	date: string;
+	total: number;
+	cancelled: number;
+	ghost: number;
+	delayed: number;
+	avgDelay: number | null;
+}
+
+export interface LineStats {
+	days: LineDayStats[];
+	operators: string[];
+	categories: string[];
+}
+
+/** Per-day stats + distinct operators/categories for one line. */
+export async function getLineStats(line: string): Promise<LineStats> {
+	const rows = await db
+		.select()
+		.from(lineDailyStats)
+		.where(eq(lineDailyStats.line, line))
+		.orderBy(desc(lineDailyStats.date));
+
+	const operators = new Set<string>();
+	const categories = new Set<string>();
+	for (const r of rows) {
+		if (r.operators) for (const op of r.operators.split(",")) operators.add(op);
+		if (r.category) categories.add(r.category);
+	}
+
+	return {
+		days: rows.map((d) => ({
+			date: d.date,
+			total: d.total,
+			cancelled: d.cancelled,
+			ghost: d.ghost,
+			delayed: d.delayed,
+			avgDelay: d.avgDelay === null ? null : Number(d.avgDelay),
+		})),
+		operators: [...operators].filter(Boolean),
+		categories: [...categories].filter(Boolean),
+	};
+}
+
+export interface LineDayJourney {
+	date: string;
+	time: string;
+	rtTime: string | null;
+	direction: string;
+	cancelled: boolean;
+	ghost: number;
+	operator: string | null;
+	category: string | null;
+	stop: string;
+}
+
+/** Individual journeys on a line on a given day, ordered by scheduled
+ * origin dep time + destination. Origin's rt_dep_time from journey_stops
+ * joined in as a correlated subquery. */
+export async function getLineDayJourneys(
+	line: string,
+	date: string,
+): Promise<LineDayJourney[]> {
+	const rows = await db
+		.select({
+			date: journeyRuns.dayOfOperation,
+			time: journeyRuns.originDepTime,
+			rtTime: sql<string | null>`(
+				SELECT js.rt_dep_time FROM journey_stops js
+				WHERE js.journey_ref = "journey_runs"."journey_ref"
+				AND js.day_of_operation = "journey_runs"."day_of_operation"
+				AND js.route_idx = 0
+			)`.as("rt_time"),
+			direction: journeyRuns.destName,
+			cancelled: journeyRuns.cancelled,
+			ghost:
+				sql<number>`CASE WHEN NOT ${journeyRuns.wasTracked} AND NOT ${journeyRuns.cancelled} THEN 1 ELSE 0 END`.as(
+					"ghost",
+				),
+			operator: journeyRuns.operator,
+			category: journeyRuns.category,
+			stop: journeyRuns.originName,
+		})
+		.from(journeyRuns)
+		.where(
+			and(eq(journeyRuns.line, line), eq(journeyRuns.dayOfOperation, date)),
+		)
+		.orderBy(asc(journeyRuns.originDepTime), asc(journeyRuns.destName));
+
+	return rows.map((r) => ({
+		date: r.date,
+		time: r.time,
+		rtTime: r.rtTime,
+		direction: r.direction,
+		cancelled: r.cancelled,
+		ghost: Number(r.ghost),
+		operator: r.operator,
+		category: r.category,
+		stop: r.stop,
+	}));
+}
+
 export interface StopDayDeparture {
 	date: string;
 	time: string;

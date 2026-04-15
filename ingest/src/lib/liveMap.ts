@@ -105,7 +105,7 @@ export async function getLiveMap(): Promise<LiveMapPayload> {
 					notInArray(journeyRuns.category, EXCLUDE_CATEGORIES),
 					eq(
 						journeyPositions.id,
-						sql`(SELECT jp2.id FROM journey_positions jp2 WHERE jp2.journey_ref = ${journeyRuns.journeyRef} AND jp2.day_of_operation = ${journeyRuns.dayOfOperation} ORDER BY jp2.captured_at DESC LIMIT 1)`,
+						sql`(SELECT jp2.id FROM journey_positions jp2 WHERE jp2.journey_ref = "journey_runs"."journey_ref" AND jp2.day_of_operation = "journey_runs"."day_of_operation" ORDER BY jp2.captured_at DESC LIMIT 1)`,
 					),
 					gte(journeyPositions.capturedAt, cutoff),
 					sql`(${journeyRuns.destArrTime} >= ${nowTime} OR ${journeyRuns.destArrTime} = ${journeyRuns.originDepTime})`,

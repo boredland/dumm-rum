@@ -28,8 +28,8 @@ const stopDelayMinSql = sql<number>`
 const delayedExistsSql = sql<number>`
 	CASE WHEN NOT ${journeyRuns.cancelled} AND EXISTS (
 		SELECT 1 FROM journey_stops js
-		WHERE js.journey_ref = ${journeyRuns.journeyRef}
-		AND js.day_of_operation = ${journeyRuns.dayOfOperation}
+		WHERE js.journey_ref = "journey_runs"."journey_ref"
+		AND js.day_of_operation = "journey_runs"."day_of_operation"
 		AND js.rt_dep_time IS NOT NULL AND js.dep_time IS NOT NULL
 		AND EXTRACT(EPOCH FROM (
 			(js.day_of_operation || ' ' || js.rt_dep_time)::timestamp
@@ -48,8 +48,8 @@ const runAvgDelaySql = sql<number | null>`
 			- (js.day_of_operation || ' ' || js.dep_time)::timestamp
 		)) / 60.0
 		FROM journey_stops js
-		WHERE js.journey_ref = ${journeyRuns.journeyRef}
-		AND js.day_of_operation = ${journeyRuns.dayOfOperation}
+		WHERE js.journey_ref = "journey_runs"."journey_ref"
+		AND js.day_of_operation = "journey_runs"."day_of_operation"
 		AND js.rt_dep_time IS NOT NULL AND js.dep_time IS NOT NULL
 		AND js.route_idx = 0
 	) END

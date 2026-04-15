@@ -1,0 +1,148 @@
+import { createFileRoute, Link } from "@tanstack/react-router";
+import { createServerFn } from "@tanstack/react-start";
+import { type Lang, t } from "../../../../../lib/i18n.ts";
+import {
+	getLineDayJourneys,
+	type LineDayJourney,
+} from "../../../../../lib/queries.ts";
+
+const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+
+const loadDay = createServerFn({ method: "GET" })
+	.inputValidator((input: unknown): { line: string; date: string } => {
+		if (
+			typeof input !== "object" ||
+			input === null ||
+			!("line" in input) ||
+			!("date" in input)
+		) {
+			throw new Error("invalid input");
+		}
+		const { line, date } = input as { line: unknown; date: unknown };
+		if (typeof line !== "string" || typeof date !== "string") {
+			throw new Error("invalid input");
+		}
+		if (!DATE_RE.test(date)) throw new Error("invalid date");
+		return { line, date };
+	})
+	.handler(
+		async ({
+			data: { line, date },
+		}): Promise<{ line: string; date: string; journeys: LineDayJourney[] }> => {
+			const journeys = await getLineDayJourneys(line, date);
+			return { line, date, journeys };
+		},
+	);
+
+export const Route = createFileRoute("/$lang/line/$line/day/$date")({
+	loader: async ({ params }) =>
+		await loadDay({ data: { line: params.line, date: params.date } }),
+	component: LineDay,
+});
+
+function formatTime(time: string | null): string {
+	if (!time) return "—";
+	return time.slice(0, 5);
+}
+
+function delayMin(
+	date: string,
+	sched: string,
+	rt: string | null,
+): number | null {
+	if (!rt) return null;
+	const planned = new Date(`${date}T${sched}`).getTime();
+	const actual = new Date(`${date}T${rt}`).getTime();
+	if (!Number.isFinite(planned) || !Number.isFinite(actual)) return null;
+	return Math.round((actual - planned) / 60_000);
+}
+
+function LineDay() {
+	const { line, date, journeys } = Route.useLoaderData();
+	const { lang } = Route.useParams();
+	const l = lang as Lang;
+
+	const pretty = new Date(`${date}T00:00:00`).toLocaleDateString(l, {
+		weekday: "long",
+		year: "numeric",
+		month: "long",
+		day: "numeric",
+	});
+
+	return (
+		<main className="mx-auto max-w-4xl p-6 space-y-6">
+			<header className="space-y-1">
+				<Link
+					to="/$lang/line/$line"
+					params={{ lang: l, line }}
+					className="text-sm text-muted hover:text-fg"
+				>
+					← {line}
+				</Link>
+				<h1 className="text-2xl font-bold mt-2">{line}</h1>
+				<p className="text-sm text-muted">{pretty}</p>
+			</header>
+
+			<section>
+				<h2 className="text-xs uppercase tracking-wide text-muted font-semibold mb-3">
+					{t(l, "section.all_departures")} ({journeys.length})
+				</h2>
+				{journeys.length === 0 ? (
+					<p className="text-sm text-dimmed">{t(l, "table.no_departures")}</p>
+				) : (
+					<div className="overflow-x-auto">
+						<table className="w-full text-sm">
+							<thead>
+								<tr className="text-left text-xs uppercase text-muted border-b border-border-dim">
+									<th className="py-2 pr-3">{t(l, "table.time")}</th>
+									<th className="py-2 pr-3">{t(l, "table.station")}</th>
+									<th className="py-2 pr-3">{t(l, "table.direction")}</th>
+									<th className="py-2 pr-3">{t(l, "table.status")}</th>
+								</tr>
+							</thead>
+							<tbody>
+								{journeys.map((j) => {
+									const delay = delayMin(j.date, j.time, j.rtTime);
+									return (
+										<tr
+											key={`${j.time}-${j.direction}-${j.stop}`}
+											className="border-b border-border-dim"
+										>
+											<td className="py-2 pr-3 whitespace-nowrap tabular-nums">
+												{formatTime(j.time)}
+												{j.rtTime && j.rtTime !== j.time && (
+													<span className="ml-1 text-dimmed">
+														→ {formatTime(j.rtTime)}
+													</span>
+												)}
+											</td>
+											<td className="py-2 pr-3 truncate" title={j.stop}>
+												{j.stop}
+											</td>
+											<td className="py-2 pr-3 truncate" title={j.direction}>
+												{j.direction}
+											</td>
+											<td className="py-2 pr-3">
+												{j.cancelled ? (
+													<span className="text-red-500">❌</span>
+												) : j.ghost ? (
+													<span className="text-purple-400">👻</span>
+												) : delay !== null && delay >= 8 ? (
+													<span className="text-amber-500">
+														⏳ +{delay} min
+													</span>
+												) : (
+													<span className="text-emerald-500">✅</span>
+												)}
+											</td>
+										</tr>
+									);
+								})}
+							</tbody>
+						</table>
+					</div>
+				)}
+			</section>
+		</main>
+	);
+}

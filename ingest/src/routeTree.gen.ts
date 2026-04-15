@@ -15,7 +15,9 @@ import { Route as LangIndexRouteImport } from './routes/$lang/index'
 import { Route as LangMapRouteImport } from './routes/$lang/map'
 import { Route as LangStationRouteRouteImport } from './routes/$lang/$station/route'
 import { Route as LangStationIndexRouteImport } from './routes/$lang/$station/index'
+import { Route as LangLineLineIndexRouteImport } from './routes/$lang/line/$line/index'
 import { Route as LangStationDayDateRouteImport } from './routes/$lang/$station/day/$date'
+import { Route as LangLineLineDayDateRouteImport } from './routes/$lang/line/$line/day/$date'
 
 const LangRouteRoute = LangRouteRouteImport.update({
   id: '/$lang',
@@ -47,10 +49,20 @@ const LangStationIndexRoute = LangStationIndexRouteImport.update({
   path: '/',
   getParentRoute: () => LangStationRouteRoute,
 } as any)
+const LangLineLineIndexRoute = LangLineLineIndexRouteImport.update({
+  id: '/line/$line/',
+  path: '/line/$line/',
+  getParentRoute: () => LangRouteRoute,
+} as any)
 const LangStationDayDateRoute = LangStationDayDateRouteImport.update({
   id: '/day/$date',
   path: '/day/$date',
   getParentRoute: () => LangStationRouteRoute,
+} as any)
+const LangLineLineDayDateRoute = LangLineLineDayDateRouteImport.update({
+  id: '/line/$line/day/$date',
+  path: '/line/$line/day/$date',
+  getParentRoute: () => LangRouteRoute,
 } as any)
 
 export interface FileRoutesByFullPath {
@@ -61,6 +73,8 @@ export interface FileRoutesByFullPath {
   '/$lang/': typeof LangIndexRoute
   '/$lang/$station/': typeof LangStationIndexRoute
   '/$lang/$station/day/$date': typeof LangStationDayDateRoute
+  '/$lang/line/$line/': typeof LangLineLineIndexRoute
+  '/$lang/line/$line/day/$date': typeof LangLineLineDayDateRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -68,6 +82,8 @@ export interface FileRoutesByTo {
   '/$lang': typeof LangIndexRoute
   '/$lang/$station': typeof LangStationIndexRoute
   '/$lang/$station/day/$date': typeof LangStationDayDateRoute
+  '/$lang/line/$line': typeof LangLineLineIndexRoute
+  '/$lang/line/$line/day/$date': typeof LangLineLineDayDateRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -78,6 +94,8 @@ export interface FileRoutesById {
   '/$lang/': typeof LangIndexRoute
   '/$lang/$station/': typeof LangStationIndexRoute
   '/$lang/$station/day/$date': typeof LangStationDayDateRoute
+  '/$lang/line/$line/': typeof LangLineLineIndexRoute
+  '/$lang/line/$line/day/$date': typeof LangLineLineDayDateRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -89,6 +107,8 @@ export interface FileRouteTypes {
     | '/$lang/'
     | '/$lang/$station/'
     | '/$lang/$station/day/$date'
+    | '/$lang/line/$line/'
+    | '/$lang/line/$line/day/$date'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -96,6 +116,8 @@ export interface FileRouteTypes {
     | '/$lang'
     | '/$lang/$station'
     | '/$lang/$station/day/$date'
+    | '/$lang/line/$line'
+    | '/$lang/line/$line/day/$date'
   id:
     | '__root__'
     | '/'
@@ -105,6 +127,8 @@ export interface FileRouteTypes {
     | '/$lang/'
     | '/$lang/$station/'
     | '/$lang/$station/day/$date'
+    | '/$lang/line/$line/'
+    | '/$lang/line/$line/day/$date'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -156,12 +180,26 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof LangStationIndexRouteImport
       parentRoute: typeof LangStationRouteRoute
     }
+    '/$lang/line/$line/': {
+      id: '/$lang/line/$line/'
+      path: '/line/$line'
+      fullPath: '/$lang/line/$line/'
+      preLoaderRoute: typeof LangLineLineIndexRouteImport
+      parentRoute: typeof LangRouteRoute
+    }
     '/$lang/$station/day/$date': {
       id: '/$lang/$station/day/$date'
       path: '/day/$date'
       fullPath: '/$lang/$station/day/$date'
       preLoaderRoute: typeof LangStationDayDateRouteImport
       parentRoute: typeof LangStationRouteRoute
+    }
+    '/$lang/line/$line/day/$date': {
+      id: '/$lang/line/$line/day/$date'
+      path: '/line/$line/day/$date'
+      fullPath: '/$lang/line/$line/day/$date'
+      preLoaderRoute: typeof LangLineLineDayDateRouteImport
+      parentRoute: typeof LangRouteRoute
     }
   }
 }
@@ -183,12 +221,16 @@ interface LangRouteRouteChildren {
   LangStationRouteRoute: typeof LangStationRouteRouteWithChildren
   LangMapRoute: typeof LangMapRoute
   LangIndexRoute: typeof LangIndexRoute
+  LangLineLineIndexRoute: typeof LangLineLineIndexRoute
+  LangLineLineDayDateRoute: typeof LangLineLineDayDateRoute
 }
 
 const LangRouteRouteChildren: LangRouteRouteChildren = {
   LangStationRouteRoute: LangStationRouteRouteWithChildren,
   LangMapRoute: LangMapRoute,
   LangIndexRoute: LangIndexRoute,
+  LangLineLineIndexRoute: LangLineLineIndexRoute,
+  LangLineLineDayDateRoute: LangLineLineDayDateRoute,
 }
 
 const LangRouteRouteWithChildren = LangRouteRoute._addFileChildren(
