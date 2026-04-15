@@ -200,12 +200,24 @@ async function fetchAndRender() {
 			const sleeping = !isGhost && depSec !== null && depSec > nowSec;
 
 			const poly = v.polyline ? JSON.parse(v.polyline) : null;
-			const parsedStops = stops.map(s => ({
-				lat: s.lat, lon: s.lon,
-				arrSec: timeToSeconds(s.arr),
-				depSec: timeToSeconds(s.dep),
-				polyIdx: 0,
-			}));
+			// Enforce a minimum visible dwell at each stop. RMV often returns
+			// arr == dep for trams/S-Bahn/U-Bahn even though the real vehicle
+			// stops 20-60s to board/alight. Without this, the marker slides
+			// straight through stations; with it, findCurrentSegment's
+			// fallback path pins progress=1 at the stop for the dwell window.
+			const MIN_DWELL_SEC = 20;
+			const parsedStops = stops.map(s => {
+				const arrSec = timeToSeconds(s.arr);
+				let depSec = timeToSeconds(s.dep);
+				if (
+					arrSec !== null &&
+					depSec !== null &&
+					depSec - arrSec < MIN_DWELL_SEC
+				) {
+					depSec = arrSec + MIN_DWELL_SEC;
+				}
+				return { lat: s.lat, lon: s.lon, arrSec, depSec, polyIdx: 0 };
+			});
 			if (poly) {
 				for (const s of parsedStops) {
 					s.polyIdx = nearestPolylineIndex(poly, s.lat, s.lon);
