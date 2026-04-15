@@ -5,7 +5,7 @@ import { runDiscovery } from "./lib/discover.ts";
 import { POLL_QUEUE, type PollJob, processPollBatch } from "./lib/poll.ts";
 
 const DISCOVER_QUEUE = "discover";
-const DISCOVER_CRON = process.env.DISCOVER_CRON ?? "*/30 * * * *";
+const DISCOVER_CRON = process.env.DISCOVER_CRON ?? "*/5 * * * *";
 const TZ = "Europe/Berlin";
 const POLL_BATCH_SIZE = 10;
 
@@ -41,6 +41,10 @@ async function main(): Promise<void> {
 	console.log(
 		`ingest up — discovery cron "${DISCOVER_CRON}" (${TZ}), poll batch ${POLL_BATCH_SIZE}`,
 	);
+
+	// Fire one discovery on boot so we don't wait up to a full cron interval
+	// for the first signal of life. Cron continues from there.
+	await boss.send(DISCOVER_QUEUE, {});
 
 	const shutdown = async (sig: string) => {
 		console.log(`${sig} received, shutting down`);
