@@ -2,7 +2,9 @@ import { migrate } from "drizzle-orm/postgres-js/migrator";
 import PgBoss from "pg-boss";
 import { db, sql as pg } from "../db/client.ts";
 import { runDiscovery } from "./discover.ts";
+import { materializeAllForToday } from "./materialize.ts";
 import { POLL_QUEUE, type PollJob, processPollBatch } from "./poll.ts";
+import { todayBerlin } from "./utils.ts";
 
 const DISCOVER_QUEUE = "discover";
 const DISCOVER_CRON = process.env.DISCOVER_CRON ?? "*/5 * * * *";
@@ -41,7 +43,12 @@ export async function startIngest(): Promise<StartedIngest> {
 	await boss.work(DISCOVER_QUEUE, async () => {
 		console.log("discover: start");
 		await runDiscovery(db, boss);
-		console.log("discover: done");
+		const today = todayBerlin();
+		const t0 = Date.now();
+		await materializeAllForToday(db, today);
+		console.log(
+			`discover: done — materialized ${today} in ${Date.now() - t0}ms`,
+		);
 	});
 
 	await boss.work<PollJob>(

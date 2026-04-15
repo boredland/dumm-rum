@@ -73,3 +73,27 @@ export const STATIONS: Station[] = [
 		excludeCategories: ["Bus"],
 	},
 ];
+
+const GERMAN_MAP: Record<string, string> = {
+	ä: "ae",
+	ö: "oe",
+	ü: "ue",
+	ß: "ss",
+	Ä: "Ae",
+	Ö: "Oe",
+	Ü: "Ue",
+};
+
+/** Stable URL slug for a station name. Used by the known_stops rollup so
+ * the UI's station pages have a routable path for every stop seen in the
+ * wild (not just the configured STATIONS list). */
+export function nameToSlug(name: string): string {
+	return name
+		.replace(/^Frankfurt \(Main\)\s*/i, "")
+		.replace(/[äöüßÄÖÜ]/g, (ch) => GERMAN_MAP[ch] ?? ch)
+		.normalize("NFD")
+		.replace(/[\u0300-\u036f]/g, "")
+		.toLowerCase()
+		.replace(/[^a-z0-9]+/g, "-")
+		.replace(/^-|-$/g, "");
+}
