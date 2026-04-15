@@ -183,9 +183,8 @@ async function fetchAndRender() {
 		const nowSec = new Date().getHours() * 3600 + new Date().getMinutes() * 60 + new Date().getSeconds();
 		for (const v of vehicles) {
 			const isGhost = !!v.ghost;
-			const stops = isGhost && v.stops ? JSON.parse(v.stops) : [];
-			const stopCount = isGhost ? stops.length : (v.stopCount ?? 0);
-			if (stopCount < 2) { continue; }
+			const stops = v.stops ? JSON.parse(v.stops) : [];
+			if (stops.length < 2) { continue; }
 			seen.add(v.id);
 			const cat = v.category || "Bus";
 			const visible = matchesFilter(cat, activeFilter);
@@ -379,7 +378,6 @@ function interpolatePositions() {
 		// server no longer returns. Removing client-side off of scheduled arrival
 		// time races with the 30s CDN cache on /api/live-map and can hide active
 		// vehicles mid-flight.
-		if (state.hasGps) continue;
 
 		const seg = findCurrentSegment(state.stops, nowSec, state);
 		const stale = !seg && !state.isGhost;
