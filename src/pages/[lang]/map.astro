@@ -146,8 +146,9 @@ function initMap() {
 		applyFilter(activeFilter);
 	}
 
-	map = L.map(el, { zoomControl: true, fullscreenControl: true }).setView([initLat, initLon], initZoom);
-	map.on("fullscreenchange", () => setTimeout(() => map.invalidateSize(), 100));
+	map = L.map(el, { zoomControl: true }).setView([initLat, initLon], initZoom);
+	if (L.control.fullscreen) L.control.fullscreen({ position: "topleft" }).addTo(map);
+	map.on("enterFullscreen exitFullscreen", () => setTimeout(() => map.invalidateSize(), 100));
 	const tiles = L.tileLayer("https://tile.memomaps.de/tilegen/{z}/{x}/{y}.png", {
 		attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &middot; <a href="https://memomaps.de/">memomaps.de</a>',
 		maxZoom: 18,
