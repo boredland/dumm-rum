@@ -356,19 +356,56 @@ export interface StopSummary {
 	categories: string[];
 }
 
-export async function getStopSummaries(db: Db): Promise<StopSummary[]> {
+export async function getStopSummaries(
+	db: Db,
+	filter: QueryFilter = {},
+): Promise<StopSummary[]> {
+	const daysCond = daysCondition(journeyStops.dayOfOperation, filter.days);
+	if (!daysCond) {
+		const rows = await db
+			.select({
+				stopIds: sql<string>`GROUP_CONCAT(DISTINCT ${knownStops.stopId})`.as(
+					"stop_ids",
+				),
+				stopName: knownStops.stopName,
+				journeyCount: sql<number>`SUM(${knownStops.journeyCount})`.as(
+					"journey_count",
+				),
+				cancelled: sql<number>`SUM(${knownStops.cancelled})`.as("cancelled"),
+				ghost: sql<number>`SUM(${knownStops.ghost})`.as("ghost"),
+				delayed: sql<number>`SUM(${knownStops.delayed})`.as("delayed"),
+				lines: sql<string>`GROUP_CONCAT(DISTINCT ${knownStops.lines})`.as(
+					"lines",
+				),
+				categories:
+					sql<string>`GROUP_CONCAT(DISTINCT ${knownStops.categories})`.as(
+						"categories",
+					),
+			})
+			.from(knownStops)
+			.groupBy(knownStops.stopName)
+			.orderBy(sql`journey_count DESC`);
+
+		return rows.map((r) => ({
+			stopIds: r.stopIds ? r.stopIds.split(",") : [],
+			stopName: r.stopName,
+			journeyCount: r.journeyCount,
+			cancelled: r.cancelled,
+			ghost: r.ghost,
+			delayed: r.delayed,
+			lines: r.lines ? [...new Set(r.lines.split(","))].filter(Boolean) : [],
+			categories: r.categories
+				? [...new Set(r.categories.split(","))].filter(Boolean)
+				: [],
+		}));
+	}
+
 	const rows = await db
 		.select({
 			stopIds: sql<string>`GROUP_CONCAT(DISTINCT ${knownStops.stopId})`.as(
 				"stop_ids",
 			),
 			stopName: knownStops.stopName,
-			journeyCount: sql<number>`SUM(${knownStops.journeyCount})`.as(
-				"journey_count",
-			),
-			cancelled: sql<number>`SUM(${knownStops.cancelled})`.as("cancelled"),
-			ghost: sql<number>`SUM(${knownStops.ghost})`.as("ghost"),
-			delayed: sql<number>`SUM(${knownStops.delayed})`.as("delayed"),
 			lines: sql<string>`GROUP_CONCAT(DISTINCT ${knownStops.lines})`.as(
 				"lines",
 			),
@@ -376,18 +413,42 @@ export async function getStopSummaries(db: Db): Promise<StopSummary[]> {
 				sql<string>`GROUP_CONCAT(DISTINCT ${knownStops.categories})`.as(
 					"categories",
 				),
+			journeyCount:
+				sql<number>`COALESCE(COUNT(${journeyRuns.journeyRef}), 0)`.as(
+					"journey_count",
+				),
+			cancelled:
+				sql<number>`COALESCE(SUM(CASE WHEN ${journeyRuns.journeyRef} IS NOT NULL THEN ${journeyStops.cancelled} ELSE 0 END), 0)`.as(
+					"cancelled",
+				),
+			ghost: sql<number>`COALESCE(SUM(${ghostCaseSql}), 0)`.as("ghost"),
+			delayed:
+				sql<number>`COALESCE(SUM(CASE WHEN ${journeyRuns.journeyRef} IS NOT NULL AND ${journeyStops.cancelled} = 0 AND ${journeyStops.rtDepTime} IS NOT NULL AND ${journeyStops.depTime} IS NOT NULL AND (strftime('%s', ${journeyStops.dayOfOperation} || 'T' || ${journeyStops.rtDepTime}) - strftime('%s', ${journeyStops.dayOfOperation} || 'T' || ${journeyStops.depTime})) / 60.0 >= ${DELAY_THRESHOLD_MIN} THEN 1 ELSE 0 END), 0)`.as(
+					"delayed",
+				),
 		})
 		.from(knownStops)
+		.leftJoin(
+			journeyStops,
+			and(eq(journeyStops.stopId, knownStops.stopId), daysCond),
+		)
+		.leftJoin(
+			journeyRuns,
+			and(
+				eq(journeyRuns.journeyRef, journeyStops.journeyRef),
+				eq(journeyRuns.dayOfOperation, journeyStops.dayOfOperation),
+			),
+		)
 		.groupBy(knownStops.stopName)
 		.orderBy(sql`journey_count DESC`);
 
 	return rows.map((r) => ({
 		stopIds: r.stopIds ? r.stopIds.split(",") : [],
 		stopName: r.stopName,
-		journeyCount: r.journeyCount,
-		cancelled: r.cancelled,
-		ghost: r.ghost,
-		delayed: r.delayed,
+		journeyCount: Number(r.journeyCount ?? 0),
+		cancelled: Number(r.cancelled ?? 0),
+		ghost: Number(r.ghost ?? 0),
+		delayed: Number(r.delayed ?? 0),
 		lines: r.lines ? [...new Set(r.lines.split(","))].filter(Boolean) : [],
 		categories: r.categories
 			? [...new Set(r.categories.split(","))].filter(Boolean)
@@ -439,7 +500,7 @@ export async function getStopStats(
 	const conditions = [sql`${journeyStops.stopId} IN (${stopIdList})`];
 	if (daysCond) conditions.push(daysCond);
 
-	const [dayRows, haikuRows] = await Promise.all([
+	const [dayRows, haikuRows, metaRows] = await Promise.all([
 		db
 			.select({
 				date: journeyStops.dayOfOperation,
@@ -457,7 +518,7 @@ export async function getStopStats(
 				),
 			})
 			.from(journeyStops)
-			.leftJoin(
+			.innerJoin(
 				journeyRuns,
 				and(
 					eq(journeyRuns.journeyRef, journeyStops.journeyRef),
@@ -472,8 +533,28 @@ export async function getStopStats(
 			.from(haikus)
 			.where(eq(haikus.date, todayBerlin()))
 			.limit(1),
+		db
+			.select({
+				lastChange: sql<string | null>`MAX(${journeyRuns.snapshotAt})`.as(
+					"last_change",
+				),
+				categories:
+					sql<string>`GROUP_CONCAT(DISTINCT ${journeyRuns.category})`.as(
+						"categories",
+					),
+			})
+			.from(journeyStops)
+			.innerJoin(
+				journeyRuns,
+				and(
+					eq(journeyRuns.journeyRef, journeyStops.journeyRef),
+					eq(journeyRuns.dayOfOperation, journeyStops.dayOfOperation),
+				),
+			)
+			.where(and(...conditions)),
 	]);
 
+	const meta = metaRows[0];
 	return {
 		days: dayRows.map((d) => ({
 			date: d.date,
@@ -483,9 +564,11 @@ export async function getStopStats(
 			delayed: d.delayed,
 			avgDelay: d.avgDelay,
 		})),
-		lastChange: null,
+		lastChange: meta?.lastChange ?? null,
 		haiku: haikuRows[0]?.haiku ?? null,
-		categories: [],
+		categories: meta?.categories
+			? [...new Set(meta.categories.split(","))].filter(Boolean)
+			: [],
 	};
 }
 
