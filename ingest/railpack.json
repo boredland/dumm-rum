@@ -1,0 +1,10 @@
+{
+	"$schema": "https://schema.railpack.com",
+	"provider": "bun",
+	"packages": {
+		"bun": "latest"
+	},
+	"deploy": {
+		"startCommand": "bun src/index.ts"
+	}
+}
