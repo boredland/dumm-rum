@@ -1,16 +1,12 @@
 # Agents
 
-## Before starting work
-
-Run `npm run generate:api` to update the HAFAS API types from the live OpenAPI spec.
-
 ## Self-correction
 
-When you discover that something works differently than you assumed (e.g. a Cloudflare or SQLite behavior, an Astro convention, a Drizzle ORM quirk), update this file with the correct information so future sessions don't repeat the mistake. Examples: D1's 100 param limit, `ALTER TABLE DROP COLUMN` rebuilding constraints, Workers not honoring `s-maxage` without the Cache API.
+When you discover that something works differently than you assumed (e.g. a Cloudflare or SQLite behavior, an Astro convention, a Drizzle ORM quirk, an RMV mgate response shape), update this file with the correct information so future sessions don't repeat the mistake. Examples below (D1's 100-param limit, `ALTER TABLE DROP COLUMN` rebuilding constraints, Workers not honoring `s-maxage` without the Cache API, mgate returning `crdEncYX` not raw `crd`, HAFAS service-day in the ref's `DA` field).
 
 ## Project overview
 
-DummRum is a public transport cancellation and delay tracker for Frankfurt (Main) stations. It collects departure data from the RMV HAFAS API every 5 minutes via a Cloudflare cron trigger, stores it in a D1 database, materializes daily statistics, and serves an Astro SSR frontend with German/English i18n showing per-station and per-operator statistics, charts, and per-day breakdowns.
+DummRum is a public transport cancellation and delay tracker for Frankfurt (Main) stations. A Cloudflare cron triggers departure-board discovery from RMV's `mgate.exe` endpoint every 30 minutes, feeds a per-journey poller via Cloudflare Queues that enriches each run with realtime/stop/position data, stores everything in a D1 database, materializes daily statistics, and serves an Astro SSR frontend with German/English i18n plus a live vehicle map.
 
 Live at https://dummrum.de
 
@@ -18,79 +14,128 @@ Live at https://dummrum.de
 
 - **Astro 6** with `@astrojs/cloudflare` v13 adapter — SSR on Cloudflare Workers
 - **Tailwind CSS v4** via `@tailwindcss/vite`
-- **Cloudflare D1** for storage, **Workers AI** for daily haiku generation
+- **Cloudflare D1** for storage, **Cloudflare Queues** for per-journey polling fan-out, **Workers AI** for daily haiku generation
 - **Drizzle ORM v1 beta** for typed queries and schema management
-- **openapi-typescript** + **openapi-fetch** for typed HAFAS API client
 - **Biome** for linting/formatting, **Knip** for unused code detection, **tsgo** (`@typescript/native-preview`) for type checking
 - **Lefthook** pre-commit hook runs all three checks
+- **Playwright** (dev-only) for headless-browser empirical testing of the live map — see `scripts/watch-map.mjs`
 
 ## Concurrency
 
 Use `better-all` (`import { all } from "better-all"`) instead of `Promise.all` for parallel async work in page frontmatter and other orchestration code. It takes an object of `() => Promise<T>` thunks and returns named results, which is clearer than positional destructuring.
 
+## RMV API: mgate only
+
+The project talks **exclusively** to RMV's `mgate.exe` JSON-RPC-style endpoint (`https://www.rmv.de/auskunft/bin/jp/mgate.exe`). The older REST `/hapi` API was removed in an earlier pass — do not reintroduce it. mgate is what the RMV web/app frontend uses, so availability tracks the user-facing site.
+
+Protocol:
+
+- POST with JSON body `{ svcReqL: [{meth, req}...], client, ver, lang, auth }`.
+- Response `{ svcResL: [{meth, res, err}...] }` with per-request error isolation — one bad item in the batch doesn't fail the others. Take advantage of this: `mgateJourneyDetailsBatch` and `mgateStationBoardBatch` in `src/lib/mgate.ts` pack up to N requests per HTTP POST.
+- The auth block is a hardcoded public `AID` (application identifier); no real API key. Multi-key `RMV_API_KEY` logic from the REST era is gone.
+
+Methods used:
+
+- `StationBoard` — departure-board discovery (replaces REST `/departureBoard`).
+- `JourneyDetails` — per-journey enrichment (polyline + stops + realtime positions).
+
+Error classification for `JourneyDetails`:
+
+- `err: "OK"` → parsed response.
+- `err: "LOCATION"` → permanently bad ref (classify as `terminal`; mark `pollState='done'`).
+- `err: "PARAMETER"`, HTTP errors, parse failures, network errors → `transient`. **PARAMETER is sometimes transient** — the same ref that returned PARAMETER on one poll can return OK on the next. The poller re-enqueues with `mgateFailCount+1` and 60s delay, up to `MGATE_MAX_FAIL_COUNT=5` consecutive fails before giving up.
+- Other codes observed: `API_QUOTA` (handled upstream in discovery REST, no longer a concern), `SVC_PARAM` (same class as PARAMETER).
+
+Polyline format:
+
+- Returned as a Google-algorithm **encoded string** in `crdEncYX` (not a raw `crd` number array in most client profiles — early assumption was wrong and produced null polylines for months). `mgate.ts`'s `decodePolyline` handles both the encoded and the raw/delta formats, always producing `[lat, lon]` degree pairs. Consumers just `JSON.stringify(points)`.
+
+Service date:
+
+- The HAFAS-canonical operating day for a journey is encoded in the ref as `DA#DDMMYY`. For overnight routes (trip after midnight), this is the *prior* calendar day — mgate's top-level `j.date` sometimes returns the calendar date instead. Always prefer `parseServiceDateFromRef(jid)` with `parseYyyymmdd(j.date)` as fallback.
+
 ## Key architecture decisions
 
-- `vite` is pinned to `^7.3.1` via `overrides` in package.json to work around a version split bug between Astro's bundled vite and `@tailwindcss/vite` (see withastro/astro#16029)
-- `src/worker.ts` is a custom Cloudflare Worker entrypoint that delegates `fetch` to Astro's handler and adds a `scheduled` handler for cron-triggered data collection
-- `wrangler.toml` points `main` to `./src/worker.ts` — the adapter builds around this
-- All pages are server-rendered (`output: "server"`) since they query D1 on every request
-- Edge caching via Cloudflare Cache API in `src/worker.ts` (5-min TTL), warmed after each cron collection run
-- **Materialized daily stats**: `station_daily_stats`, `operator_daily_stats`, and `line_daily_stats` tables are populated by the cron after each collection run — page queries read pre-computed rows instead of aggregating raw departures
-- Core hours mode (`?hours=core`) falls back to raw departures aggregation since it's not materialized
-- `RMV_API_KEY` supports multiple comma-separated keys — each station picks a random key per cron run to distribute load
-- Transport type icons (🚇🚋🚌) are derived from the `category` column in departure data, not hardcoded per station
+- `vite` is pinned to `^7.3.1` via `overrides` in package.json to work around a version split bug between Astro's bundled vite and `@tailwindcss/vite` (withastro/astro#16029).
+- `src/worker.ts` is a custom Cloudflare Worker entrypoint that delegates `fetch` to Astro's handler and adds a `scheduled` handler for cron-triggered data collection + a `queue` handler for the per-journey poller.
+- `wrangler.toml` points `main` to `./src/worker.ts`; the adapter builds around this.
+- All pages are server-rendered (`output: "server"`) since they query D1 on every request.
+- Edge caching via Cloudflare Cache API in `src/worker.ts`. **Only sets a default `Cache-Control` when the response didn't already set one** — `/api/live-map` (30s) and past-date day pages (24h) rely on this; clobbering would break them.
+- **Materialized daily stats**: `operator_daily_stats`, `line_daily_stats`, `known_stops` are populated by the cron after each collection run — page queries read pre-computed rows instead of aggregating raw journey data.
+- Transport category icons (🚇🚋🚌) are derived from `journey_runs.category` / `journey_stops.category`, not hardcoded per station.
+- Long-distance train categories (`ICE`, `EC`, `ECE`, `NJ`, `RJ`, `TGV`, `FLX`, etc.) are excluded both at discovery time (`EXCLUDE_CATEGORIES` in `collect.ts`) and in the `/api/live-map` query as defence in depth.
 
 ## Project structure
 
 ```
 src/
-├── worker.ts                     # Custom CF Worker entrypoint (fetch + scheduled)
-├── middleware.ts                  # Cache-Control headers for edge caching
-├── env.d.ts                      # Cloudflare.Env type augmentation (DB, AI, RMV_API_KEY)
+├── worker.ts                     # Custom CF Worker entrypoint (fetch + scheduled + queue)
+├── env.d.ts                      # Cloudflare.Env type augmentation
 ├── styles/app.css                # Tailwind entry with light-dark() theme tokens
-├── layouts/Layout.astro          # Shared HTML shell (lang switcher, GitHub link)
+├── layouts/Layout.astro          # Shared HTML shell (auto-refresh, share, nav)
 ├── db/
-│   ├── schema.ts                 # Drizzle schema (departures, haikus, daily stats)
-│   └── client.ts                 # createDb(d1) wrapper
+│   ├── schema.ts                 # Drizzle schema (journey_runs, journey_stops, journey_positions, daily stats)
+│   ├── client.ts                 # createDb(d1) wrapper
+│   └── helpers.ts                # d1BatchSize, excluded, coalesce, sqlIdList
 ├── components/
-│   ├── HoursToggle.astro         # Hours / days / category filter toggles
-│   ├── DepartureFilter.astro     # Client-side status filter for departure tables
-│   └── StatusBadge.astro         # Departure status badge (cancelled/delayed/ok)
+│   ├── HoursToggle.astro         # Days + category filter pills
+│   ├── DepartureFilter.astro     # Client-side status/direction filter
+│   └── StatusBadge.astro         # Departure status badge (cancelled/delayed/ghost/ok)
 ├── lib/
-│   ├── stations.ts               # Station config array (STATIONS) and helpers
-│   ├── queries.ts                # All DB query functions (reads materialized stats)
-│   ├── collect.ts                # HAFAS API collection + materialization + haiku
-│   ├── hafas.ts                  # Typed HAFAS API client (openapi-fetch)
-│   ├── hafas-types.ts            # Auto-generated from OpenAPI spec (do not edit)
+│   ├── mgate.ts                  # mgate client: JourneyDetails + StationBoard batch, polyline decode
+│   ├── stations.ts               # Station config + slug helpers + SLUG_REDIRECTS
+│   ├── queries.ts                # All DB read functions
+│   ├── collect.ts                # Cron handler: discovery + materialization + haiku
+│   ├── journeyRuns.ts            # Daily snapshot topology enrichment (02:00)
+│   ├── journeyPoller.ts          # Queue consumer: per-journey mgate poll
+│   ├── telegram.ts               # Telegram subscription + notifications
 │   ├── i18n.ts                   # German/English translations
-│   └── utils.ts                  # Date/time/formatting helpers
+│   └── utils.ts                  # Date/time/format helpers
 └── pages/
     ├── index.astro               # Accept-Language redirect to /de or /en
+    ├── api/live-map.ts           # JSON endpoint feeding the live vehicle map
     └── [lang]/
-        ├── index.astro           # Landing — station cards + operator accordion
-        ├── operator/
-        │   └── [operator].astro  # Operator detail — stats, chart, daily table
+        ├── index.astro           # Home: stops + lines + operators cards
+        ├── map.astro             # Leaflet live-vehicle map
+        ├── line/[line]/
+        │   ├── index.astro       # Line overview
+        │   └── day/[date].astro  # Line day detail
+        ├── operator/[operator]/
+        │   ├── index.astro       # Operator overview
+        │   └── day/[date].astro  # Operator day detail
         └── [station]/
-            ├── index.astro       # Station overview — stats, next deps, chart, table
-            ├── day/[date].astro  # Day detail — all departures with delay/status
-            └── api/stats.ts      # JSON API endpoint
+            ├── index.astro       # Station overview
+            ├── day/[date].astro  # Station day detail
+            └── api/stats.ts      # JSON stats endpoint
+scripts/
+└── watch-map.mjs                 # Headless-browser harness for empirical map A/B
 ```
 
 ## Data flow
 
-1. Every 5 min, the `scheduled` handler in `src/worker.ts` calls `runCollection()`
-2. For each station (in parallel): fetches departures from `rmv.de/hapi/departureBoard` and upserts into D1, generates a daily haiku via Workers AI (once per day)
-3. After collection: materializes `station_daily_stats` and `operator_daily_stats` from raw departures for today
-4. Page requests read from materialized stats tables (fast) — core hours mode falls back to raw aggregation
+1. Every 30 min, `scheduled` in `src/worker.ts` calls `runCollection()`.
+2. `collect.ts` → `mgateStationBoardBatch` across all configured `STATIONS` in a single POST; filtered departures become skeleton `journey_runs` rows (no polyline/topology yet).
+3. Skeleton rows get enqueued on `JOURNEY_QUEUE` for the per-journey poller.
+4. Queue consumer (`journeyPoller.ts`) batches up to 10 refs per mgate POST, writes run/stop/position rows, re-enqueues polling up to 15 times per journey with 5-min delay until departure passes.
+5. Day-rollover (02:00): `snapshotJourneys` re-polls yesterday's journeys to fill in topology that discovery missed.
+6. Day-rollover (03:00): `journey_positions` older than 24h are pruned — the live-map only reads the newest fix per ref.
+7. Page requests read materialized stats tables (fast) and raw queries for station/day detail pages.
+
+### Write amplification knobs
+
+Two `setWhere` predicates in `journeyPoller.ts` turn a "nothing changed" poll into a read-only no-op so we don't churn D1 rows. If you touch the stop/run upserts, keep them.
 
 ## Database schema
 
 Managed by Drizzle ORM. Schema in `src/db/schema.ts`.
 
-- **departures** — raw departure records (station_id, date, time, rt_time, line, direction, operator, category, cancelled, etc.)
-- **haikus** — one AI-generated haiku per station per day
-- **station_daily_stats** — materialized: total, cancelled, avg_delay, planned_freq, actual_freq per station per day
-- **operator_daily_stats** — materialized: total, cancelled, avg_delay per operator per day
+- **journey_runs** — one row per journey-ref + day-of-operation. Scheduled + meta (line, operator, category, origin/dest, times, polyline string, pollState).
+- **journey_stops** — one row per (journey_ref, day, route_idx). Scheduled + realtime arr/dep times, stop lat/lon, cancelled flag.
+- **journey_positions** — append-only GPS fixes. Pruned daily to 24h. `/api/live-map` reads the newest row per journey_ref.
+- **haikus** — one AI-generated haiku per day (en + optional de).
+- **operator_daily_stats** / **line_daily_stats** — materialized aggregates.
+- **known_stops** — dereffed stop metadata used by home page and search.
+- **telegram_subscriptions** — per-user line+direction subscriptions.
 
 ### Migrations
 
@@ -107,7 +152,7 @@ Migrations in `migrations/` are applied automatically on every deploy. To apply 
 
 ### Indexes
 
-When adding, removing, or modifying queries in `src/lib/queries.ts` or `src/lib/collect.ts`, always check that the `departures` table indexes in `src/db/schema.ts` cover the new query's WHERE/GROUP BY/ORDER BY columns. Remove indexes that no longer match any query pattern to avoid write overhead. Unbounded DISTINCT or GROUP BY queries on `departures` should be scoped to recent data (e.g. last 30 days) to avoid full table scans as data grows.
+When adding, removing, or modifying queries in `src/lib/queries.ts` or `src/lib/collect.ts`, always check that the table indexes in `src/db/schema.ts` cover the new query's WHERE/GROUP BY/ORDER BY columns. Remove indexes that no longer match any query pattern to avoid write overhead. Unbounded DISTINCT or GROUP BY queries on large tables should be scoped to recent data (e.g. last 30 days) to avoid full table scans as data grows.
 
 ### D1's 100-parameter limit
 
@@ -115,91 +160,38 @@ D1 enforces a hard limit of **100 bound parameters per statement** (`D1_ERROR: t
 
 **Drizzle binds one parameter per non-autoincrement column on every row, including columns omitted from `.values()` that fall back to a schema default.** So `Object.keys(rowObject).length` undercounts the real param count whenever the schema has columns with defaults that you don't explicitly pass. A 7-row batch that "should" be 7×14=98 params can actually be 7×15=105 and silently fail every cron run — only the trailing partial batch (≤6 rows) gets through.
 
-When batching inserts, derive the per-row param count from the schema, not from the values object:
+When batching inserts, derive the per-row param count from the schema, not from the values object. `src/db/helpers.ts` has `d1BatchSize(table)` that does this.
 
-```ts
-import { getTableColumns } from "drizzle-orm";
-const colCount = Object.keys(getTableColumns(table)).length - 1; // -1 for autoincrement id
-const batchSize = Math.floor(100 / colCount);
-```
+## Debugging the live map
 
-This stays correct when columns are added later. If the primary-key shape changes, revisit the `-1`.
+The map is the most motion-sensitive part of the app — small changes to animation logic have non-obvious visual consequences. **Don't guess; measure.**
 
-## RMV HAFAS API reference
+Fast iteration setup:
 
-Base URL: `https://www.rmv.de/hapi`
+1. `npm run dev` — Astro dev server on `localhost:4321`. `astro.config.ts` has a dev-only Vite proxy that forwards `/api/live-map` to production so the browser sees real D1-backed data with no local DB copy.
+2. Edit `src/pages/[lang]/map.astro`. Vite hot-reloads.
+3. `npm run watch-map` — Playwright headless Chromium drives the page for 60s at 500ms samples, patches `L.map` to expose the Leaflet instance, records every marker's lat/lon per frame, and prints a distribution of per-frame jump distances.
 
-OpenAPI 3.0.1 spec: `https://www.rmv.de/hapi/api-doc`
+Compare the "Per-500ms-frame shift distribution" table across runs to A/B animation changes. The `>1km` bucket is the "visible teleport" case; reducing it is usually what you want.
 
-Authentication: `accessId=<key>` query parameter or `Authorization: Bearer <key>` header.
+Env overrides: `MAP_URL=https://dummrum.de/en/map npm run watch-map` points the harness at production, `SAMPLE_COUNT=240 SAMPLE_MS=250 npm run watch-map` runs longer or finer-grained.
 
-### Endpoints used
+### Known traps
 
-#### `GET /departureBoard` — Departure Board (Section 2.25)
-
-Returns departures from a station within a time window. Default duration is 60 minutes.
-
-| Parameter | Required | Default | Description |
-|-----------|----------|---------|-------------|
-| `accessId` | M | — | API key |
-| `id` | O | — | Station/stop ID (from `location.name`). Required if `extId` not set |
-| `date` | O | today | Start date (`YYYY-MM-DD`) |
-| `time` | O | now | Start time (`HH:mm`) |
-| `duration` | O | 60 | Time window in minutes (0–1439) |
-| `maxJourneys` | O | -1 | Max departures to return. `-1` = all within duration |
-| `products` | O | all | Bitmask for transport types (bus=16, tram=4, U-Bahn=8) |
-| `direction` | O | — | Filter by direction (station ID of last stop) |
-| `lines` | O | — | Filter by line codes (comma-separated, `!` prefix to negate) |
-| `operators` | O | — | Filter by operator codes (comma-separated) |
-| `rtMode` | O | SERVER_DEFAULT | Realtime mode: `OFF`, `INFOS`, `FULL`, `REALTIME`, `SERVER_DEFAULT` |
-| `format` | O | xml | Response format: `json` or `xml` |
-
-Response root element: `DepartureBoard`. Contains a list of `Departure` objects with times, realtime data, tracks, journey references, and product info.
-
-This project uses: `type=DEP`, `id`, `date`, `time`, `duration=120`, `maxJourneys=-1`, `format=json`.
-
-#### `GET /location.name` — Location Search by Name (Section 2.3)
-
-Pattern-matching search for stops, stations, addresses, and POIs.
-
-| Parameter | Required | Default | Description |
-|-----------|----------|---------|-------------|
-| `accessId` | M | — | API key |
-| `input` | M | — | Search string |
-| `maxNo` | O | 10 | Max results (1–1000) |
-| `type` | O | ALL | Filter: `S` (stops only), `A` (addresses), `P` (POIs), `ALL`, `SA`, `SP`, `AP` |
-| `format` | O | xml | Response format |
-
-Use `type=S` to search for station/stop IDs when adding new stations.
-
-#### Finding station IDs without an API key
-
-The RMV website exposes a public autocomplete endpoint that returns station IDs without authentication:
-
-```
-https://www.rmv.de/auskunft/bin/jp/ajax-getstop.exe/dn?REQ0JourneyStopsS0A=1&REQ0JourneyStopsS0G=<search-term>&js=true
-```
-
-The response contains `extId` fields with the station IDs (e.g., `003006903` → use `3006903` without leading zeros).
-
-### API types
-
-Types are auto-generated from the OpenAPI spec into `src/lib/hafas-types.ts`. The typed client is in `src/lib/hafas.ts`. Regenerate with `npm run generate:api`.
-
-## Secrets (set via `wrangler secret put`)
-
-- `RMV_API_KEY` — HAFAS API access key(s) for rmv.de. Supports multiple comma-separated keys for load distribution.
+- **Per-journey GPS cadence is ~5 min**. That's the poller's per-journey poll interval; the client's 30s fetch mostly returns unchanged data. Any animation that forward-projects at schedule pace will drift kilometres if the vehicle runs late. Observed-velocity extrapolation (derive speed from two consecutive fixes) is what works.
+- **Underground stretches (U-Bahn, S-Bahn tunnels) produce schedule-derived "fake" GPS**. Snap GPS to the nearest polyline point when a polyline is present so the marker stays on the rails.
+- **Polylines arrive as Google-encoded `crdEncYX`**. The original parser only checked `crd` and produced null for months. See `src/lib/mgate.ts:decodePolyline`.
+- **RMV often returns `arr == dep` at intermediate stops** for trams/S-Bahn/U-Bahn. Enforce a minimum 20s dwell at parse time so the marker visibly pauses at stations.
 
 ## Biome config notes
 
-- `.astro` files have `noUnusedVariables` and `noUnusedImports` disabled (biome can't see template usage)
-- `tailwindDirectives` CSS parser option is enabled for `@import "tailwindcss"`
-- The `noNonNullAssertion` warnings on Astro params (`Astro.params.station!`) are expected and intentional
-- Lefthook glob excludes `.json` files from biome (they're not in biome's includes list)
+- `.astro` files have `noUnusedVariables` and `noUnusedImports` disabled (biome can't see template usage).
+- `tailwindDirectives` CSS parser option is enabled for `@import "tailwindcss"`.
+- The `noNonNullAssertion` warnings on Astro params (`Astro.params.station!`) are expected and intentional.
+- Lefthook glob excludes `.json` files from biome (they're not in biome's includes list).
 
 ## Knip config notes
 
-- `.astro` files are excluded from analysis (`ignore: ["src/**/*.astro"]`) since knip can't parse them
-- `tailwindcss` and `cloudflare` are in `ignoreDependencies` (virtual module imports)
-- `ignoreExportsUsedInFile` is enabled because query interfaces are used via function return types
-- `src/lib/hafas-types.ts` is excluded (auto-generated)
+- `.astro` files are excluded from analysis (`ignore: ["src/**/*.astro"]`) since knip can't parse them.
+- `tailwindcss` and `cloudflare` are in `ignoreDependencies` (virtual module imports).
+- `ignoreExportsUsedInFile` is enabled because query interfaces are used via function return types.

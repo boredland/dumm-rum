@@ -12,7 +12,8 @@
 		"db:migrate": "wrangler d1 migrations apply rmv-departures --remote",
 		"db:migrate:local": "wrangler d1 migrations apply rmv-departures --local",
 		"deploy": "astro build && npm run db:migrate && wrangler deploy",
-		"prepare": "lefthook install"
+		"prepare": "lefthook install",
+		"watch-map": "node scripts/watch-map.mjs"
 	},
 	"dependencies": {
 		"@astrojs/cloudflare": "^13.1.4",
@@ -29,6 +30,7 @@
 		"drizzle-kit": "^1.0.0-beta.20",
 		"knip": "^6.1.0",
 		"lefthook": "^2.1.4",
+		"playwright": "^1.59.1",
 		"tailwindcss": "^4.2.2",
 		"typescript": "^5.4.0",
 		"wrangler": "^4.78.0"
