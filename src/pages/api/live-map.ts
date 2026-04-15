@@ -71,8 +71,14 @@ export const GET: APIRoute = async () => {
 					eq(journeyRuns.cancelled, 0),
 					eq(journeyRuns.wasTracked, 0),
 					eq(journeyRuns.pollState, "done"),
-					sql`(${journeyRuns.destArrTime} >= ${nowTime} OR (${journeyRuns.destArrTime} = ${journeyRuns.originDepTime} AND (${journeyRuns.originDepTime} >= time(${nowTime}, '-1 hour') OR time(${nowTime}, '-1 hour') > ${nowTime})))`,
+					// Only surface ghosts during the trip's planned run window.
+					// Requires an enriched destArrTime (> originDepTime) — runs
+					// that still carry the discovery-time placeholder
+					// (destArrTime = originDepTime) are skipped; we don't know
+					// when those were supposed to end.
+					sql`${journeyRuns.destArrTime} > ${journeyRuns.originDepTime}`,
 					sql`${journeyRuns.originDepTime} <= ${nowTime}`,
+					sql`${journeyRuns.destArrTime} >= ${nowTime}`,
 				),
 			),
 	]);
