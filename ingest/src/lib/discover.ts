@@ -114,20 +114,22 @@ async function enqueueNewJourneys(
 			),
 		);
 
-	await Promise.all(
-		candidates.map((c, i) =>
-			boss.send(
-				POLL_QUEUE,
-				{
-					journeyRef: c.journeyRef,
-					dayOfOperation: c.dayOfOperation,
-					pollCount: 0,
-				},
-				{
-					startAfter: Math.floor((i / candidates.length) * STAGGER_WINDOW_S),
-				},
+	// One bulk insert beats N individual boss.send() round-trips. Convert
+	// relative seconds → absolute Date since JobInsert wants an absolute
+	// startAfter.
+	const nowMs = Date.now();
+	await boss.insert(
+		candidates.map((c, i) => ({
+			name: POLL_QUEUE,
+			data: {
+				journeyRef: c.journeyRef,
+				dayOfOperation: c.dayOfOperation,
+				pollCount: 0,
+			},
+			startAfter: new Date(
+				nowMs + Math.floor((i / candidates.length) * STAGGER_WINDOW_S) * 1000,
 			),
-		),
+		})),
 	);
 
 	return candidates.length;
