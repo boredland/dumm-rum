@@ -80,3 +80,61 @@ export const journeyPositions = pgTable(
 		index("idx_journey_pos_captured").on(t.capturedAt),
 	],
 );
+
+// Pre-aggregated per-operator / per-line / per-stop rollups produced by the
+// materialize* jobs. Stats pages read from these instead of scanning the
+// full journey_runs / journey_stops tables on every request.
+
+export const operatorDailyStats = pgTable(
+	"operator_daily_stats",
+	{
+		operator: text().notNull(),
+		date: text().notNull(),
+		total: integer().notNull().default(0),
+		cancelled: integer().notNull().default(0),
+		ghost: integer().notNull().default(0),
+		delayed: integer().notNull().default(0),
+		avgDelay: real("avg_delay"),
+	},
+	(t) => [
+		primaryKey({ columns: [t.operator, t.date] }),
+		index("idx_operator_daily_stats_date").on(t.date),
+	],
+);
+
+export const lineDailyStats = pgTable(
+	"line_daily_stats",
+	{
+		line: text().notNull(),
+		date: text().notNull(),
+		total: integer().notNull().default(0),
+		cancelled: integer().notNull().default(0),
+		ghost: integer().notNull().default(0),
+		delayed: integer().notNull().default(0),
+		avgDelay: real("avg_delay"),
+		category: text(),
+		operators: text(),
+		destinations: text(),
+	},
+	(t) => [
+		primaryKey({ columns: [t.line, t.date] }),
+		index("idx_line_daily_stats_date").on(t.date),
+	],
+);
+
+export const knownStops = pgTable(
+	"known_stops",
+	{
+		stopId: text("stop_id").primaryKey(),
+		stopName: text("stop_name").notNull(),
+		slug: text(),
+		lines: text(),
+		categories: text(),
+		journeyCount: integer("journey_count").notNull().default(0),
+		cancelled: integer().notNull().default(0),
+		ghost: integer().notNull().default(0),
+		delayed: integer().notNull().default(0),
+		updatedAt: text("updated_at").notNull(),
+	},
+	(t) => [index("idx_known_stops_slug").on(t.slug)],
+);
