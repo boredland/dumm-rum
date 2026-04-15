@@ -1,12 +1,39 @@
-import { and, desc, eq, gte, isNotNull, sql, sum } from "drizzle-orm";
+import {
+	and,
+	asc,
+	count,
+	desc,
+	eq,
+	gte,
+	inArray,
+	isNotNull,
+	sql,
+	sum,
+} from "drizzle-orm";
 import { db } from "../db/client.ts";
 import {
 	journeyRuns,
+	journeyStops,
 	knownStops,
 	lineDailyStats,
 	operatorDailyStats,
 } from "../db/schema.ts";
-import { todayBerlin } from "./utils.ts";
+import {
+	DELAY_THRESHOLD_MIN,
+	PLANNED_FREQUENCY_MIN,
+	todayBerlin,
+} from "./utils.ts";
+
+// Reusable SQL fragments (mirror of materialize.ts helpers — Postgres
+// boolean-aware; epoch math for delay minutes).
+const ghostStopCaseSql = sql<number>`CASE WHEN NOT ${journeyRuns.wasTracked} AND NOT ${journeyRuns.cancelled} THEN 1 ELSE 0 END`;
+
+const stopDelayMinSql = sql<number>`
+	EXTRACT(EPOCH FROM (
+		(${journeyStops.dayOfOperation} || ' ' || ${journeyStops.rtDepTime})::timestamp
+		- (${journeyStops.dayOfOperation} || ' ' || ${journeyStops.depTime})::timestamp
+	)) / 60.0
+`;
 
 export type DaysFilter = "all" | "today" | "weekdays" | "weekends";
 
@@ -228,4 +255,195 @@ export async function getStopSummaries(): Promise<StopSummary[]> {
  * itself a comma-separated list built by the materialize job). Split + unique. */
 function dedupeCsv(s: string): string[] {
 	return [...new Set(s.split(","))].filter(Boolean);
+}
+
+export interface KnownStop {
+	stopIds: string[];
+	stopName: string;
+	categories: string[];
+}
+
+/**
+ * Given a station slug, resolve to the set of stop_ids sharing that slug.
+ * Multiple stop_ids can map to the same station name (e.g. separate
+ * platforms numbered differently in HAFAS but representing the same stop).
+ */
+export async function findStopBySlug(slug: string): Promise<KnownStop | null> {
+	const rows = await db
+		.select({
+			stopId: knownStops.stopId,
+			stopName: knownStops.stopName,
+			categories: knownStops.categories,
+		})
+		.from(knownStops)
+		.where(eq(knownStops.slug, slug));
+
+	if (rows.length === 0) return null;
+
+	const categories = new Set<string>();
+	for (const r of rows) {
+		if (r.categories)
+			for (const c of r.categories.split(",")) categories.add(c);
+	}
+
+	return {
+		stopIds: rows.map((r) => r.stopId),
+		stopName: rows[0].stopName,
+		categories: [...categories].filter(Boolean),
+	};
+}
+
+export interface DayStats {
+	date: string;
+	total: number;
+	cancelled: number;
+	ghost: number;
+	delayed: number;
+	avgDelay: number | null;
+}
+
+export interface StopStats {
+	days: DayStats[];
+	lastChange: string | null;
+	categories: string[];
+}
+
+/**
+ * Per-day stats for a station, joining stops→runs so we can count ghosts
+ * (runs that never got realtime data). Returns one row per day_of_operation,
+ * newest first.
+ */
+export async function getStopStats(stopIds: string[]): Promise<StopStats> {
+	if (stopIds.length === 0) {
+		return { days: [], lastChange: null, categories: [] };
+	}
+
+	const [dayRows, metaRows] = await Promise.all([
+		db
+			.select({
+				date: journeyStops.dayOfOperation,
+				total: count().as("total"),
+				cancelled:
+					sql<number>`SUM(CASE WHEN ${journeyStops.cancelled} THEN 1 ELSE 0 END)`.as(
+						"cancelled",
+					),
+				ghost: sql<number>`SUM(${ghostStopCaseSql})`.as("ghost"),
+				delayed: sql<number>`
+					SUM(CASE WHEN NOT ${journeyStops.cancelled}
+						AND ${journeyStops.rtDepTime} IS NOT NULL
+						AND ${journeyStops.depTime} IS NOT NULL
+						AND ${stopDelayMinSql} >= ${DELAY_THRESHOLD_MIN}
+					THEN 1 ELSE 0 END)
+				`.as("delayed"),
+				avgDelay: sql<number | null>`
+					AVG(CASE
+						WHEN ${journeyStops.cancelled} THEN ${PLANNED_FREQUENCY_MIN}
+						WHEN ${journeyStops.rtDepTime} IS NOT NULL AND ${journeyStops.depTime} IS NOT NULL THEN ${stopDelayMinSql}
+					END)
+				`.as("avg_delay"),
+			})
+			.from(journeyStops)
+			.innerJoin(
+				journeyRuns,
+				and(
+					eq(journeyRuns.journeyRef, journeyStops.journeyRef),
+					eq(journeyRuns.dayOfOperation, journeyStops.dayOfOperation),
+				),
+			)
+			.where(inArray(journeyStops.stopId, stopIds))
+			.groupBy(journeyStops.dayOfOperation)
+			.orderBy(desc(journeyStops.dayOfOperation)),
+		db
+			.select({
+				lastChange: sql<string | null>`MAX(${journeyRuns.snapshotAt})`.as(
+					"last_change",
+				),
+				categories:
+					sql<string>`STRING_AGG(DISTINCT ${journeyRuns.category}, ',')`.as(
+						"categories",
+					),
+			})
+			.from(journeyStops)
+			.innerJoin(
+				journeyRuns,
+				and(
+					eq(journeyRuns.journeyRef, journeyStops.journeyRef),
+					eq(journeyRuns.dayOfOperation, journeyStops.dayOfOperation),
+				),
+			)
+			.where(inArray(journeyStops.stopId, stopIds)),
+	]);
+
+	const meta = metaRows[0];
+	return {
+		days: dayRows.map((d) => ({
+			date: d.date,
+			total: Number(d.total),
+			cancelled: Number(d.cancelled),
+			ghost: Number(d.ghost),
+			delayed: Number(d.delayed),
+			avgDelay: d.avgDelay === null ? null : Number(d.avgDelay),
+		})),
+		lastChange: meta?.lastChange ?? null,
+		categories: meta?.categories ? dedupeCsv(meta.categories) : [],
+	};
+}
+
+export interface StopDayDeparture {
+	date: string;
+	time: string;
+	rtTime: string | null;
+	line: string;
+	direction: string;
+	cancelled: boolean;
+	ghost: number;
+}
+
+/** Ordered list of all observed departures at a station on a given day. */
+export async function getStopDayDepartures(
+	stopIds: string[],
+	date: string,
+): Promise<StopDayDeparture[]> {
+	if (stopIds.length === 0) return [];
+	const rows = await db
+		.select({
+			date: journeyStops.dayOfOperation,
+			time: sql<string>`COALESCE(${journeyStops.depTime}, ${journeyStops.arrTime})`.as(
+				"time",
+			),
+			rtTime: sql<
+				string | null
+			>`COALESCE(${journeyStops.rtDepTime}, ${journeyStops.rtArrTime})`.as(
+				"rt_time",
+			),
+			line: journeyRuns.line,
+			direction: journeyRuns.destName,
+			cancelled: journeyStops.cancelled,
+			ghost: ghostStopCaseSql.as("ghost"),
+		})
+		.from(journeyStops)
+		.innerJoin(
+			journeyRuns,
+			and(
+				eq(journeyRuns.journeyRef, journeyStops.journeyRef),
+				eq(journeyRuns.dayOfOperation, journeyStops.dayOfOperation),
+			),
+		)
+		.where(
+			and(
+				inArray(journeyStops.stopId, stopIds),
+				eq(journeyStops.dayOfOperation, date),
+			),
+		)
+		.orderBy(asc(sql`time`), asc(journeyRuns.line));
+
+	return rows.map((r) => ({
+		date: r.date,
+		time: r.time,
+		rtTime: r.rtTime,
+		line: r.line,
+		direction: r.direction,
+		cancelled: r.cancelled,
+		ghost: Number(r.ghost),
+	}));
 }

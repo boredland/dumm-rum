@@ -181,9 +181,10 @@ function StopCard({ stop, lang }: { stop: StopSummary; lang: Lang }) {
 				: "border-emerald-500";
 	const slug = slugForStop(stop.stopIds, stop.stopName);
 	return (
-		<div
-			className={`bg-surface border ${border} rounded-xl p-4`}
-			data-slug={slug}
+		<Link
+			to="/$lang/$station"
+			params={{ lang, station: slug }}
+			className={`bg-surface border ${border} rounded-xl p-4 no-underline text-fg hover:bg-surface-hover transition-colors`}
 		>
 			<div className="text-[0.7rem] uppercase tracking-wide text-muted mb-1">
 				{categoryIcons(stop.categories)}
@@ -209,7 +210,7 @@ function StopCard({ stop, lang }: { stop: StopSummary; lang: Lang }) {
 					{t(lang, "table.no_data")}
 				</div>
 			)}
-		</div>
+		</Link>
 	);
 }
 

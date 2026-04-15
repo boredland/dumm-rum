@@ -13,6 +13,9 @@ import { Route as LangRouteRouteImport } from './routes/$lang/route'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as LangIndexRouteImport } from './routes/$lang/index'
 import { Route as LangMapRouteImport } from './routes/$lang/map'
+import { Route as LangStationRouteRouteImport } from './routes/$lang/$station/route'
+import { Route as LangStationIndexRouteImport } from './routes/$lang/$station/index'
+import { Route as LangStationDayDateRouteImport } from './routes/$lang/$station/day/$date'
 
 const LangRouteRoute = LangRouteRouteImport.update({
   id: '/$lang',
@@ -34,31 +37,74 @@ const LangMapRoute = LangMapRouteImport.update({
   path: '/map',
   getParentRoute: () => LangRouteRoute,
 } as any)
+const LangStationRouteRoute = LangStationRouteRouteImport.update({
+  id: '/$station',
+  path: '/$station',
+  getParentRoute: () => LangRouteRoute,
+} as any)
+const LangStationIndexRoute = LangStationIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => LangStationRouteRoute,
+} as any)
+const LangStationDayDateRoute = LangStationDayDateRouteImport.update({
+  id: '/day/$date',
+  path: '/day/$date',
+  getParentRoute: () => LangStationRouteRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/$lang': typeof LangRouteRouteWithChildren
+  '/$lang/$station': typeof LangStationRouteRouteWithChildren
   '/$lang/map': typeof LangMapRoute
   '/$lang/': typeof LangIndexRoute
+  '/$lang/$station/': typeof LangStationIndexRoute
+  '/$lang/$station/day/$date': typeof LangStationDayDateRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/$lang/map': typeof LangMapRoute
   '/$lang': typeof LangIndexRoute
+  '/$lang/$station': typeof LangStationIndexRoute
+  '/$lang/$station/day/$date': typeof LangStationDayDateRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/$lang': typeof LangRouteRouteWithChildren
+  '/$lang/$station': typeof LangStationRouteRouteWithChildren
   '/$lang/map': typeof LangMapRoute
   '/$lang/': typeof LangIndexRoute
+  '/$lang/$station/': typeof LangStationIndexRoute
+  '/$lang/$station/day/$date': typeof LangStationDayDateRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/$lang' | '/$lang/map' | '/$lang/'
+  fullPaths:
+    | '/'
+    | '/$lang'
+    | '/$lang/$station'
+    | '/$lang/map'
+    | '/$lang/'
+    | '/$lang/$station/'
+    | '/$lang/$station/day/$date'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/$lang/map' | '/$lang'
-  id: '__root__' | '/' | '/$lang' | '/$lang/map' | '/$lang/'
+  to:
+    | '/'
+    | '/$lang/map'
+    | '/$lang'
+    | '/$lang/$station'
+    | '/$lang/$station/day/$date'
+  id:
+    | '__root__'
+    | '/'
+    | '/$lang'
+    | '/$lang/$station'
+    | '/$lang/map'
+    | '/$lang/'
+    | '/$lang/$station/'
+    | '/$lang/$station/day/$date'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -96,15 +142,51 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof LangMapRouteImport
       parentRoute: typeof LangRouteRoute
     }
+    '/$lang/$station': {
+      id: '/$lang/$station'
+      path: '/$station'
+      fullPath: '/$lang/$station'
+      preLoaderRoute: typeof LangStationRouteRouteImport
+      parentRoute: typeof LangRouteRoute
+    }
+    '/$lang/$station/': {
+      id: '/$lang/$station/'
+      path: '/'
+      fullPath: '/$lang/$station/'
+      preLoaderRoute: typeof LangStationIndexRouteImport
+      parentRoute: typeof LangStationRouteRoute
+    }
+    '/$lang/$station/day/$date': {
+      id: '/$lang/$station/day/$date'
+      path: '/day/$date'
+      fullPath: '/$lang/$station/day/$date'
+      preLoaderRoute: typeof LangStationDayDateRouteImport
+      parentRoute: typeof LangStationRouteRoute
+    }
   }
 }
 
+interface LangStationRouteRouteChildren {
+  LangStationIndexRoute: typeof LangStationIndexRoute
+  LangStationDayDateRoute: typeof LangStationDayDateRoute
+}
+
+const LangStationRouteRouteChildren: LangStationRouteRouteChildren = {
+  LangStationIndexRoute: LangStationIndexRoute,
+  LangStationDayDateRoute: LangStationDayDateRoute,
+}
+
+const LangStationRouteRouteWithChildren =
+  LangStationRouteRoute._addFileChildren(LangStationRouteRouteChildren)
+
 interface LangRouteRouteChildren {
+  LangStationRouteRoute: typeof LangStationRouteRouteWithChildren
   LangMapRoute: typeof LangMapRoute
   LangIndexRoute: typeof LangIndexRoute
 }
 
 const LangRouteRouteChildren: LangRouteRouteChildren = {
+  LangStationRouteRoute: LangStationRouteRouteWithChildren,
   LangMapRoute: LangMapRoute,
   LangIndexRoute: LangIndexRoute,
 }
