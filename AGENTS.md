@@ -116,7 +116,7 @@ scripts/
 1. Every 30 min, `scheduled` in `src/worker.ts` calls `runCollection()`.
 2. `collect.ts` → `mgateStationBoardBatch` across all configured `STATIONS` in a single POST; filtered departures become skeleton `journey_runs` rows (no polyline/topology yet).
 3. Skeleton rows get enqueued on `JOURNEY_QUEUE` for the per-journey poller.
-4. Queue consumer (`journeyPoller.ts`) batches up to 10 refs per mgate POST, writes run/stop/position rows, re-enqueues polling up to 15 times per journey with 5-min delay until departure passes.
+4. Queue consumer (`journeyPoller.ts`) batches up to 10 refs per mgate POST, writes run/stop/position rows, re-enqueues polling up to 90 times per journey with 1-min delay until departure passes.
 5. Day-rollover (02:00): `snapshotJourneys` re-polls yesterday's journeys to fill in topology that discovery missed.
 6. Day-rollover (03:00): `journey_positions` older than 24h are pruned — the live-map only reads the newest fix per ref.
 7. Page requests read materialized stats tables (fast) and raw queries for station/day detail pages.
@@ -178,7 +178,7 @@ Env overrides: `MAP_URL=https://dummrum.de/en/map npm run watch-map` points the 
 
 ### Known traps
 
-- **Per-journey GPS cadence is ~5 min**. That's the poller's per-journey poll interval; the client's 30s fetch mostly returns unchanged data. Any animation that forward-projects at schedule pace will drift kilometres if the vehicle runs late. Observed-velocity extrapolation (derive speed from two consecutive fixes) is what works.
+- **Per-journey GPS cadence is ~1 min**. That's the poller's per-journey poll interval; the client's 30s fetch mostly returns unchanged data. Any animation that forward-projects at schedule pace will drift kilometres if the vehicle runs late. Observed-velocity extrapolation (derive speed from two consecutive fixes) is what works.
 - **Underground stretches (U-Bahn, S-Bahn tunnels) produce schedule-derived "fake" GPS**. Snap GPS to the nearest polyline point when a polyline is present so the marker stays on the rails.
 - **Polylines arrive as Google-encoded `crdEncYX`**. The original parser only checked `crd` and produced null for months. See `src/lib/mgate.ts:decodePolyline`.
 - **RMV often returns `arr == dep` at intermediate stops** for trams/S-Bahn/U-Bahn. Enforce a minimum 20s dwell at parse time so the marker visibly pauses at stations.

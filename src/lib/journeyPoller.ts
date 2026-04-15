@@ -193,8 +193,8 @@ async function handlePollResult(
 	const hasDeparted =
 		!origin?.depTime ||
 		nowBerlin().isAfter(berlinTime(dayOfOperation, origin.depTime));
-	const noRtAfterMaxPolls = !hasRtData && pollCount >= 2 && hasDeparted;
-	const maxPollsReached = pollCount >= 15;
+	const noRtAfterMaxPolls = !hasRtData && pollCount >= 10 && hasDeparted;
+	const maxPollsReached = pollCount >= 90;
 
 	if (pollCount === 0 && line && env.TELEGRAM_BOT_TOKEN) {
 		await notifyJourneyIssues(
@@ -227,14 +227,14 @@ async function handlePollResult(
 		msg.ack();
 		await env.JOURNEY_QUEUE.send(
 			{ journeyRef, dayOfOperation, pollCount: pollCount + 1 },
-			{ delaySeconds: 300 },
+			{ delaySeconds: 60 },
 		);
 	}
 }
 
 // Skip the per-poll run upsert when nothing meaningful changed. snapshotAt
 // becomes slightly stale in exchange, but it's only used for "last updated"
-// display and stays accurate enough at the 5-min poll cadence.
+// display and stays accurate enough at the 1-min poll cadence.
 const runChangedSql = sql`
 	${excluded(journeyRuns.status)} != ${journeyRuns.status}
 	OR ${excluded(journeyRuns.cancelled)} > ${journeyRuns.cancelled}
