@@ -304,7 +304,7 @@ async function materializeLineStats(db: Db, date: string): Promise<void> {
 	const rows = await db
 		.select({
 			line: journeyRuns.line,
-			category: journeyRuns.category,
+			category: sql<string>`MAX(${journeyRuns.category})`.as("category"),
 			total: count().as("total"),
 			cancelled: sql<number>`SUM(${journeyRuns.cancelled})`.as("cancelled"),
 			ghost: sql<number>`SUM(${ghostCaseSql})`.as("ghost"),
@@ -336,7 +336,7 @@ async function materializeLineStats(db: Db, date: string): Promise<void> {
 		})
 		.from(journeyRuns)
 		.where(eq(journeyRuns.dayOfOperation, date))
-		.groupBy(journeyRuns.line, journeyRuns.category);
+		.groupBy(journeyRuns.line);
 
 	await Promise.all(
 		rows.map((row) =>
