@@ -1,4 +1,3 @@
-import dayjs from "dayjs";
 import { and, eq, sql } from "drizzle-orm";
 import type PgBoss from "pg-boss";
 import type { Db } from "../db/client.ts";
@@ -30,7 +29,6 @@ const EXCLUDE_CATEGORIES = new Set([
 
 const BATCH_INSERT_SIZE = 500;
 const POLL_QUEUE = "journey-poll";
-const STAGGER_WINDOW_S = 60;
 
 async function discoverStationJourneys(
 	db: Db,
@@ -115,21 +113,16 @@ async function enqueueNewJourneys(
 			),
 		);
 
-	// One bulk insert beats N individual boss.send() round-trips. Convert
-	// relative seconds → absolute Date since JobInsert wants an absolute
-	// startAfter.
-	const start = dayjs();
+	// One bulk insert beats N individual boss.send() round-trips. pg-boss
+	// paces the drain naturally — no startAfter stagger needed.
 	await boss.insert(
-		candidates.map((c, i) => ({
+		candidates.map((c) => ({
 			name: POLL_QUEUE,
 			data: {
 				journeyRef: c.journeyRef,
 				dayOfOperation: c.dayOfOperation,
 				pollCount: 0,
 			},
-			startAfter: start
-				.add(Math.floor((i / candidates.length) * STAGGER_WINDOW_S), "second")
-				.toDate(),
 		})),
 	);
 

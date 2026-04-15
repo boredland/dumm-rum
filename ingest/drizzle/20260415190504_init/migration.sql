@@ -1,4 +1,4 @@
-CREATE TABLE "journey_positions" (
+CREATE TABLE IF NOT EXISTS "journey_positions" (
 	"id" serial PRIMARY KEY,
 	"journey_ref" text NOT NULL,
 	"day_of_operation" text NOT NULL,
@@ -10,7 +10,7 @@ CREATE TABLE "journey_positions" (
 	"captured_at" text NOT NULL
 );
 --> statement-breakpoint
-CREATE TABLE "journey_runs" (
+CREATE TABLE IF NOT EXISTS "journey_runs" (
 	"journey_ref" text,
 	"day_of_operation" text,
 	"line" text NOT NULL,
@@ -34,7 +34,7 @@ CREATE TABLE "journey_runs" (
 	CONSTRAINT "journey_runs_pkey" PRIMARY KEY("journey_ref","day_of_operation")
 );
 --> statement-breakpoint
-CREATE TABLE "journey_stops" (
+CREATE TABLE IF NOT EXISTS "journey_stops" (
 	"journey_ref" text,
 	"day_of_operation" text,
 	"route_idx" integer,
@@ -50,8 +50,8 @@ CREATE TABLE "journey_stops" (
 	CONSTRAINT "journey_stops_pkey" PRIMARY KEY("journey_ref","day_of_operation","route_idx")
 );
 --> statement-breakpoint
-CREATE INDEX "idx_journey_pos_ref_day" ON "journey_positions" ("journey_ref","day_of_operation");--> statement-breakpoint
-CREATE INDEX "idx_journey_pos_captured" ON "journey_positions" ("captured_at");--> statement-breakpoint
-CREATE INDEX "idx_journey_runs_day" ON "journey_runs" ("day_of_operation");--> statement-breakpoint
-CREATE INDEX "idx_journey_runs_poll_state" ON "journey_runs" ("poll_state","day_of_operation");--> statement-breakpoint
-CREATE INDEX "idx_journey_stops_day" ON "journey_stops" ("day_of_operation");
+CREATE INDEX IF NOT EXISTS "idx_journey_pos_ref_day" ON "journey_positions" ("journey_ref","day_of_operation");--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "idx_journey_pos_captured" ON "journey_positions" ("captured_at");--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "idx_journey_runs_day" ON "journey_runs" ("day_of_operation");--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "idx_journey_runs_poll_state" ON "journey_runs" ("poll_state","day_of_operation");--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "idx_journey_stops_day" ON "journey_stops" ("day_of_operation");
