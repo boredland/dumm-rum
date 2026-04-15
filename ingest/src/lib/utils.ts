@@ -25,3 +25,22 @@ export function todayBerlin(): string {
 // threshold is the minutes after which a departure counts as "delayed".
 export const PLANNED_FREQUENCY_MIN = 15;
 export const DELAY_THRESHOLD_MIN = 7.5;
+
+export function pct(numer: number, denom: number): string {
+	return denom > 0 ? ((numer / denom) * 100).toFixed(1) : "0.0";
+}
+
+export function onTimeRate(
+	cancelled: number,
+	delayed: number,
+	total: number,
+): number {
+	if (total === 0) return 100;
+	return Math.round(((total - cancelled - delayed) / total) * 100);
+}
+
+export function shortStationName(name: string): string {
+	return name
+		.replace(/^Frankfurt \(Main\)\s*/i, "FFM ")
+		.replace(/Hauptbahnhof/g, "Hbf");
+}

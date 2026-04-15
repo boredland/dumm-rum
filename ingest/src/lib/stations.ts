@@ -97,3 +97,26 @@ export function nameToSlug(name: string): string {
 		.replace(/[^a-z0-9]+/g, "-")
 		.replace(/^-|-$/g, "");
 }
+
+const SLUG_BY_STOP_ID = new Map(STATIONS.map((s) => [s.id, s.slug]));
+
+/** Prefer the configured STATIONS slug when the stop id matches — keeps
+ * shorter / curated URLs for the main Frankfurt stops — else derive from name. */
+export function slugForStop(stopIds: string[], stopName: string): string {
+	for (const id of stopIds) {
+		const slug = SLUG_BY_STOP_ID.get(id);
+		if (slug) return slug;
+	}
+	return nameToSlug(stopName);
+}
+
+export function categoryIcons(categories: string[]): string {
+	const icons: string[] = [];
+	if (categories.some((c) => ["ICE", "IC", "EC"].includes(c))) icons.push("🚄");
+	if (categories.some((c) => ["RE", "RB", "R"].includes(c))) icons.push("🚆");
+	if (categories.some((c) => ["S-Bahn", "S"].includes(c))) icons.push("🚈");
+	if (categories.includes("U-Bahn")) icons.push("🚇");
+	if (categories.includes("Tram")) icons.push("🚋");
+	if (categories.includes("Bus")) icons.push("🚌");
+	return icons.join("");
+}
