@@ -129,6 +129,7 @@ export function LiveMapView({
 }: Props) {
 	const [payload, setPayload] = useState(initial);
 	const [filter, setFilter] = useState<FilterKey>("all");
+	const [mapReady, setMapReady] = useState(false);
 	const mapElRef = useRef<HTMLDivElement | null>(null);
 	const mapRef = useRef<LeafletMap | null>(null);
 	const leafletRef = useRef<typeof import("leaflet") | null>(null);
@@ -199,6 +200,10 @@ export function LiveMapView({
 			// Expose cleanup for the outer effect teardown.
 			(map as unknown as { _themeCleanup?: () => void })._themeCleanup = () =>
 				darkMql.removeEventListener("change", onThemeChange);
+
+			// Triggers the marker-drawing effect so initial vehicles render
+			// immediately instead of waiting for the first poll.
+			setMapReady(true);
 		})();
 
 		return () => {
@@ -211,11 +216,16 @@ export function LiveMapView({
 				mapRef.current = null;
 			}
 			markersRef.current.clear();
+			setMapReady(false);
 		};
 	}, []);
 
-	// Redraw markers whenever payload or filter changes.
+	// Redraw markers whenever payload or filter changes. mapReady flips
+	// true once Leaflet finishes its async import — keeping it in deps
+	// means the very first payload renders as soon as the map mounts,
+	// not 30s later at the first refresh.
 	useEffect(() => {
+		if (!mapReady) return;
 		const L = leafletRef.current;
 		const map = mapRef.current;
 		if (!L || !map) return;
@@ -317,7 +327,7 @@ export function LiveMapView({
 				existing.delete(id);
 			}
 		}
-	}, [payload, filter]);
+	}, [mapReady, payload, filter]);
 
 	// Poll for updates.
 	useEffect(() => {
