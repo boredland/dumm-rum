@@ -277,18 +277,10 @@ async function upsertJourneyRunFromMgate(
 	const hasRtData =
 		mg.lastPos != null || stops.some((s) => s.rtDepTime || s.rtArrTime);
 
-	let polyline: string | null = null;
-	if (mg.polylineCrd && mg.polylineCrd.length >= 4) {
-		const dim = mg.polylineDim ?? 2;
-		const raw = mg.polylineDelta
-			? decodeDeltaCrd(mg.polylineCrd, dim)
-			: mg.polylineCrd;
-		const points: [number, number][] = [];
-		for (let i = 0; i < raw.length; i += dim) {
-			points.push([raw[i + 1] / 1_000_000, raw[i] / 1_000_000]);
-		}
-		polyline = JSON.stringify(points);
-	}
+	const polyline =
+		mg.polylinePoints && mg.polylinePoints.length >= 2
+			? JSON.stringify(mg.polylinePoints)
+			: null;
 
 	await db
 		.insert(journeyRuns)
@@ -339,18 +331,6 @@ async function upsertJourneyRunFromMgate(
 			},
 			setWhere: runChangedSql,
 		});
-}
-
-function decodeDeltaCrd(encoded: number[], dim: number): number[] {
-	const result: number[] = [];
-	const acc = new Array(dim).fill(0);
-	for (let i = 0; i < encoded.length; i += dim) {
-		for (let d = 0; d < dim; d++) {
-			acc[d] += encoded[i + d];
-			result.push(acc[d]);
-		}
-	}
-	return result;
 }
 
 async function upsertMgateStops(

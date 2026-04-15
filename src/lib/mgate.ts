@@ -29,9 +29,8 @@ export interface MgateJourneyDetail {
 	lastPos?: { lat: number; lon: number };
 	lastPosReported?: string;
 	lastPassRouteIdx?: number;
-	polylineCrd?: number[];
-	polylineDelta?: boolean;
-	polylineDim?: number;
+	/** Route geometry as [lat, lon] pairs, already in WGS84 degrees. */
+	polylinePoints?: [number, number][];
 	dayOfOperation?: string;
 	cancelled?: boolean;
 	partCancelled?: boolean;
@@ -140,6 +139,8 @@ interface MgateSvcRes {
 			polyL?: {
 				crd?: number[];
 				crdEncYX?: string;
+				crdEncS?: string;
+				crdEncF?: string;
 				delta?: boolean;
 				dim?: number;
 			}[];
@@ -219,16 +220,9 @@ function parseJourneyDetailsRes(svc: MgateSvcRes | undefined): MgateResult {
 		? { lat: pos.y / 1_000_000, lon: pos.x / 1_000_000 }
 		: undefined;
 
-	let polylineCrd: number[] | undefined;
-	let polylineDelta: boolean | undefined;
-	let polylineDim: number | undefined;
 	const polyIdx = journey.polyG?.polyXL?.[0];
 	const poly = polyIdx != null ? polyL[polyIdx] : polyL[0];
-	if (poly?.crd) {
-		polylineCrd = poly.crd;
-		polylineDelta = poly.delta;
-		polylineDim = poly.dim ?? 2;
-	}
+	const polylinePoints = poly ? decodePolyline(poly) : undefined;
 
 	const dateRaw = journey.date;
 	const dayOfOperation = dateRaw
@@ -244,14 +238,81 @@ function parseJourneyDetailsRes(svc: MgateSvcRes | undefined): MgateResult {
 			lastPos,
 			lastPosReported: journey.posRep,
 			lastPassRouteIdx: journey.lastPassIdx,
-			polylineCrd,
-			polylineDelta,
-			polylineDim,
+			polylinePoints,
 			dayOfOperation,
 			cancelled: journey.isCncl,
 			partCancelled: journey.isPartCncl,
 		},
 	};
+}
+
+/**
+ * mgate returns polylines in one of two shapes depending on the client
+ * profile: a raw `crd` number array (sometimes delta-encoded, integers
+ * scaled by 1e6), or a Google-algorithm encoded `crdEncYX` string. This
+ * handles both and always returns [lat, lon] pairs in WGS84 degrees.
+ */
+function decodePolyline(poly: {
+	crd?: number[];
+	crdEncYX?: string;
+	delta?: boolean;
+	dim?: number;
+}): [number, number][] | undefined {
+	if (poly.crdEncYX) return decodeEncodedPolyline(poly.crdEncYX);
+
+	const dim = poly.dim ?? 2;
+	if (!poly.crd || poly.crd.length < dim * 2) return undefined;
+	const raw = poly.delta ? decodeDeltaCrd(poly.crd, dim) : poly.crd;
+	const points: [number, number][] = [];
+	for (let i = 0; i < raw.length; i += dim) {
+		points.push([raw[i + 1] / 1_000_000, raw[i] / 1_000_000]);
+	}
+	return points;
+}
+
+function decodeDeltaCrd(encoded: number[], dim: number): number[] {
+	const result: number[] = [];
+	const acc = new Array(dim).fill(0);
+	for (let i = 0; i < encoded.length; i += dim) {
+		for (let d = 0; d < dim; d++) {
+			acc[d] += encoded[i + d];
+			result.push(acc[d]);
+		}
+	}
+	return result;
+}
+
+/**
+ * Standard Google-algorithm polyline decoder, lat-before-lon order.
+ * Produces [lat, lon] degree pairs.
+ */
+function decodeEncodedPolyline(str: string): [number, number][] {
+	const factor = 1e5;
+	let index = 0;
+	let lat = 0;
+	let lng = 0;
+	const coords: [number, number][] = [];
+	while (index < str.length) {
+		let result = 1;
+		let shift = 0;
+		let b: number;
+		do {
+			b = str.charCodeAt(index++) - 63 - 1;
+			result += b << shift;
+			shift += 5;
+		} while (b >= 0x1f);
+		lat += result & 1 ? ~(result >> 1) : result >> 1;
+		result = 1;
+		shift = 0;
+		do {
+			b = str.charCodeAt(index++) - 63 - 1;
+			result += b << shift;
+			shift += 5;
+		} while (b >= 0x1f);
+		lng += result & 1 ? ~(result >> 1) : result >> 1;
+		coords.push([lat / factor, lng / factor]);
+	}
+	return coords;
 }
 
 /**

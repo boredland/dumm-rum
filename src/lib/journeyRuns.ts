@@ -120,18 +120,10 @@ function buildRow(
 
 	const cancelledStops = stops.filter((s) => s.cancelled).length;
 
-	let polyline: string | null = null;
-	if (detail.polylineCrd && detail.polylineCrd.length >= 4) {
-		const dim = detail.polylineDim ?? 2;
-		const raw = detail.polylineDelta
-			? decodeDeltaCrd(detail.polylineCrd, dim)
-			: detail.polylineCrd;
-		const points: [number, number][] = [];
-		for (let i = 0; i < raw.length; i += dim) {
-			points.push([raw[i + 1] / 1_000_000, raw[i] / 1_000_000]);
-		}
-		polyline = JSON.stringify(points);
-	}
+	const polyline =
+		detail.polylinePoints && detail.polylinePoints.length >= 2
+			? JSON.stringify(detail.polylinePoints)
+			: null;
 
 	return {
 		journeyRef: ref,
@@ -155,16 +147,4 @@ function buildRow(
 		polyline,
 		snapshotAt,
 	};
-}
-
-function decodeDeltaCrd(encoded: number[], dim: number): number[] {
-	const result: number[] = [];
-	const acc = new Array(dim).fill(0);
-	for (let i = 0; i < encoded.length; i += dim) {
-		for (let d = 0; d < dim; d++) {
-			acc[d] += encoded[i + d];
-			result.push(acc[d]);
-		}
-	}
-	return result;
 }
