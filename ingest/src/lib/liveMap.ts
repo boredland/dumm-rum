@@ -54,6 +54,8 @@ export interface MapVehicle {
 	polyline: string | null;
 	stops: string;
 	ghost: 0 | 1;
+	/** Delay in minutes vs. the scheduled origin departure. 0 if no rt data yet. */
+	delayMin: number;
 }
 
 export interface LiveMapPayload {
@@ -201,10 +203,42 @@ export async function getLiveMap(): Promise<LiveMapPayload> {
 			})),
 		);
 
+	// Origin-stop delay: compare rt_dep_time vs scheduled dep_time on route_idx=0.
+	// Simpler than picking the nearest-passed stop dynamically, and usually a
+	// decent proxy for current delay. Only needed for tracked vehicles.
+	const trackedIds = trackedRows.map((v) => v.id);
+	const delayByJourney = new Map<string, number>();
+	if (trackedIds.length > 0) {
+		const delayRows = await db
+			.select({
+				journeyRef: journeyStops.journeyRef,
+				rtDep: journeyStops.rtDepTime,
+				dep: journeyStops.depTime,
+				dayOfOperation: journeyStops.dayOfOperation,
+			})
+			.from(journeyStops)
+			.where(
+				and(
+					eq(journeyStops.routeIdx, 0),
+					inArray(journeyStops.dayOfOperation, [today, yesterday]),
+					inArray(journeyStops.journeyRef, trackedIds),
+					isNotNull(journeyStops.rtDepTime),
+				),
+			);
+		for (const r of delayRows) {
+			if (!r.rtDep || !r.dep) continue;
+			const planned = new Date(`${r.dayOfOperation}T${r.dep}`).getTime();
+			const actual = new Date(`${r.dayOfOperation}T${r.rtDep}`).getTime();
+			const delayMin = Math.round((actual - planned) / 60_000);
+			if (delayMin > 0) delayByJourney.set(r.journeyRef, delayMin);
+		}
+	}
+
 	const vehicles: MapVehicle[] = trackedRows.map((v) => ({
 		...v,
 		stops: serializeStops(v.id),
 		ghost: 0,
+		delayMin: delayByJourney.get(v.id) ?? 0,
 	}));
 
 	const ghosts: MapVehicle[] = ghostRows.map((v) => ({
@@ -214,6 +248,7 @@ export async function getLiveMap(): Promise<LiveMapPayload> {
 		reportedAt: null,
 		stops: serializeStops(v.id),
 		ghost: 1,
+		delayMin: 0,
 	}));
 
 	return {

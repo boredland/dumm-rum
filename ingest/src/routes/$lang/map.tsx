@@ -66,9 +66,24 @@ function MapPage() {
 					borderTop: "1px solid var(--border-dim)",
 					fontSize: "0.75rem",
 					color: "var(--dimmed)",
+					display: "flex",
+					alignItems: "center",
+					gap: "0.75rem",
 				}}
 			>
-				{l === "de" ? "Datenquelle: RMV" : "Data source: RMV"}
+				<a
+					href="https://www.rmv.de"
+					style={{ display: "inline-flex", flexShrink: 0 }}
+				>
+					<img
+						src="/rmv-logo.svg"
+						alt="RMV"
+						width={74}
+						height={15}
+						style={{ opacity: 0.6 }}
+					/>
+				</a>
+				<span>{l === "de" ? "Datenquelle: RMV" : "Data source: RMV"}</span>
 			</footer>
 		</main>
 	);

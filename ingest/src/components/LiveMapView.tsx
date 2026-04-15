@@ -74,11 +74,7 @@ function secondsNow(): number {
 }
 
 function delayMinForVehicle(v: MapVehicle): number {
-	if (!v.reportedAt) return 0;
-	// Without access to planned arrival timestamps per stop we can't compute
-	// a true delay here — left at 0 for now. (Astro version did the same
-	// for the marker icon path; full delay tracking lives on the stop row.)
-	return 0;
+	return v.delayMin ?? 0;
 }
 
 function createIcon(
@@ -134,6 +130,10 @@ export function LiveMapView({
 	const mapRef = useRef<LeafletMap | null>(null);
 	const leafletRef = useRef<typeof import("leaflet") | null>(null);
 	const markersRef = useRef<Map<string, VehicleMarker>>(new Map());
+	// Keep current filter in a ref so the map's moveend/zoomend callbacks
+	// can read the latest value without closing over a stale render.
+	const currentFilterRef = useRef<FilterKey>("all");
+	const hashWriterRef = useRef<(() => void) | null>(null);
 
 	// Initialize leaflet once, client-side only.
 	useEffect(() => {
@@ -154,19 +154,46 @@ export function LiveMapView({
 		};
 		const themedTile = () => (darkMql.matches ? darkTile : lightTile);
 
+		// Parse `#lat/lng/zoom[/filter]` so refreshing keeps the view.
+		const parseHash = (): {
+			lat: number;
+			lon: number;
+			zoom: number;
+			filter: FilterKey | null;
+		} => {
+			const fallback = { lat: 50.11, lon: 8.68, zoom: 12, filter: null };
+			const parts = window.location.hash.slice(1).split("/");
+			if (parts.length < 3) return fallback;
+			const lat = Number(parts[0]);
+			const lon = Number(parts[1]);
+			const zoom = Number(parts[2]);
+			if (
+				!Number.isFinite(lat) ||
+				!Number.isFinite(lon) ||
+				!Number.isFinite(zoom)
+			) {
+				return fallback;
+			}
+			const f = parts[3] ? decodeURIComponent(parts[3]) : null;
+			const isFilter = (x: string | null): x is FilterKey =>
+				!!x && FILTERS.some((entry) => entry.key === x);
+			return { lat, lon, zoom, filter: isFilter(f) ? f : null };
+		};
+
+		const init = parseHash();
+		if (init.filter && init.filter !== "all") setFilter(init.filter);
+
 		(async () => {
 			const L = (await import("leaflet")).default;
-			await import("leaflet.fullscreen");
+			const { FullScreen } = await import("leaflet.fullscreen");
 			if (cancelled || !mapElRef.current) return;
 			leafletRef.current = L;
 
 			const map = L.map(mapElRef.current, { zoomControl: true }).setView(
-				[50.11, 8.68],
-				12,
+				[init.lat, init.lon],
+				init.zoom,
 			);
-			// biome-ignore lint/suspicious/noExplicitAny: fullscreen plugin augments L.control
-			const fs = (L.control as any).fullscreen;
-			if (fs) fs({ position: "topleft" }).addTo(map);
+			new FullScreen({ position: "topleft" }).addTo(map);
 
 			let currentTileLayer: TileLayer = L.tileLayer(
 				themedTile().url,
@@ -195,6 +222,24 @@ export function LiveMapView({
 				currentTileLayer.addTo(map);
 			};
 			darkMql.addEventListener("change", onThemeChange);
+
+			const updateHash = () => {
+				const c = map.getCenter();
+				const z = map.getZoom();
+				const f =
+					currentFilterRef.current === "all"
+						? ""
+						: `/${encodeURIComponent(currentFilterRef.current)}`;
+				history.replaceState(
+					null,
+					"",
+					`#${c.lat.toFixed(5)}/${c.lng.toFixed(5)}/${z}${f}`,
+				);
+			};
+			map.on("moveend", updateHash);
+			map.on("zoomend", updateHash);
+			hashWriterRef.current = updateHash;
+
 			mapRef.current = map;
 
 			// Expose cleanup for the outer effect teardown.
@@ -328,6 +373,12 @@ export function LiveMapView({
 			}
 		}
 	}, [mapReady, payload, filter]);
+
+	// Keep currentFilterRef in sync + rewrite hash when filter toggles.
+	useEffect(() => {
+		currentFilterRef.current = filter;
+		hashWriterRef.current?.();
+	}, [filter]);
 
 	// Poll for updates.
 	useEffect(() => {
