@@ -17,7 +17,6 @@ const db = createDb(env.DB);
 const lang = langFromParams(Astro.params);
 const operator = decodeURIComponent(Astro.params.operator!);
 const filter = parseFilter(Astro.url);
-const coreOnly = Astro.url.searchParams.get("hours") === "core";
 const daysFilter = filter.days ?? "today";
 
 const { opStats, oldestDate } = await all({
@@ -60,7 +59,6 @@ const scoreWithGhosts = onTimeRate(
 
 	<HoursToggle
 		basePath={`/${lang}/operator/${encodeURIComponent(operator)}`}
-		coreOnly={coreOnly}
 		daysFilter={daysFilter}
 		lang={lang}
 	/>

@@ -4,24 +4,17 @@ import { t } from "../lib/i18n";
 
 interface Props {
 	basePath: string;
-	coreOnly: boolean;
 	daysFilter: string;
 	category?: string;
 	lang: Lang;
 }
 
-const { basePath, coreOnly, daysFilter, category, lang } = Astro.props;
+const { basePath, daysFilter, category, lang } = Astro.props;
 
-function buildHref(params: {
-	hours?: string;
-	days?: string;
-	cat?: string;
-}): string {
+function buildHref(params: { days?: string; cat?: string }): string {
 	const search = new URLSearchParams();
-	const hours = params.hours ?? (coreOnly ? "core" : "");
 	const days = params.days ?? daysFilter;
 	const cat = params.cat ?? category;
-	if (hours) search.set("hours", hours);
 	if (days) search.set("days", days);
 	if (cat) search.set("cat", cat);
 	const qs = search.toString();
@@ -41,32 +34,6 @@ const categories = [
 ---
 
 <div class="flex flex-wrap gap-x-4 gap-y-2 mb-6 items-center">
-	<div class="flex gap-2 items-center">
-		<a
-			href={buildHref({ hours: "" })}
-			class:list={[
-				pill,
-				!coreOnly
-					? "bg-success/10 text-success"
-					: "bg-success/10 text-success opacity-50",
-			]}
-		>
-			{t(lang, "hours.all")}
-		</a>
-		<a
-			href={buildHref({ hours: "core" })}
-			class:list={[
-				pill,
-				coreOnly
-					? "bg-success/10 text-success"
-					: "bg-success/10 text-success opacity-50",
-			]}
-		>
-			{t(lang, "hours.core")}
-		</a>
-		{coreOnly && <span class="text-muted text-sm">{t(lang, "hours.core_range")}</span>}
-	</div>
-
 	<div class="flex gap-2 items-center">
 		<a
 			href={buildHref({ days: "all" })}

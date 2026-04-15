@@ -37,7 +37,6 @@ const translations = {
 
 		"hours.all": "Alle Zeiten",
 		"hours.core": "Hauptverkehrszeit",
-		"hours.core_range": "6\u20139 & 16\u201319 (HVZ)",
 
 		"days.all": "Alle Tage",
 		"days.today": "Heute",
@@ -148,7 +147,6 @@ const translations = {
 
 		"hours.all": "All hours",
 		"hours.core": "Core hours",
-		"hours.core_range": "6\u20139 & 16\u201319 (HVZ)",
 
 		"days.all": "All days",
 		"days.today": "Today",

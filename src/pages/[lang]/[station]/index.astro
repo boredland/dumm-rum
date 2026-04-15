@@ -42,7 +42,6 @@ const stopSlug = slug;
 const stopIds = configured ? [configured.id] : dynamicStop!.stopIds;
 
 const filter = parseFilter(Astro.url);
-const coreOnly = Astro.url.searchParams.get("hours") === "core";
 const daysFilter = filter.days ?? "today";
 const { stats, oldestDate } = await all({
 	stats: () => getStopStats(db, stopIds, filter),
@@ -99,7 +98,7 @@ const scoreWithGhosts = onTimeRate(
 		}
 	</header>
 
-	<HoursToggle basePath={`/${lang}/${stopSlug}`} coreOnly={coreOnly} daysFilter={daysFilter} lang={lang} />
+	<HoursToggle basePath={`/${lang}/${stopSlug}`} daysFilter={daysFilter} lang={lang} />
 
 	<div class="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-8">
 		<div class="bg-surface border border-border rounded-xl p-5">

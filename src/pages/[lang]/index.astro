@@ -25,10 +25,9 @@ import {
 const db = createDb(env.DB);
 const lang = langFromParams(Astro.params);
 const filter = parseFilter(Astro.url);
-const coreOnly = Astro.url.searchParams.get("hours") === "core";
 const daysFilter = filter.days ?? "today";
 const { stops, operators, lines, oldestDate, haiku } = await all({
-	stops: () => getStopSummaries(db),
+	stops: () => getStopSummaries(db, filter),
 	operators: () => getOperatorSummaries(db, filter),
 	lines: () => getLineSummaries(db, filter),
 	oldestDate: () => getOldestDate(db),
@@ -82,7 +81,7 @@ for (const stop of stops) {
 		</ul>
 	</details>
 
-	<HoursToggle basePath={`/${lang}`} coreOnly={coreOnly} daysFilter={daysFilter} lang={lang} />
+	<HoursToggle basePath={`/${lang}`} daysFilter={daysFilter} lang={lang} />
 
 	{(() => {
 		let totalAll = 0, cancelledAll = 0, ghostAll = 0, delayedAll = 0;

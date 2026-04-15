@@ -17,7 +17,6 @@ const db = createDb(env.DB);
 const lang = langFromParams(Astro.params);
 const line = decodeURIComponent(Astro.params.line!);
 const filter = parseFilter(Astro.url);
-const coreOnly = Astro.url.searchParams.get("hours") === "core";
 const daysFilter = filter.days ?? "today";
 
 const { lineStats, oldestDate } = await all({
@@ -58,13 +57,7 @@ const scoreWithGhosts = onTimeRate(
 		</p>
 		<a
 			id="telegram-subscribe"
-			href={(() => {
-				if (!coreOnly) return `https://t.me/rumsteh_bot?start=subscribe_${encodeURIComponent(line)}`;
-				const encoded = btoa(`${line}||06:00-09:00,16:00-19:00`).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
-				return encoded.length <= 62
-					? `https://t.me/rumsteh_bot?start=s-${encoded}`
-					: `https://t.me/rumsteh_bot?start=subscribe_${encodeURIComponent(line)}`;
-			})()}
+			href={`https://t.me/rumsteh_bot?start=subscribe_${encodeURIComponent(line)}`}
 			data-line={line}
 			class="inline-flex items-center gap-1 text-xs text-link no-underline hover:underline mt-2"
 			target="_blank"
@@ -76,7 +69,6 @@ const scoreWithGhosts = onTimeRate(
 
 	<HoursToggle
 		basePath={`/${lang}/line/${encodeURIComponent(line)}`}
-		coreOnly={coreOnly}
 		daysFilter={daysFilter}
 		lang={lang}
 	/>
