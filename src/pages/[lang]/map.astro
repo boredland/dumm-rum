@@ -223,10 +223,23 @@ async function fetchAndRender() {
 			const gpsLat = v.lat ?? null;
 			const gpsLon = v.lon ?? null;
 			const hasGps = !isGhost && gpsLat !== null && gpsLon !== null;
+			// Seconds-of-day for when the GPS fix was reported. Used to
+			// anchor the between-fetch smooth interpolation.
+			let gpsReportedSec = null;
+			if (hasGps && v.reportedAt) {
+				const r = new Date(v.reportedAt);
+				gpsReportedSec = r.getHours() * 3600 + r.getMinutes() * 60 + r.getSeconds();
+			}
+			// Cached polyline index of the GPS fix. Lets the animation walk
+			// along the route from where the vehicle actually is instead of
+			// from the scheduled "from" stop.
+			const gpsPolyIdx = hasGps && poly
+				? nearestPolylineIndex(poly, gpsLat, gpsLon)
+				: null;
 
 			vehicleState.set(v.id, {
 				lat: initLat, lon: initLon,
-				gpsLat, gpsLon, hasGps,
+				gpsLat, gpsLon, hasGps, gpsReportedSec, gpsPolyIdx,
 				destArrSec: destSec, cat, isGhost, delayMin,
 				polyline: poly, stops: parsedStops,
 			});
@@ -386,14 +399,55 @@ function interpolatePositions() {
 		// time races with the 30s CDN cache on /api/live-map and can hide active
 		// vehicles mid-flight.
 
-		// Tracked vehicles: fetchAndRender already snapped the marker to the
-		// latest GPS fix. Don't let schedule interpolation overwrite that —
-		// the schedule routinely disagrees with real position (train ahead of
-		// schedule, dwell at stops, delays) and the schedule-interp position
-		// would make the vehicle look stuck at whatever stop the schedule
-		// thinks it's at. Ghosts still fall through to schedule interp below,
-		// since they have no GPS.
-		if (state.hasGps) continue;
+		// Tracked vehicles: use GPS as the truth anchor and interpolate from
+		// there toward the next scheduled stop at schedule pace. Gives smooth
+		// motion that starts from the real position rather than whatever the
+		// schedule thinks the from-stop is. Ghosts (no GPS) fall through to
+		// pure schedule interp below.
+		if (state.hasGps && state.gpsLat !== null && state.gpsLon !== null) {
+			const segFromGps = findCurrentSegment(state.stops, nowSec, state);
+			if (!segFromGps || segFromGps.to.arrSec === null) {
+				m.setLatLng([state.gpsLat, state.gpsLon]);
+				continue;
+			}
+			const gpsSec = state.gpsReportedSec ?? (segFromGps.from.depSec ?? 0);
+			const baselineSec = Math.max(gpsSec, segFromGps.from.depSec ?? 0);
+			const arrSec = segFromGps.to.arrSec;
+			if (arrSec <= baselineSec) {
+				m.setLatLng([state.gpsLat, state.gpsLon]);
+				continue;
+			}
+			const frac = Math.max(
+				0,
+				Math.min(1, (nowSec - baselineSec) / (arrSec - baselineSec)),
+			);
+			// Polyline-aware: walk along the actual route from the GPS point
+			// toward the next stop's polyline index. Falls back to a straight
+			// line when no polyline is available for this run.
+			if (
+				state.polyline &&
+				state.polyline.length >= 2 &&
+				state.gpsPolyIdx != null
+			) {
+				const targetIdx = segFromGps.to.polyIdx ?? state.polyline.length - 1;
+				if (targetIdx > state.gpsPolyIdx) {
+					m.setLatLng(
+						interpolateAlongPolyline(
+							state.polyline,
+							state.gpsPolyIdx,
+							targetIdx,
+							frac,
+						),
+					);
+					continue;
+				}
+			}
+			m.setLatLng([
+				state.gpsLat + (segFromGps.to.lat - state.gpsLat) * frac,
+				state.gpsLon + (segFromGps.to.lon - state.gpsLon) * frac,
+			]);
+			continue;
+		}
 
 		const seg = findCurrentSegment(state.stops, nowSec, state);
 		const stale = !seg && !state.isGhost;
