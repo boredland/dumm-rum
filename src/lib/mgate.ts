@@ -69,6 +69,26 @@ function parseTime(t?: string): string | undefined {
 }
 
 /**
+ * HAFAS refs encode the service date as `DA#DDMMYY`. That's the
+ * HAFAS-canonical operating day for the journey — which for overnight
+ * routes can be the *prior* calendar day even though the trip happens
+ * after midnight. Prefer this over the calendar date mgate sometimes
+ * returns as `j.date` / `journey.date`, which for some responses is
+ * the departure's calendar date instead.
+ */
+function parseServiceDateFromRef(ref: string): string | undefined {
+	const m = /DA#(\d{2})(\d{2})(\d{2})/.exec(ref);
+	if (!m) return undefined;
+	const [, dd, mm, yy] = m;
+	return `20${yy}-${mm}-${dd}`;
+}
+
+function parseYyyymmdd(s?: string): string | undefined {
+	if (!s || s.length < 8) return undefined;
+	return `${s.slice(0, 4)}-${s.slice(4, 6)}-${s.slice(6, 8)}`;
+}
+
+/**
  * Batch up to N journey-detail lookups into a single mgate POST. mgate's
  * `svcReqL` supports per-request error isolation, so one bad jid doesn't
  * fail the batch. Returns one MgateResult per input, in order.
@@ -112,7 +132,7 @@ export async function mgateJourneyDetailsBatch(
 	const data = await resp.json<{ svcResL?: MgateSvcRes[] }>();
 	const svcResL = data.svcResL ?? [];
 
-	return journeyIds.map((_, i) => parseJourneyDetailsRes(svcResL[i]));
+	return journeyIds.map((jid, i) => parseJourneyDetailsRes(svcResL[i], jid));
 }
 
 interface MgateSvcRes {
@@ -169,7 +189,10 @@ interface MgateSvcRes {
 	};
 }
 
-function parseJourneyDetailsRes(svc: MgateSvcRes | undefined): MgateResult {
+function parseJourneyDetailsRes(
+	svc: MgateSvcRes | undefined,
+	ref: string,
+): MgateResult {
 	if (!svc) return { kind: "transient", errCode: null };
 	if (svc.err && svc.err !== "OK") {
 		const errCode = svc.err;
@@ -224,10 +247,8 @@ function parseJourneyDetailsRes(svc: MgateSvcRes | undefined): MgateResult {
 	const poly = polyIdx != null ? polyL[polyIdx] : polyL[0];
 	const polylinePoints = poly ? decodePolyline(poly) : undefined;
 
-	const dateRaw = journey.date;
-	const dayOfOperation = dateRaw
-		? `${dateRaw.slice(0, 4)}-${dateRaw.slice(4, 6)}-${dateRaw.slice(6, 8)}`
-		: undefined;
+	const dayOfOperation =
+		parseServiceDateFromRef(ref) ?? parseYyyymmdd(journey.date);
 
 	return {
 		kind: "ok",
@@ -427,7 +448,9 @@ function parseStationBoardRes(
 		const depTime = parseTime(rawTime);
 		if (!depTime) continue;
 
-		const dayOfOperation = `${j.date.slice(0, 4)}-${j.date.slice(4, 6)}-${j.date.slice(6, 8)}`;
+		const dayOfOperation =
+			parseServiceDateFromRef(j.jid) ?? parseYyyymmdd(j.date);
+		if (!dayOfOperation) continue;
 
 		journeys.push({
 			journeyRef: j.jid,
