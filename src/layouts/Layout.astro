@@ -7,9 +7,11 @@ interface Props {
 	title: string;
 	lang: Lang;
 	description?: string;
+	/** Drop the 800px content cap. Used for the map page. */
+	wide?: boolean;
 }
 
-const { title, lang, description } = Astro.props;
+const { title, lang, description, wide = false } = Astro.props;
 const desc =
 	description ??
 	(lang === "de"
@@ -92,7 +94,7 @@ const otherPath = Astro.url.pathname.replace(`/${lang}`, `/${otherLang}`);
 				</svg>
 			</a>
 		</div>
-		<div class="max-w-[800px] mx-auto px-6 py-8 max-sm:px-4">
+		<div class:list={["mx-auto px-6 py-8 max-sm:px-4", wide ? "max-w-none" : "max-w-[800px]"]}>
 			<slot />
 		</div>
 		<button
