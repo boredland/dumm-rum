@@ -370,10 +370,6 @@ export function LiveMapView({
 					isGhost ? 0 : delayMin,
 				);
 				const marker = L.marker([initLat, initLon], { icon });
-				marker.bindTooltip(
-					`${isGhost ? "👻 " : ""}${v.line} → ${v.destination}`,
-					{ direction: "top" },
-				);
 				marker.addTo(map);
 				entry = { marker, polyline: null, iconKey };
 				existing.set(v.id, entry);
