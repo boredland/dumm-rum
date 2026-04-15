@@ -403,17 +403,32 @@ function findCurrentSegment(stops, nowSec, state) {
 }
 
 // Ease the marker from its current displayed position toward `target` at
-// a fixed fraction of the remaining distance per frame. At ~60 fps and
-// 0.15 per frame, ~99% of the gap closes over 30 frames (~500 ms). Small
-// frame-to-frame targets (normal smooth motion) are invisible; the big
-// post-fetch GPS correction visibly slides into place.
+// a fixed fraction of the remaining distance per frame. 0.05 per frame
+// at ~60 fps takes ~1.7 s to close 99% of the gap — slow enough that a
+// 200 m correction reads as a smooth glide rather than a fast streak.
 function easeMarkerTo(m, target) {
 	const c = m.getLatLng();
 	const dLat = target[0] - c.lat;
 	const dLon = target[1] - c.lng;
 	// Snap when already on target (avoids jitter on stationary markers).
 	if (Math.abs(dLat) < 1e-6 && Math.abs(dLon) < 1e-6) return;
-	m.setLatLng([c.lat + dLat * 0.15, c.lng + dLon * 0.15]);
+	m.setLatLng([c.lat + dLat * 0.05, c.lng + dLon * 0.05]);
+}
+
+// Cap how far schedule interpolation may pull the marker from the GPS
+// anchor. Between GPS refreshes (~5 min per journey) a running-late
+// vehicle would otherwise drift 1–2 km ahead of reality; the next fix
+// then snaps it back as a visible "jump". Clamping the drift keeps the
+// max correction bounded so the ease has a reasonable distance to cover.
+// ~0.0018° ≈ 200 m at Frankfurt latitude.
+const MAX_DRIFT_DEG = 0.0018;
+function clampDrift(target, anchorLat, anchorLon) {
+	const dLat = target[0] - anchorLat;
+	const dLon = target[1] - anchorLon;
+	const d = Math.hypot(dLat, dLon);
+	if (d <= MAX_DRIFT_DEG) return target;
+	const scale = MAX_DRIFT_DEG / d;
+	return [anchorLat + dLat * scale, anchorLon + dLon * scale];
 }
 
 function interpolatePositions() {
@@ -453,6 +468,7 @@ function interpolatePositions() {
 			// Polyline-aware: walk along the actual route from the GPS point
 			// toward the next stop's polyline index. Falls back to a straight
 			// line when no polyline is available for this run.
+			let target;
 			if (
 				state.polyline &&
 				state.polyline.length >= 2 &&
@@ -460,22 +476,21 @@ function interpolatePositions() {
 			) {
 				const targetIdx = segFromGps.to.polyIdx ?? state.polyline.length - 1;
 				if (targetIdx > state.gpsPolyIdx) {
-					easeMarkerTo(
-						m,
-						interpolateAlongPolyline(
-							state.polyline,
-							state.gpsPolyIdx,
-							targetIdx,
-							frac,
-						),
+					target = interpolateAlongPolyline(
+						state.polyline,
+						state.gpsPolyIdx,
+						targetIdx,
+						frac,
 					);
-					continue;
 				}
 			}
-			easeMarkerTo(m, [
-				state.gpsLat + (segFromGps.to.lat - state.gpsLat) * frac,
-				state.gpsLon + (segFromGps.to.lon - state.gpsLon) * frac,
-			]);
+			if (!target) {
+				target = [
+					state.gpsLat + (segFromGps.to.lat - state.gpsLat) * frac,
+					state.gpsLon + (segFromGps.to.lon - state.gpsLon) * frac,
+				];
+			}
+			easeMarkerTo(m, clampDrift(target, state.gpsLat, state.gpsLon));
 			continue;
 		}
 
