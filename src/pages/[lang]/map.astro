@@ -248,7 +248,10 @@ async function fetchAndRender() {
 				const m = markers.get(v.id);
 				m.setIcon(getVehicleIcon(cat, sleeping, isGhost, delayMin));
 				m.setPopupContent(popupContent(v));
-				if (hasGps) m.setLatLng([gpsLat, gpsLon]);
+				// Don't hard-snap to the new GPS position on fetch. The
+				// interpolation loop below will ease the marker toward the
+				// new target (the GPS-anchored interp value) over ~0.5s,
+				// so a reload slides smoothly instead of teleporting.
 				if (visible && !map.hasLayer(m)) m.addTo(map);
 				else if (!visible && map.hasLayer(m)) m.remove();
 			} else {
@@ -387,6 +390,20 @@ function findCurrentSegment(stops, nowSec, state) {
 	return null;
 }
 
+// Ease the marker from its current displayed position toward `target` at
+// a fixed fraction of the remaining distance per frame. At ~60 fps and
+// 0.15 per frame, ~99% of the gap closes over 30 frames (~500 ms). Small
+// frame-to-frame targets (normal smooth motion) are invisible; the big
+// post-fetch GPS correction visibly slides into place.
+function easeMarkerTo(m, target) {
+	const c = m.getLatLng();
+	const dLat = target[0] - c.lat;
+	const dLon = target[1] - c.lng;
+	// Snap when already on target (avoids jitter on stationary markers).
+	if (Math.abs(dLat) < 1e-6 && Math.abs(dLon) < 1e-6) return;
+	m.setLatLng([c.lat + dLat * 0.15, c.lng + dLon * 0.15]);
+}
+
 function interpolatePositions() {
 	const now = new Date();
 	const nowSec = now.getHours() * 3600 + now.getMinutes() * 60 + now.getSeconds() + now.getMilliseconds() / 1000;
@@ -407,14 +424,14 @@ function interpolatePositions() {
 		if (state.hasGps && state.gpsLat !== null && state.gpsLon !== null) {
 			const segFromGps = findCurrentSegment(state.stops, nowSec, state);
 			if (!segFromGps || segFromGps.to.arrSec === null) {
-				m.setLatLng([state.gpsLat, state.gpsLon]);
+				easeMarkerTo(m, [state.gpsLat, state.gpsLon]);
 				continue;
 			}
 			const gpsSec = state.gpsReportedSec ?? (segFromGps.from.depSec ?? 0);
 			const baselineSec = Math.max(gpsSec, segFromGps.from.depSec ?? 0);
 			const arrSec = segFromGps.to.arrSec;
 			if (arrSec <= baselineSec) {
-				m.setLatLng([state.gpsLat, state.gpsLon]);
+				easeMarkerTo(m, [state.gpsLat, state.gpsLon]);
 				continue;
 			}
 			const frac = Math.max(
@@ -431,7 +448,8 @@ function interpolatePositions() {
 			) {
 				const targetIdx = segFromGps.to.polyIdx ?? state.polyline.length - 1;
 				if (targetIdx > state.gpsPolyIdx) {
-					m.setLatLng(
+					easeMarkerTo(
+						m,
 						interpolateAlongPolyline(
 							state.polyline,
 							state.gpsPolyIdx,
@@ -442,7 +460,7 @@ function interpolatePositions() {
 					continue;
 				}
 			}
-			m.setLatLng([
+			easeMarkerTo(m, [
 				state.gpsLat + (segFromGps.to.lat - state.gpsLat) * frac,
 				state.gpsLon + (segFromGps.to.lon - state.gpsLon) * frac,
 			]);
@@ -461,15 +479,15 @@ function interpolatePositions() {
 				const startIdx = seg.from.polyIdx ?? 0;
 				const endIdx = seg.to.polyIdx ?? 0;
 				if (endIdx > startIdx) {
-					m.setLatLng(interpolateAlongPolyline(state.polyline, startIdx, endIdx, seg.progress));
+					easeMarkerTo(m, interpolateAlongPolyline(state.polyline, startIdx, endIdx, seg.progress));
 				} else {
-					m.setLatLng([
+					easeMarkerTo(m, [
 						seg.from.lat + (seg.to.lat - seg.from.lat) * seg.progress,
 						seg.from.lon + (seg.to.lon - seg.from.lon) * seg.progress,
 					]);
 				}
 			} else {
-				m.setLatLng([
+				easeMarkerTo(m, [
 					seg.from.lat + (seg.to.lat - seg.from.lat) * seg.progress,
 					seg.from.lon + (seg.to.lon - seg.from.lon) * seg.progress,
 				]);
