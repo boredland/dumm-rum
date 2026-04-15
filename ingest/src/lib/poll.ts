@@ -254,29 +254,6 @@ async function handlePollResult(
 	return false;
 }
 
-// Skip the per-poll run upsert when nothing meaningful changed. snapshotAt
-// becomes slightly stale in exchange, but it's only used for "last updated"
-// display and stays accurate enough at the 1-min poll cadence.
-const runChangedSql = sql`
-	${excluded(journeyRuns.status)} != ${journeyRuns.status}
-	OR (${excluded(journeyRuns.cancelled)} AND NOT ${journeyRuns.cancelled})
-	OR (${excluded(journeyRuns.partCancelled)} AND NOT ${journeyRuns.partCancelled})
-	OR ${excluded(journeyRuns.cancelledStopCount)} > ${journeyRuns.cancelledStopCount}
-	OR (${excluded(journeyRuns.wasTracked)} AND NOT ${journeyRuns.wasTracked})
-	OR (${journeyRuns.polyline} IS NULL AND ${excluded(journeyRuns.polyline)} IS NOT NULL)
-	OR ${journeyRuns.pollState} != 'polling'
-`;
-
-// Only write stop rows on conflict when something observable actually
-// changed. Turns the typical "nothing new" poll into a read-only no-op.
-const stopsChangedSql = sql`
-	COALESCE(${excluded(journeyStops.rtDepTime)}, '') != COALESCE(${journeyStops.rtDepTime}, '')
-	OR COALESCE(${excluded(journeyStops.rtArrTime)}, '') != COALESCE(${journeyStops.rtArrTime}, '')
-	OR (${excluded(journeyStops.cancelled)} AND NOT ${journeyStops.cancelled})
-	OR (${journeyStops.lat} IS NULL AND ${excluded(journeyStops.lat)} IS NOT NULL)
-	OR (${journeyStops.lon} IS NULL AND ${excluded(journeyStops.lon)} IS NOT NULL)
-`;
-
 async function upsertJourneyRunFromMgate(
 	db: Db,
 	ref: string,
@@ -349,7 +326,6 @@ async function upsertJourneyRunFromMgate(
 				polyline: sql`COALESCE(${excluded(journeyRuns.polyline)}, ${journeyRuns.polyline})`,
 				snapshotAt: excluded(journeyRuns.snapshotAt),
 			},
-			setWhere: runChangedSql,
 		});
 }
 
@@ -392,6 +368,5 @@ async function upsertMgateStops(
 				lat: sql`COALESCE(${excluded(journeyStops.lat)}, ${journeyStops.lat})`,
 				lon: sql`COALESCE(${excluded(journeyStops.lon)}, ${journeyStops.lon})`,
 			},
-			setWhere: stopsChangedSql,
 		});
 }

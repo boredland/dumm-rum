@@ -63,7 +63,6 @@ export interface LiveMapPayload {
 	updatedAt: string;
 }
 
-const STOP_BATCH = 50;
 const POS_CUTOFF_MIN = 10;
 
 export async function getLiveMap(): Promise<LiveMapPayload> {
@@ -151,40 +150,31 @@ export async function getLiveMap(): Promise<LiveMapPayload> {
 	// Stops are the motion source on the client: GPS gives an accurate
 	// anchor every poll, but between polls the marker slides along the
 	// scheduled stop sequence so the map doesn't look frozen.
-	const stopRows: {
-		journeyRef: string;
-		lat: number | null;
-		lon: number | null;
-		arr: string | null;
-		dep: string | null;
-	}[] = [];
-	for (let i = 0; i < allIds.length; i += STOP_BATCH) {
-		const chunk = allIds.slice(i, i + STOP_BATCH);
-		if (chunk.length === 0) continue;
-		const rows = await db
-			.select({
-				journeyRef: journeyStops.journeyRef,
-				lat: journeyStops.lat,
-				lon: journeyStops.lon,
-				arr: coalesce<string>(
-					journeyStops.rtArrTime,
-					journeyStops.arrTime,
-					journeyStops.depTime,
-				),
-				dep: coalesce<string>(journeyStops.rtDepTime, journeyStops.depTime),
-			})
-			.from(journeyStops)
-			.where(
-				and(
-					inArray(journeyStops.dayOfOperation, [today, yesterday]),
-					inArray(journeyStops.journeyRef, chunk),
-					eq(journeyStops.cancelled, false),
-					isNotNull(journeyStops.lat),
-				),
-			)
-			.orderBy(journeyStops.journeyRef, asc(journeyStops.routeIdx));
-		stopRows.push(...rows);
-	}
+	const stopRows =
+		allIds.length === 0
+			? []
+			: await db
+					.select({
+						journeyRef: journeyStops.journeyRef,
+						lat: journeyStops.lat,
+						lon: journeyStops.lon,
+						arr: coalesce<string>(
+							journeyStops.rtArrTime,
+							journeyStops.arrTime,
+							journeyStops.depTime,
+						),
+						dep: coalesce<string>(journeyStops.rtDepTime, journeyStops.depTime),
+					})
+					.from(journeyStops)
+					.where(
+						and(
+							inArray(journeyStops.dayOfOperation, [today, yesterday]),
+							inArray(journeyStops.journeyRef, allIds),
+							eq(journeyStops.cancelled, false),
+							isNotNull(journeyStops.lat),
+						),
+					)
+					.orderBy(journeyStops.journeyRef, asc(journeyStops.routeIdx));
 
 	const stopsByJourney = new Map<string, typeof stopRows>();
 	for (const s of stopRows) {

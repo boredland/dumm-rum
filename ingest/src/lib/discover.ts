@@ -27,7 +27,6 @@ const EXCLUDE_CATEGORIES = new Set([
 	"EST",
 ]);
 
-const BATCH_INSERT_SIZE = 500;
 const POLL_QUEUE = "journey-poll";
 
 async function discoverStationJourneys(
@@ -74,11 +73,7 @@ async function discoverStationJourneys(
 		});
 	}
 
-	for (let i = 0; i < rows.length; i += BATCH_INSERT_SIZE) {
-		const batch = rows.slice(i, i + BATCH_INSERT_SIZE);
-		await db.insert(journeyRuns).values(batch).onConflictDoNothing();
-	}
-
+	await db.insert(journeyRuns).values(rows).onConflictDoNothing();
 	return rows.length;
 }
 
