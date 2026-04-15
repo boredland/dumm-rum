@@ -38,6 +38,11 @@ function Index() {
 				{t(l, "station.last_updated")}: {at}
 			</p>
 			<p>
+				<Link to="/$lang/map" params={{ lang: l }}>
+					{t(l, "map.title")} →
+				</Link>
+			</p>
+			<p>
 				<Link to="/$lang" params={{ lang: other }}>
 					{other.toUpperCase()}
 				</Link>
