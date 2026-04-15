@@ -22,6 +22,13 @@ const lang = langFromParams(Astro.params);
 		<button data-cat="RE,RB" class="cat-pill px-2.5 py-1 text-xs font-medium rounded-full border border-border cursor-pointer transition-colors text-muted">RE/RB</button>
 		<span class="ml-auto text-xs text-dimmed" id="last-update"></span>
 	</div>
+
+	<footer class="mt-4 pt-4 border-t border-border-dim flex items-center gap-3">
+		<a href="https://www.rmv.de" class="shrink-0">
+			<img src="/rmv-logo.svg" alt="RMV" width="74" height="15" class="opacity-60 hover:opacity-100 transition-opacity" />
+		</a>
+		<span class="text-xs text-dimmed">{lang === "de" ? "Datenquelle: RMV" : "Data source: RMV"}</span>
+	</footer>
 </Layout>
 
 <style>
@@ -378,6 +385,15 @@ function interpolatePositions() {
 		// server no longer returns. Removing client-side off of scheduled arrival
 		// time races with the 30s CDN cache on /api/live-map and can hide active
 		// vehicles mid-flight.
+
+		// Tracked vehicles: fetchAndRender already snapped the marker to the
+		// latest GPS fix. Don't let schedule interpolation overwrite that —
+		// the schedule routinely disagrees with real position (train ahead of
+		// schedule, dwell at stops, delays) and the schedule-interp position
+		// would make the vehicle look stuck at whatever stop the schedule
+		// thinks it's at. Ghosts still fall through to schedule interp below,
+		// since they have no GPS.
+		if (state.hasGps) continue;
 
 		const seg = findCurrentSegment(state.stops, nowSec, state);
 		const stale = !seg && !state.isGhost;
