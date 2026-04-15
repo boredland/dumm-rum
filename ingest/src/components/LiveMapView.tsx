@@ -470,6 +470,25 @@ export function LiveMapView({
 		second: "2-digit",
 	});
 
+	const nextInLabel = lang === "de" ? "nächstes in" : "next in";
+	const [secondsUntilNext, setSecondsUntilNext] = useState(() =>
+		Math.max(0, Math.ceil(refreshMs / 1000)),
+	);
+	// Tick the visible countdown each second. The animated progress bar
+	// below uses a CSS keyframe (no JS), so this is purely for the label.
+	// biome-ignore lint/correctness/useExhaustiveDependencies: updatedAt drives the restart of the countdown on each new payload
+	useEffect(() => {
+		if (refreshMs <= 0) return;
+		const loadedAt = Date.now();
+		const tick = () => {
+			const elapsed = Date.now() - loadedAt;
+			setSecondsUntilNext(Math.max(0, Math.ceil((refreshMs - elapsed) / 1000)));
+		};
+		tick();
+		const id = window.setInterval(tick, 1000);
+		return () => window.clearInterval(id);
+	}, [payload.updatedAt, refreshMs]);
+
 	return (
 		<>
 			<div className="mb-3 flex justify-between text-sm">
@@ -478,8 +497,21 @@ export function LiveMapView({
 					{visibleCount === 0 ? ` — ${texts.noVehicles}` : ""}
 				</span>
 				<span className="text-dimmed">
-					{texts.lastUpdate}: {lastUpdate}
+					{texts.lastUpdate}: {lastUpdate} · {nextInLabel} {secondsUntilNext}s
 				</span>
+			</div>
+
+			<div
+				key={payload.updatedAt}
+				className="h-0.5 bg-surface-hover mb-2 overflow-hidden rounded-full"
+				aria-hidden="true"
+			>
+				<div
+					className="h-full bg-accent origin-left"
+					style={{
+						animation: `refresh-countdown ${refreshMs}ms linear forwards`,
+					}}
+				/>
 			</div>
 
 			<div

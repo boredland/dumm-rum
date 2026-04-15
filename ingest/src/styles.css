@@ -83,3 +83,14 @@ a:hover {
 		opacity: 0.8;
 	}
 }
+
+/* Linear countdown bar — remounts via React `key={updatedAt}` each poll
+   to restart the animation at 100% and drain to 0% over refreshMs. */
+@keyframes refresh-countdown {
+	from {
+		transform: scaleX(1);
+	}
+	to {
+		transform: scaleX(0);
+	}
+}
