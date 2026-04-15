@@ -34,3 +34,30 @@ a {
 a:hover {
 	text-decoration: underline;
 }
+
+/* Leaflet popup + tooltip — theme-aware. */
+.leaflet-popup-content-wrapper,
+.leaflet-popup-tip,
+.leaflet-tooltip {
+	background: var(--surface);
+	color: var(--fg);
+	border: 1px solid var(--border-dim);
+}
+.leaflet-popup-content-wrapper {
+	border-radius: 8px;
+}
+.leaflet-tooltip {
+	border-radius: 4px;
+}
+.leaflet-tooltip-top::before,
+.leaflet-tooltip-bottom::before,
+.leaflet-tooltip-left::before,
+.leaflet-tooltip-right::before {
+	border-top-color: var(--surface);
+}
+
+/* Selected journey polyline. Overrides Leaflet's stroke attribute so
+   the color tracks the theme. */
+.journey-polyline {
+	stroke: var(--accent);
+}
