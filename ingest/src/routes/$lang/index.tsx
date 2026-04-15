@@ -22,13 +22,13 @@ function Index() {
 	const other: Lang = l === "de" ? "en" : "de";
 
 	return (
-		<main style={{ padding: "2rem" }}>
-			<h1>{t(l, "home.title")}</h1>
+		<main className="mx-auto max-w-3xl p-8 space-y-4">
+			<h1 className="text-3xl font-semibold">{t(l, "home.title")}</h1>
 			<p>{t(l, "home.subtitle")}</p>
 			<p>
 				<strong>{journeyCount}</strong> {t(l, "stat.departures")}
 			</p>
-			<p style={{ color: "var(--muted)", fontSize: "0.875rem" }}>
+			<p className="text-sm text-muted">
 				{t(l, "station.last_updated")}: {at}
 			</p>
 			<p>

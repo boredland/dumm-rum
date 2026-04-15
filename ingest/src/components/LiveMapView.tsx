@@ -503,64 +503,40 @@ export function LiveMapView({
 
 	return (
 		<>
-			<style>{`@keyframes ghost-shimmer { 0%, 100% { opacity: 0.3; } 50% { opacity: 0.8; } }`}</style>
-
-			<div
-				style={{
-					display: "flex",
-					justifyContent: "space-between",
-					marginBottom: "0.75rem",
-					fontSize: "0.875rem",
-				}}
-			>
+			<div className="mb-3 flex justify-between text-sm">
 				<span>
 					{visibleCount} {texts.vehicles}
 					{visibleCount === 0 ? ` — ${texts.noVehicles}` : ""}
 				</span>
-				<span style={{ color: "var(--dimmed)" }}>
+				<span className="text-dimmed">
 					{texts.lastUpdate}: {lastUpdate}
 				</span>
 			</div>
 
 			<div
 				ref={mapElRef}
-				style={{
-					height: "calc(100dvh - 200px)",
-					minHeight: 400,
-					borderRadius: 8,
-					border: "1px solid var(--border)",
-					overflow: "hidden",
-				}}
+				className="rounded-lg border border-border overflow-hidden"
+				style={{ height: "calc(100dvh - 200px)", minHeight: 400 }}
 			/>
 
-			<div
-				style={{
-					marginTop: "0.75rem",
-					display: "flex",
-					flexWrap: "wrap",
-					gap: "0.5rem",
-				}}
-			>
-				{FILTERS.map((f) => (
-					<button
-						key={f.key}
-						type="button"
-						onClick={() => setFilter(f.key)}
-						style={{
-							padding: "0.25rem 0.625rem",
-							fontSize: "0.75rem",
-							fontWeight: 500,
-							borderRadius: 9999,
-							border: "1px solid var(--border)",
-							cursor: "pointer",
-							background:
-								filter === f.key ? "var(--surface-hover)" : "transparent",
-							color: filter === f.key ? "var(--fg)" : "var(--muted)",
-						}}
-					>
-						{f.key === "all" ? texts.filterAll : f.label}
-					</button>
-				))}
+			<div className="mt-3 flex flex-wrap gap-2">
+				{FILTERS.map((f) => {
+					const active = filter === f.key;
+					return (
+						<button
+							key={f.key}
+							type="button"
+							onClick={() => setFilter(f.key)}
+							className={`px-2.5 py-1 text-xs font-medium rounded-full border border-border cursor-pointer transition-colors ${
+								active
+									? "bg-surface-hover text-fg"
+									: "bg-transparent text-muted hover:text-fg"
+							}`}
+						>
+							{f.key === "all" ? texts.filterAll : f.label}
+						</button>
+					);
+				})}
 			</div>
 		</>
 	);

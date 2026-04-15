@@ -1,3 +1,21 @@
+@import "tailwindcss";
+
+/* Keep existing CSS vars (light-dark() based) as the source of truth,
+   expose them to Tailwind via @theme inline so arbitrary classes like
+   `bg-surface`, `text-muted` resolve to the right var without losing
+   automatic OS theme switching. */
+@theme inline {
+	--color-bg: var(--bg);
+	--color-fg: var(--fg);
+	--color-muted: var(--muted);
+	--color-dimmed: var(--dimmed);
+	--color-border: var(--border);
+	--color-border-dim: var(--border-dim);
+	--color-accent: var(--accent);
+	--color-surface: var(--surface);
+	--color-surface-hover: var(--surface-hover);
+}
+
 :root {
 	color-scheme: light dark;
 	--bg: light-dark(#ffffff, #0d1117);
@@ -9,12 +27,6 @@
 	--accent: light-dark(#0969da, #2f81f7);
 	--surface: light-dark(#f6f8fa, #161b22);
 	--surface-hover: light-dark(#eff2f5, #1f2937);
-}
-
-*,
-*::before,
-*::after {
-	box-sizing: border-box;
 }
 
 html,
@@ -60,4 +72,14 @@ a:hover {
    the color tracks the theme. */
 .journey-polyline {
 	stroke: var(--accent);
+}
+
+@keyframes ghost-shimmer {
+	0%,
+	100% {
+		opacity: 0.3;
+	}
+	50% {
+		opacity: 0.8;
+	}
 }

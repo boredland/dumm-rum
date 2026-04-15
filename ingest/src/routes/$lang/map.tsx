@@ -19,32 +19,16 @@ function MapPage() {
 	const l = lang as Lang;
 
 	return (
-		<main
-			style={{
-				padding: "1rem",
-				maxWidth: 1200,
-				margin: "0 auto",
-			}}
-		>
-			<div
-				style={{
-					display: "flex",
-					justifyContent: "space-between",
-					alignItems: "center",
-					marginBottom: "1rem",
-				}}
-			>
+		<main className="mx-auto max-w-[1200px] p-4">
+			<div className="mb-4 flex items-center justify-between">
 				<Link
 					to="/$lang"
 					params={{ lang: l }}
-					style={{
-						color: "var(--muted)",
-						fontSize: "0.875rem",
-					}}
+					className="text-sm text-muted hover:text-fg"
 				>
 					← {t(l, "nav.back")}
 				</Link>
-				<h1 style={{ margin: 0, fontSize: "1.5rem" }}>{t(l, "map.title")}</h1>
+				<h1 className="m-0 text-2xl font-semibold">{t(l, "map.title")}</h1>
 			</div>
 
 			<LiveMapView
@@ -59,28 +43,14 @@ function MapPage() {
 				onRefresh={fetchLiveMap}
 			/>
 
-			<footer
-				style={{
-					marginTop: "1rem",
-					paddingTop: "1rem",
-					borderTop: "1px solid var(--border-dim)",
-					fontSize: "0.75rem",
-					color: "var(--dimmed)",
-					display: "flex",
-					alignItems: "center",
-					gap: "0.75rem",
-				}}
-			>
-				<a
-					href="https://www.rmv.de"
-					style={{ display: "inline-flex", flexShrink: 0 }}
-				>
+			<footer className="mt-4 pt-4 border-t border-border-dim flex items-center gap-3 text-xs text-dimmed">
+				<a href="https://www.rmv.de" className="inline-flex shrink-0">
 					<img
 						src="/rmv-logo.svg"
 						alt="RMV"
 						width={74}
 						height={15}
-						style={{ opacity: 0.6 }}
+						className="opacity-60 hover:opacity-100 transition-opacity"
 					/>
 				</a>
 				<span>{l === "de" ? "Datenquelle: RMV" : "Data source: RMV"}</span>
