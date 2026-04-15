@@ -1,5 +1,5 @@
+import { migrate } from "drizzle-orm/postgres-js/migrator";
 import PgBoss from "pg-boss";
-import { bootstrap } from "./db/bootstrap.ts";
 import { db, sql as pg } from "./db/client.ts";
 import { runDiscovery } from "./lib/discover.ts";
 import { POLL_QUEUE, type PollJob, processPollBatch } from "./lib/poll.ts";
@@ -13,7 +13,7 @@ async function main(): Promise<void> {
 	const url = process.env.DATABASE_URL;
 	if (!url) throw new Error("DATABASE_URL is not set");
 
-	await bootstrap(pg);
+	await migrate(db, { migrationsFolder: "./drizzle" });
 
 	const boss = new PgBoss({ connectionString: url });
 	boss.on("error", (err) => console.error("pg-boss error:", err));
