@@ -20,7 +20,23 @@ import {
 	todayBerlin,
 } from "./utils";
 
-const EXCLUDE_CATEGORIES = new Set(["ICE", "IC", "EC"]);
+// Long-distance train categories — not ÖPNV. Drop at discovery so we
+// never write these into journey_runs in the first place.
+const EXCLUDE_CATEGORIES = new Set([
+	"ICE",
+	"ICE-Sprinter",
+	"IC",
+	"EC",
+	"ECE",
+	"NJ",
+	"EN",
+	"RJ",
+	"RJX",
+	"TGV",
+	"FLX",
+	"FlixTrain",
+	"EST",
+]);
 
 async function discoverStationJourneys(
 	db: Db,

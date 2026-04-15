@@ -1,10 +1,38 @@
 import { env } from "cloudflare:workers";
 import type { APIRoute } from "astro";
-import { and, asc, eq, gte, inArray, isNotNull, sql } from "drizzle-orm";
+import {
+	and,
+	asc,
+	eq,
+	gte,
+	inArray,
+	isNotNull,
+	notInArray,
+	sql,
+} from "drizzle-orm";
 import { createDb } from "../../db/client";
 import { coalesce } from "../../db/helpers";
 import { journeyPositions, journeyRuns, journeyStops } from "../../db/schema";
 import { nowBerlin } from "../../lib/utils";
+
+// Mirror of the discovery-time EXCLUDE_CATEGORIES in collect.ts. Applied
+// here too so any rows that slipped through before the filter existed
+// (or through a buggier earlier discovery) don't render.
+const EXCLUDE_CATEGORIES = [
+	"ICE",
+	"ICE-Sprinter",
+	"IC",
+	"EC",
+	"ECE",
+	"NJ",
+	"EN",
+	"RJ",
+	"RJX",
+	"TGV",
+	"FLX",
+	"FlixTrain",
+	"EST",
+];
 
 export const GET: APIRoute = async () => {
 	const db = createDb(env.DB);
@@ -43,6 +71,7 @@ export const GET: APIRoute = async () => {
 					inArray(journeyRuns.dayOfOperation, [today, yesterday]),
 					eq(journeyRuns.pollState, "polling"),
 					eq(journeyRuns.cancelled, 0),
+					notInArray(journeyRuns.category, EXCLUDE_CATEGORIES),
 					eq(
 						journeyPositions.id,
 						sql`(SELECT jp2.id FROM journey_positions jp2 WHERE jp2.journey_ref = "journey_runs"."journey_ref" AND jp2.day_of_operation = "journey_runs"."day_of_operation" ORDER BY jp2.captured_at DESC LIMIT 1)`,
@@ -71,6 +100,7 @@ export const GET: APIRoute = async () => {
 					eq(journeyRuns.cancelled, 0),
 					eq(journeyRuns.wasTracked, 0),
 					eq(journeyRuns.pollState, "done"),
+					notInArray(journeyRuns.category, EXCLUDE_CATEGORIES),
 					// Only surface ghosts during the trip's planned run window.
 					// Requires an enriched destArrTime (> originDepTime) — runs
 					// that still carry the discovery-time placeholder
