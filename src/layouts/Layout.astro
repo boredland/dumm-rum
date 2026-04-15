@@ -282,15 +282,31 @@ const otherPath = Astro.url.pathname.replace(`/${lang}`, `/${otherLang}`);
 			});
 
 			let refreshTimer: ReturnType<typeof setInterval>;
+			let lastActivity = Date.now();
+			const markActive = () => { lastActivity = Date.now(); };
+			for (const evt of ["mousemove", "keydown", "touchstart", "scroll"]) {
+				window.addEventListener(evt, markActive, { passive: true });
+			}
+			document.addEventListener("visibilitychange", () => {
+				if (!document.hidden) markActive();
+			});
 			document.addEventListener("astro:page-load", () => {
 				clearInterval(refreshTimer);
+				markActive();
+				// The map page has its own 30s live-map polling — don't let
+				// Layout tear it down every few minutes.
+				if (/\/[a-z]{2}\/map(\/|$)/.test(window.location.pathname)) return;
 				refreshTimer = setInterval(async () => {
 					if (document.hidden) return;
+					// Skip when the tab has been idle for >15 min; the user
+					// presumably doesn't need a fresh page and we don't need
+					// to spam D1.
+					if (Date.now() - lastActivity > 15 * 60_000) return;
 					const search = document.getElementById("search") as HTMLInputElement | null;
 					if (search && (search === document.activeElement || search.value)) return;
 					const { navigate } = await import("astro:transitions/client");
 					navigate(window.location.href, { history: "replace" });
-				}, 180_000);
+				}, 300_000);
 			});
 		</script>
 	</body>
