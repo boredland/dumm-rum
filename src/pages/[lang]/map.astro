@@ -256,9 +256,28 @@ async function fetchAndRender() {
 				gpsLon = poly[gpsPolyIdx][1];
 			}
 
+			// Keep the previous fix around so the animation can derive
+			// the real observed velocity along the route instead of
+			// relying on schedule pace.
+			const prior = vehicleState.get(v.id);
+			const gpsChanged =
+				!prior ||
+				prior.gpsReportedSec !== gpsReportedSec ||
+				prior.gpsLat !== gpsLat ||
+				prior.gpsLon !== gpsLon;
+			const prevGpsLat = gpsChanged ? prior?.gpsLat ?? null : prior?.prevGpsLat ?? null;
+			const prevGpsLon = gpsChanged ? prior?.gpsLon ?? null : prior?.prevGpsLon ?? null;
+			const prevGpsReportedSec = gpsChanged
+				? prior?.gpsReportedSec ?? null
+				: prior?.prevGpsReportedSec ?? null;
+			const prevGpsPolyIdx = gpsChanged
+				? prior?.gpsPolyIdx ?? null
+				: prior?.prevGpsPolyIdx ?? null;
+
 			vehicleState.set(v.id, {
 				lat: initLat, lon: initLon,
 				gpsLat, gpsLon, hasGps, gpsReportedSec, gpsPolyIdx,
+				prevGpsLat, prevGpsLon, prevGpsReportedSec, prevGpsPolyIdx,
 				destArrSec: destSec, cat, isGhost, delayMin,
 				polyline: poly, stops: parsedStops,
 			});
@@ -423,6 +442,7 @@ function easeMarkerTo(m, target) {
 	m.setLatLng([c.lat + dLat * 0.15, c.lng + dLon * 0.15]);
 }
 
+
 function interpolatePositions() {
 	const now = new Date();
 	const nowSec = now.getHours() * 3600 + now.getMinutes() * 60 + now.getSeconds() + now.getMilliseconds() / 1000;
@@ -457,32 +477,62 @@ function interpolatePositions() {
 				0,
 				Math.min(1, (nowSec - baselineSec) / (arrSec - baselineSec)),
 			);
-			// Polyline-aware: walk along the actual route from the GPS point
-			// toward the next stop's polyline index. Falls back to a straight
-			// line when no polyline is available for this run.
+			// Observed-velocity extrapolation: if we have a previous GPS fix
+			// for this vehicle, derive its real speed along the polyline and
+			// extrapolate forward from the latest fix at that speed. Falls
+			// back to schedule-paced interp when we only have one fix.
+			let target;
 			if (
 				state.polyline &&
 				state.polyline.length >= 2 &&
 				state.gpsPolyIdx != null
 			) {
 				const targetIdx = segFromGps.to.polyIdx ?? state.polyline.length - 1;
-				if (targetIdx > state.gpsPolyIdx) {
-					easeMarkerTo(
-						m,
-						interpolateAlongPolyline(
+				let idxPerSec = null;
+				if (
+					state.prevGpsPolyIdx != null &&
+					state.prevGpsReportedSec != null &&
+					state.gpsReportedSec != null
+				) {
+					const dt = state.gpsReportedSec - state.prevGpsReportedSec;
+					if (dt > 0) {
+						idxPerSec = (state.gpsPolyIdx - state.prevGpsPolyIdx) / dt;
+					}
+				}
+				if (idxPerSec !== null && idxPerSec >= 0) {
+					const elapsed = Math.max(0, nowSec - state.gpsReportedSec);
+					const projIdx = Math.min(
+						targetIdx,
+						state.gpsPolyIdx + idxPerSec * elapsed,
+					);
+					if (projIdx > state.gpsPolyIdx) {
+						const walkProgress =
+							(projIdx - state.gpsPolyIdx) / (targetIdx - state.gpsPolyIdx);
+						target = interpolateAlongPolyline(
 							state.polyline,
 							state.gpsPolyIdx,
 							targetIdx,
-							frac,
-						),
+							walkProgress,
+						);
+					}
+				}
+				if (!target && targetIdx > state.gpsPolyIdx) {
+					// No velocity yet — use schedule-paced frac as before.
+					target = interpolateAlongPolyline(
+						state.polyline,
+						state.gpsPolyIdx,
+						targetIdx,
+						frac,
 					);
-					continue;
 				}
 			}
-			easeMarkerTo(m, [
-				state.gpsLat + (segFromGps.to.lat - state.gpsLat) * frac,
-				state.gpsLon + (segFromGps.to.lon - state.gpsLon) * frac,
-			]);
+			if (!target) {
+				target = [
+					state.gpsLat + (segFromGps.to.lat - state.gpsLat) * frac,
+					state.gpsLon + (segFromGps.to.lon - state.gpsLon) * frac,
+				];
+			}
+			easeMarkerTo(m, target);
 			continue;
 		}
 
