@@ -1,13 +1,7 @@
 import "leaflet/dist/leaflet.css";
 import "leaflet.fullscreen/dist/Control.FullScreen.css";
 
-import type {
-	DivIcon,
-	Map as LeafletMap,
-	Marker,
-	Polyline,
-	TileLayer,
-} from "leaflet";
+import type { DivIcon, Map as LeafletMap, Marker, Polyline } from "leaflet";
 import { useEffect, useRef, useState } from "react";
 import type { Lang } from "../lib/i18n.ts";
 import type { LiveMapPayload, MapVehicle } from "../lib/liveMap.ts";
@@ -209,21 +203,6 @@ export function LiveMapView({
 	useEffect(() => {
 		let cancelled = false;
 
-		const darkMql = window.matchMedia("(prefers-color-scheme: dark)");
-		const lightTile = {
-			url: "https://tile.memomaps.de/tilegen/{z}/{x}/{y}.png",
-			attribution:
-				'&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &middot; <a href="https://memomaps.de/">memomaps.de</a>',
-			maxZoom: 18,
-		};
-		const darkTile = {
-			url: "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png",
-			attribution:
-				'&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &middot; <a href="https://carto.com/attributions">CARTO</a>',
-			maxZoom: 19,
-		};
-		const themedTile = () => (darkMql.matches ? darkTile : lightTile);
-
 		// Parse `#lat/lng/zoom[/filter]` so refreshing keeps the view.
 		const parseHash = (): {
 			lat: number;
@@ -265,11 +244,15 @@ export function LiveMapView({
 			);
 			new FullScreen({ position: "topleft" }).addTo(map);
 
-			let currentTileLayer: TileLayer = L.tileLayer(
-				themedTile().url,
-				themedTile(),
+			const tileLayer = L.tileLayer(
+				"https://tile.memomaps.de/tilegen/{z}/{x}/{y}.png",
+				{
+					attribution:
+						'&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &middot; <a href="https://memomaps.de/">memomaps.de</a>',
+					maxZoom: 18,
+				},
 			);
-			currentTileLayer.addTo(map);
+			tileLayer.addTo(map);
 
 			const osmFallback = L.tileLayer(
 				"https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
@@ -279,19 +262,12 @@ export function LiveMapView({
 					maxZoom: 19,
 				},
 			);
-			currentTileLayer.on("tileerror", () => {
+			tileLayer.on("tileerror", () => {
 				if (!map.hasLayer(osmFallback)) {
-					currentTileLayer.remove();
+					tileLayer.remove();
 					osmFallback.addTo(map);
 				}
 			});
-
-			const onThemeChange = () => {
-				currentTileLayer.remove();
-				currentTileLayer = L.tileLayer(themedTile().url, themedTile());
-				currentTileLayer.addTo(map);
-			};
-			darkMql.addEventListener("change", onThemeChange);
 
 			const updateHash = () => {
 				const c = map.getCenter();
@@ -312,10 +288,6 @@ export function LiveMapView({
 
 			mapRef.current = map;
 
-			// Expose cleanup for the outer effect teardown.
-			(map as unknown as { _themeCleanup?: () => void })._themeCleanup = () =>
-				darkMql.removeEventListener("change", onThemeChange);
-
 			// Triggers the marker-drawing effect so initial vehicles render
 			// immediately instead of waiting for the first poll.
 			setMapReady(true);
@@ -324,9 +296,6 @@ export function LiveMapView({
 		return () => {
 			cancelled = true;
 			if (mapRef.current) {
-				(
-					mapRef.current as unknown as { _themeCleanup?: () => void }
-				)._themeCleanup?.();
 				mapRef.current.remove();
 				mapRef.current = null;
 			}
