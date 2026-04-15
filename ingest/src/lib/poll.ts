@@ -37,12 +37,27 @@ async function markRunDone(
 		);
 }
 
+interface BatchStats {
+	ok: number;
+	skipped: number;
+	transient: number;
+	terminal: number;
+	done: number;
+}
+
 export async function processPollBatch(
 	db: Db,
 	boss: PgBoss,
 	jobs: PgBoss.Job<PollJob>[],
 ): Promise<void> {
 	const now = new Date().toISOString();
+	const stats: BatchStats = {
+		ok: 0,
+		skipped: 0,
+		transient: 0,
+		terminal: 0,
+		done: 0,
+	};
 
 	// Fan out a single mgate POST for the whole batch. mgate's svcReqL
 	// supports per-request error isolation, so this is ~1 HTTP instead of N.
@@ -69,7 +84,10 @@ export async function processPollBatch(
 					),
 				);
 
-			if (row?.pollState === "done") continue;
+			if (row?.pollState === "done") {
+				stats.skipped++;
+				continue;
+			}
 
 			const mgateResult = mgateResults[i];
 
@@ -78,6 +96,8 @@ export async function processPollBatch(
 					`mgate terminal error for ${journeyRef}: ${mgateResult.errCode}`,
 				);
 				await markRunDone(db, journeyRef, dayOfOperation);
+				stats.terminal++;
+				stats.done++;
 				continue;
 			}
 
@@ -88,6 +108,8 @@ export async function processPollBatch(
 						`mgate gave up on ${journeyRef} after ${MGATE_MAX_FAIL_COUNT} transient errors (last: ${mgateResult.errCode})`,
 					);
 					await markRunDone(db, journeyRef, dayOfOperation);
+					stats.terminal++;
+					stats.done++;
 					continue;
 				}
 				console.error(
@@ -103,6 +125,7 @@ export async function processPollBatch(
 					} satisfies PollJob,
 					{ startAfter: RETRY_DELAY_S },
 				);
+				stats.transient++;
 				continue;
 			}
 
@@ -135,7 +158,7 @@ export async function processPollBatch(
 				mgDetail.lastPos != null ||
 				mgStops.some((s) => s.rtDepTime || s.rtArrTime);
 
-			await handlePollResult(
+			const markedDone = await handlePollResult(
 				db,
 				boss,
 				journeyRef,
@@ -145,12 +168,19 @@ export async function processPollBatch(
 				mgHasRtData,
 				mgDetail.lastPassRouteIdx,
 			);
+
+			stats.ok++;
+			if (markedDone) stats.done++;
 		} catch (e) {
 			console.error(`Failed to process journey ${journeyRef}:`, e);
 			// Throwing bubbles to pg-boss, which will retry per queue config.
 			throw e;
 		}
 	}
+
+	console.log(
+		`poll: batch=${jobs.length} ok=${stats.ok} skipped=${stats.skipped} transient=${stats.transient} terminal=${stats.terminal} done=${stats.done}`,
+	);
 }
 
 function isHardCapReached(
@@ -176,7 +206,7 @@ async function handlePollResult(
 	stops: { depTime?: string; arrTime?: string; name: string }[],
 	hasRtData: boolean,
 	lastPassRouteIdx: number | null | undefined,
-): Promise<void> {
+): Promise<boolean> {
 	const lastStopIdx = stops.length - 1;
 	const passedLastStop =
 		lastPassRouteIdx != null &&
@@ -210,17 +240,18 @@ async function handlePollResult(
 					eq(journeyRuns.dayOfOperation, dayOfOperation),
 				),
 			);
-	} else {
-		await boss.send(
-			POLL_QUEUE,
-			{
-				journeyRef,
-				dayOfOperation,
-				pollCount: pollCount + 1,
-			} satisfies PollJob,
-			{ startAfter: RETRY_DELAY_S },
-		);
+		return true;
 	}
+	await boss.send(
+		POLL_QUEUE,
+		{
+			journeyRef,
+			dayOfOperation,
+			pollCount: pollCount + 1,
+		} satisfies PollJob,
+		{ startAfter: RETRY_DELAY_S },
+	);
+	return false;
 }
 
 // Skip the per-poll run upsert when nothing meaningful changed. snapshotAt
