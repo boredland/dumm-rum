@@ -37,94 +37,133 @@ export interface MgateJourneyDetail {
 	partCancelled?: boolean;
 }
 
+export type MgateResult =
+	| { kind: "ok"; detail: MgateJourneyDetail }
+	| { kind: "transient"; errCode: string | null }
+	| { kind: "terminal"; errCode: string };
+
+// Error codes we've observed from mgate that indicate a ref is permanently
+// unusable. Everything else — including PARAMETER, which can flip back to OK
+// on the very next call — is treated as transient so we don't burn the REST
+// fallback on a single blip.
+const TERMINAL_ERR_CODES = new Set(["LOCATION"]);
+
 function parseTime(t?: string): string | undefined {
 	if (!t || t.length < 6) return undefined;
 	return `${t.slice(0, 2)}:${t.slice(2, 4)}:${t.slice(4, 6)}`;
 }
 
-export async function mgateJourneyDetail(
-	journeyId: string,
-): Promise<MgateJourneyDetail | null> {
+/**
+ * Batch up to N journey-detail lookups into a single mgate POST. mgate's
+ * `svcReqL` supports per-request error isolation, so one bad jid doesn't
+ * fail the batch. Returns one MgateResult per input, in order.
+ */
+export async function mgateJourneyDetailsBatch(
+	journeyIds: string[],
+): Promise<MgateResult[]> {
+	if (journeyIds.length === 0) return [];
+
 	const body = {
-		svcReqL: [
-			{
-				meth: "JourneyDetails",
-				req: { jid: journeyId, getPolyline: true },
-			},
-		],
+		svcReqL: journeyIds.map((jid) => ({
+			meth: "JourneyDetails",
+			req: { jid, getPolyline: true },
+		})),
 		client: CLIENT,
 		ver: "1.62",
 		lang: "deu",
 		auth: AUTH,
 	};
 
-	const resp = await fetch(MGATE_URL, {
-		method: "POST",
-		headers: { "Content-Type": "application/json" },
-		body: JSON.stringify(body),
-	});
+	let resp: Response;
+	try {
+		resp = await fetch(MGATE_URL, {
+			method: "POST",
+			headers: { "Content-Type": "application/json" },
+			body: JSON.stringify(body),
+		});
+	} catch {
+		return journeyIds.map(() => ({
+			kind: "transient" as const,
+			errCode: null,
+		}));
+	}
 
-	if (!resp.ok) return null;
-	const data = await resp.json<{
-		svcResL?: {
-			err?: string;
-			res?: {
-				common?: {
-					locL?: {
-						name: string;
-						extId: string;
-						crd?: { x: number; y: number };
-					}[];
-					prodL?: {
-						name?: string;
-						line?: string;
-						catOut?: string;
-						oprX?: number;
-						prodCtx?: {
-							catOut?: string;
-							catOutL?: string;
-							line?: string;
-						};
-					}[];
-					opL?: { name: string }[];
-					polyL?: {
-						crd?: number[];
-						crdEncYX?: string;
-						delta?: boolean;
-						dim?: number;
-					}[];
-				};
-				journey?: {
-					status?: string;
-					stopL?: {
-						locX: number;
-						idx: number;
-						dTimeS?: string;
-						aTimeS?: string;
-						dTimeR?: string;
-						aTimeR?: string;
-						cancelled?: boolean;
-						dCncl?: boolean;
-						aCncl?: boolean;
-					}[];
-					pos?: { x: number; y: number };
-					posRep?: string;
-					lastPassIdx?: number;
-					polyG?: { polyXL?: number[] };
-					date?: string;
-					isCncl?: boolean;
-					isPartCncl?: boolean;
-				};
-			};
-		}[];
-	}>();
+	if (!resp.ok)
+		return journeyIds.map(() => ({
+			kind: "transient" as const,
+			errCode: `HTTP_${resp.status}`,
+		}));
 
-	const svc = data.svcResL?.[0];
-	if (!svc || (svc.err && svc.err !== "OK")) return null;
+	const data = await resp.json<{ svcResL?: MgateSvcRes[] }>();
+	const svcResL = data.svcResL ?? [];
+
+	return journeyIds.map((_, i) => parseJourneyDetailsRes(svcResL[i]));
+}
+
+interface MgateSvcRes {
+	err?: string;
+	res?: {
+		common?: {
+			locL?: {
+				name: string;
+				extId: string;
+				crd?: { x: number; y: number };
+			}[];
+			prodL?: {
+				name?: string;
+				line?: string;
+				catOut?: string;
+				oprX?: number;
+				prodCtx?: {
+					catOut?: string;
+					catOutL?: string;
+					line?: string;
+				};
+			}[];
+			opL?: { name: string }[];
+			polyL?: {
+				crd?: number[];
+				crdEncYX?: string;
+				delta?: boolean;
+				dim?: number;
+			}[];
+		};
+		journey?: {
+			status?: string;
+			stopL?: {
+				locX: number;
+				idx: number;
+				dTimeS?: string;
+				aTimeS?: string;
+				dTimeR?: string;
+				aTimeR?: string;
+				cancelled?: boolean;
+				dCncl?: boolean;
+				aCncl?: boolean;
+			}[];
+			pos?: { x: number; y: number };
+			posRep?: string;
+			lastPassIdx?: number;
+			polyG?: { polyXL?: number[] };
+			date?: string;
+			isCncl?: boolean;
+			isPartCncl?: boolean;
+		};
+	};
+}
+
+function parseJourneyDetailsRes(svc: MgateSvcRes | undefined): MgateResult {
+	if (!svc) return { kind: "transient", errCode: null };
+	if (svc.err && svc.err !== "OK") {
+		const errCode = svc.err;
+		return TERMINAL_ERR_CODES.has(errCode)
+			? { kind: "terminal", errCode }
+			: { kind: "transient", errCode };
+	}
 
 	const common = svc.res?.common;
 	const journey = svc.res?.journey;
-	if (!common || !journey) return null;
+	if (!common || !journey) return { kind: "transient", errCode: "NO_DATA" };
 
 	const locs = common.locL ?? [];
 	const prods = common.prodL ?? [];
@@ -181,17 +220,20 @@ export async function mgateJourneyDetail(
 		: undefined;
 
 	return {
-		stops,
-		product,
-		status: journey.status,
-		lastPos,
-		lastPosReported: journey.posRep,
-		lastPassRouteIdx: journey.lastPassIdx,
-		polylineCrd,
-		polylineDelta,
-		polylineDim,
-		dayOfOperation,
-		cancelled: journey.isCncl,
-		partCancelled: journey.isPartCncl,
+		kind: "ok",
+		detail: {
+			stops,
+			product,
+			status: journey.status,
+			lastPos,
+			lastPosReported: journey.posRep,
+			lastPassRouteIdx: journey.lastPassIdx,
+			polylineCrd,
+			polylineDelta,
+			polylineDim,
+			dayOfOperation,
+			cancelled: journey.isCncl,
+			partCancelled: journey.isPartCncl,
+		},
 	};
 }

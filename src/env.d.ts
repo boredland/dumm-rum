@@ -13,4 +13,8 @@ interface JourneyPollMessage {
 	journeyRef: string;
 	dayOfOperation: string;
 	pollCount: number;
+	// Consecutive mgate failures for this ref. REST is only attempted once
+	// this passes MGATE_FALLBACK_THRESHOLD (see journeyPoller). Absent on
+	// older in-flight messages — treat as 0.
+	mgateFailCount?: number;
 }

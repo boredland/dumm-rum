@@ -5,11 +5,32 @@ import { coalesce, d1BatchSize, excluded } from "../db/helpers";
 import { journeyPositions, journeyRuns, journeyStops } from "../db/schema";
 import { createHafasClient } from "./hafas";
 import type { components } from "./hafas-types";
-import { mgateJourneyDetail } from "./mgate";
+import { mgateJourneyDetailsBatch } from "./mgate";
 import { notifyJourneyIssues } from "./telegram";
 import { berlinTime, extractPolyline, nowBerlin, pickKey } from "./utils";
 
 type JourneyDetail = components["schemas"]["JourneyDetail"];
+
+// How many consecutive transient mgate failures before falling through to
+// REST. mgate's PARAMETER error can flip back to OK on the next call, so
+// one blip shouldn't burn REST quota.
+const MGATE_FALLBACK_THRESHOLD = 3;
+
+async function markRunDone(
+	db: Db,
+	journeyRef: string,
+	dayOfOperation: string,
+): Promise<void> {
+	await db
+		.update(journeyRuns)
+		.set({ pollState: "done" })
+		.where(
+			and(
+				eq(journeyRuns.journeyRef, journeyRef),
+				eq(journeyRuns.dayOfOperation, dayOfOperation),
+			),
+		);
+}
 
 export async function processJourneyBatch(
 	batch: MessageBatch<JourneyPollMessage>,
@@ -18,8 +39,19 @@ export async function processJourneyBatch(
 	const db = createDb(env.DB);
 	const now = new Date().toISOString();
 
-	for (const msg of batch.messages) {
-		const { journeyRef, dayOfOperation, pollCount } = msg.body;
+	// Fan out a single mgate POST for the whole queue batch. mgate's svcReqL
+	// supports per-request error isolation, so this is ~1 HTTP instead of N.
+	const batchRefs = batch.messages.map((m) => m.body.journeyRef);
+	const mgateResults = await mgateJourneyDetailsBatch(batchRefs);
+
+	for (let i = 0; i < batch.messages.length; i++) {
+		const msg = batch.messages[i];
+		const {
+			journeyRef,
+			dayOfOperation,
+			pollCount,
+			mgateFailCount = 0,
+		} = msg.body;
 
 		try {
 			const [row] = await db
@@ -37,10 +69,41 @@ export async function processJourneyBatch(
 				continue;
 			}
 
-			const mgateResult = await mgateJourneyDetail(journeyRef);
+			const mgateResult = mgateResults[i];
 
-			if (!mgateResult) {
-				console.error(`mgate failed for ${journeyRef}, trying REST API`);
+			if (mgateResult.kind === "terminal") {
+				console.error(
+					`mgate terminal error for ${journeyRef}: ${mgateResult.errCode}`,
+				);
+				await markRunDone(db, journeyRef, dayOfOperation);
+				msg.ack();
+				continue;
+			}
+
+			if (
+				mgateResult.kind === "transient" &&
+				mgateFailCount + 1 < MGATE_FALLBACK_THRESHOLD
+			) {
+				console.error(
+					`mgate transient error for ${journeyRef} (attempt ${mgateFailCount + 1}/${MGATE_FALLBACK_THRESHOLD}): ${mgateResult.errCode}`,
+				);
+				msg.ack();
+				await env.JOURNEY_QUEUE.send(
+					{
+						journeyRef,
+						dayOfOperation,
+						pollCount,
+						mgateFailCount: mgateFailCount + 1,
+					},
+					{ delaySeconds: 60 },
+				);
+				continue;
+			}
+
+			if (mgateResult.kind === "transient") {
+				console.error(
+					`mgate exhausted for ${journeyRef} after ${MGATE_FALLBACK_THRESHOLD} attempts, trying REST API`,
+				);
 				const client = createHafasClient(pickKey(env.RMV_API_KEY));
 				const { data, error } = await client.GET("/journeyDetail", {
 					params: {
@@ -54,8 +117,8 @@ export async function processJourneyBatch(
 							? (error as { errorCode?: string }).errorCode
 							: undefined;
 					const isQuota = errCode === "API_QUOTA";
-					// SVC_PARAM / PARAMETER mean the ref is permanently rejected by
-					// the API — retrying just burns quota. Mark the run done.
+					// SVC_PARAM / PARAMETER from REST after mgate also gave up:
+					// treat as terminal, mark done.
 					const isTerminal = errCode === "SVC_PARAM" || errCode === "PARAMETER";
 					console.error(`journeyDetail failed for ${journeyRef}:`, error);
 					if (isQuota) {
@@ -65,15 +128,7 @@ export async function processJourneyBatch(
 							{ delaySeconds: 1800 },
 						);
 					} else if (isTerminal) {
-						await db
-							.update(journeyRuns)
-							.set({ pollState: "done" })
-							.where(
-								and(
-									eq(journeyRuns.journeyRef, journeyRef),
-									eq(journeyRuns.dayOfOperation, dayOfOperation),
-								),
-							);
+						await markRunDone(db, journeyRef, dayOfOperation);
 						msg.ack();
 					} else {
 						msg.retry();
@@ -121,16 +176,18 @@ export async function processJourneyBatch(
 				continue;
 			}
 
-			const mgStops = mgateResult.stops;
+			// mgate success path
+			const mgDetail = mgateResult.detail;
+			const mgStops = mgDetail.stops;
 
-			if (mgateResult.lastPos) {
+			if (mgDetail.lastPos) {
 				await db.insert(journeyPositions).values({
 					journeyRef,
 					dayOfOperation,
-					lat: mgateResult.lastPos.lat,
-					lon: mgateResult.lastPos.lon,
-					reportedAt: mgateResult.lastPosReported ?? now,
-					routeIdx: mgateResult.lastPassRouteIdx ?? null,
+					lat: mgDetail.lastPos.lat,
+					lon: mgDetail.lastPos.lon,
+					reportedAt: mgDetail.lastPosReported ?? now,
+					routeIdx: mgDetail.lastPassRouteIdx ?? null,
 					rtRouteIdx: null,
 					capturedAt: now,
 				});
@@ -140,14 +197,14 @@ export async function processJourneyBatch(
 				db,
 				journeyRef,
 				dayOfOperation,
-				mgateResult,
+				mgDetail,
 				now,
 			);
 			await upsertMgateStops(db, journeyRef, dayOfOperation, mgStops);
 
-			const mgLine = mgateResult.product?.line ?? mgateResult.product?.name;
+			const mgLine = mgDetail.product?.line ?? mgDetail.product?.name;
 			const mgHasRtData =
-				mgateResult.lastPos != null ||
+				mgDetail.lastPos != null ||
 				mgStops.some((s) => s.rtDepTime || s.rtArrTime);
 
 			await handlePollResult(
@@ -160,7 +217,7 @@ export async function processJourneyBatch(
 				mgLine,
 				mgStops,
 				mgHasRtData,
-				mgateResult.lastPassRouteIdx,
+				mgDetail.lastPassRouteIdx,
 			);
 		} catch (e) {
 			console.error(`Failed to process journey ${journeyRef}:`, e);
