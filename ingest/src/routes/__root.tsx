@@ -3,7 +3,9 @@ import {
 	HeadContent,
 	Outlet,
 	Scripts,
+	useLocation,
 } from "@tanstack/react-router";
+import { type Lang, languages } from "../lib/i18n.ts";
 
 export const Route = createRootRoute({
 	head: () => ({
@@ -17,8 +19,14 @@ export const Route = createRootRoute({
 });
 
 function RootComponent() {
+	// Derive <html lang> from the URL prefix so the document advertises
+	// the correct language for SEO + a11y. Fallback to "de" when no prefix.
+	const { pathname } = useLocation();
+	const first = pathname.split("/")[1];
+	const lang: Lang = languages.includes(first as Lang) ? (first as Lang) : "de";
+
 	return (
-		<html lang="en">
+		<html lang={lang}>
 			<head>
 				<HeadContent />
 			</head>
