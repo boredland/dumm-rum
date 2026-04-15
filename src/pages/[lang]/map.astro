@@ -166,7 +166,14 @@ function initMap() {
 
 async function fetchAndRender() {
 	try {
-		const resp = await fetch("/api/live-map");
+		// Cache-bust the browser cache. A previous deploy left
+		// /api/live-map pinned in some browsers' caches for up to 4h
+		// with the old payload shape, which made newer JS read
+		// `v.stopCount` as undefined and skip every tracked vehicle.
+		// Rounding to 30s buckets keeps the CDN edge cache effective
+		// while still defeating any stale browser-cached response.
+		const bucket = Math.floor(Date.now() / 30000);
+		const resp = await fetch(`/api/live-map?t=${bucket}`);
 		if (!resp.ok) return;
 		const data = await resp.json();
 		const vehicles = data.vehicles || [];

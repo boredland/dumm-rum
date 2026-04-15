@@ -173,7 +173,12 @@ export const GET: APIRoute = async () => {
 		{ vehicles: [...vehicles, ...ghosts], updatedAt: new Date().toISOString() },
 		{
 			headers: {
-				"Cache-Control": "s-maxage=30, stale-while-revalidate=30",
+				// `max-age=0` keeps the browser from caching across the
+				// 30s edge window — which matters when the payload shape
+				// changes, since a 4-hour browser cache would otherwise
+				// serve a stale shape to clients running newer JS.
+				"Cache-Control":
+					"public, max-age=0, s-maxage=30, stale-while-revalidate=30",
 			},
 		},
 	);

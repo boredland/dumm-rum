@@ -41,10 +41,16 @@ export default {
 				(contentType.includes("text/html") ||
 					contentType.includes("application/json"))
 			) {
-				response.headers.set(
-					"Cache-Control",
-					`public, s-maxage=${CACHE_TTL}, stale-while-revalidate=${CACHE_TTL}`,
-				);
+				// Only set the default cache header if the page didn't set its
+				// own. Overwriting here would clobber per-route choices — the
+				// live-map API wants a 30s TTL, past-date day pages want 24h,
+				// etc.
+				if (!response.headers.has("Cache-Control")) {
+					response.headers.set(
+						"Cache-Control",
+						`public, s-maxage=${CACHE_TTL}, stale-while-revalidate=${CACHE_TTL}`,
+					);
+				}
 				ctx.waitUntil(cache.put(request, response.clone()));
 			}
 			return response;
