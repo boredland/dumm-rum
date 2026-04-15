@@ -33,9 +33,16 @@ const lang = langFromParams(Astro.params);
 <script is:inline src="https://unpkg.com/leaflet.fullscreen@3.0.2/Control.FullScreen.js"></script>
 
 <script is:inline define:vars={{ lang, noVehiclesText: t(lang, "map.no_vehicles"), vehiclesText: t(lang, "map.vehicles"), lastUpdateText: t(lang, "map.last_update") }}>
+function normalizeCategory(cat) {
+	if (!cat) return cat;
+	if (cat === "S") return "S-Bahn";
+	if (/bus$/i.test(cat) || cat === "AST") return "Bus";
+	if (/straßenbahn$/i.test(cat) || /strassenbahn$/i.test(cat)) return "Tram";
+	return cat;
+}
+
 const CATEGORY_ICON_URLS = {
 	"U-Bahn": "/icons/ubahn.svg",
-	"S": "/icons/sbahn.svg",
 	"S-Bahn": "/icons/sbahn.svg",
 	"Tram": "/icons/tram.svg",
 	"Bus": "/icons/bus.svg",
@@ -45,7 +52,7 @@ const CATEGORY_ICON_URLS = {
 
 function createVehicleIcon(cat, sleeping, ghost, delayed) {
 	if (ghost) return createGhostIcon(cat);
-	const iconUrl = CATEGORY_ICON_URLS[cat] || CATEGORY_ICON_URLS["Bus"];
+	const iconUrl = CATEGORY_ICON_URLS[normalizeCategory(cat)] || CATEGORY_ICON_URLS["Bus"];
 	const opacity = sleeping ? "opacity:0.5;" : "";
 	const badge = sleeping
 		? `<span style="position:absolute;top:-8px;right:-6px;font-size:10px;line-height:1">💤</span>`
@@ -64,7 +71,7 @@ function createVehicleIcon(cat, sleeping, ghost, delayed) {
 }
 
 function createGhostIcon(cat) {
-	const iconUrl = CATEGORY_ICON_URLS[cat] || CATEGORY_ICON_URLS["Bus"];
+	const iconUrl = CATEGORY_ICON_URLS[normalizeCategory(cat)] || CATEGORY_ICON_URLS["Bus"];
 	return L.divIcon({
 		className: "",
 		html: `<div style="position:relative;animation:ghost-shimmer 2s ease-in-out infinite"><img src="${iconUrl}" width="30" height="30" style="border-radius:50%;box-shadow:0 2px 6px rgba(0,0,0,.35)" /></div>`,
@@ -99,8 +106,9 @@ function formatTime(isoString) {
 
 function matchesFilter(cat, filter) {
 	if (filter === "all") return true;
-	if (filter === "RE,RB") return cat === "RE" || cat === "RB";
-	return cat === filter || (filter === "S" && cat === "S-Bahn");
+	const n = normalizeCategory(cat);
+	if (filter === "RE,RB") return n === "RE" || n === "RB";
+	return n === filter || (filter === "S" && n === "S-Bahn");
 }
 
 let map;
