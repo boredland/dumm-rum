@@ -9,7 +9,7 @@
 		"lint": "biome check",
 		"format": "biome check --write",
 		"check": "tsc --noEmit && biome check",
-		"prepare": "lefthook install || true"
+		"prepare": "lefthook install"
 	},
 	"dependencies": {
 		"dayjs": "^1.11.20",
