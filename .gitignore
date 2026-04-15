@@ -4,3 +4,4 @@ dist/
 .wrangler/
 .dev.vars
 departures.csv
+.mcp.json
