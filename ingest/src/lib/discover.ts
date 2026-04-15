@@ -1,3 +1,4 @@
+import dayjs from "dayjs";
 import { and, eq, sql } from "drizzle-orm";
 import type PgBoss from "pg-boss";
 import type { Db } from "../db/client.ts";
@@ -117,7 +118,7 @@ async function enqueueNewJourneys(
 	// One bulk insert beats N individual boss.send() round-trips. Convert
 	// relative seconds → absolute Date since JobInsert wants an absolute
 	// startAfter.
-	const nowMs = Date.now();
+	const start = dayjs();
 	await boss.insert(
 		candidates.map((c, i) => ({
 			name: POLL_QUEUE,
@@ -126,9 +127,9 @@ async function enqueueNewJourneys(
 				dayOfOperation: c.dayOfOperation,
 				pollCount: 0,
 			},
-			startAfter: new Date(
-				nowMs + Math.floor((i / candidates.length) * STAGGER_WINDOW_S) * 1000,
-			),
+			startAfter: start
+				.add(Math.floor((i / candidates.length) * STAGGER_WINDOW_S), "second")
+				.toDate(),
 		})),
 	);
 
