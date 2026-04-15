@@ -49,11 +49,14 @@ export async function processJourneyBatch(
 				});
 
 				if (error || !data) {
-					const isQuota =
-						typeof error === "object" &&
-						error !== null &&
-						"errorCode" in error &&
-						(error as { errorCode?: string }).errorCode === "API_QUOTA";
+					const errCode =
+						typeof error === "object" && error !== null && "errorCode" in error
+							? (error as { errorCode?: string }).errorCode
+							: undefined;
+					const isQuota = errCode === "API_QUOTA";
+					// SVC_PARAM / PARAMETER mean the ref is permanently rejected by
+					// the API — retrying just burns quota. Mark the run done.
+					const isTerminal = errCode === "SVC_PARAM" || errCode === "PARAMETER";
 					console.error(`journeyDetail failed for ${journeyRef}:`, error);
 					if (isQuota) {
 						msg.ack();
@@ -61,6 +64,17 @@ export async function processJourneyBatch(
 							{ journeyRef, dayOfOperation, pollCount: pollCount + 1 },
 							{ delaySeconds: 1800 },
 						);
+					} else if (isTerminal) {
+						await db
+							.update(journeyRuns)
+							.set({ pollState: "done" })
+							.where(
+								and(
+									eq(journeyRuns.journeyRef, journeyRef),
+									eq(journeyRuns.dayOfOperation, dayOfOperation),
+								),
+							);
+						msg.ack();
 					} else {
 						msg.retry();
 					}
@@ -309,8 +323,22 @@ async function upsertJourneyRun(
 				polyline: sql`COALESCE(${excluded(journeyRuns.polyline)}, ${journeyRuns.polyline})`,
 				snapshotAt: excluded(journeyRuns.snapshotAt),
 			},
+			setWhere: runChangedSql,
 		});
 }
+
+// Skip the per-poll run upsert when nothing meaningful changed. snapshotAt
+// becomes slightly stale in exchange, but it's only used for "last updated"
+// display and stays accurate enough at the 5-min poll cadence.
+const runChangedSql = sql`
+	${excluded(journeyRuns.status)} != ${journeyRuns.status}
+	OR ${excluded(journeyRuns.cancelled)} > ${journeyRuns.cancelled}
+	OR ${excluded(journeyRuns.partCancelled)} > ${journeyRuns.partCancelled}
+	OR ${excluded(journeyRuns.cancelledStopCount)} > ${journeyRuns.cancelledStopCount}
+	OR ${excluded(journeyRuns.wasTracked)} > ${journeyRuns.wasTracked}
+	OR (${journeyRuns.polyline} IS NULL AND ${excluded(journeyRuns.polyline)} IS NOT NULL)
+	OR ${journeyRuns.pollState} != 'polling'
+`;
 
 type StopType = components["schemas"]["StopType"];
 
@@ -363,9 +391,21 @@ async function upsertJourneyStops(
 					lat: coalesce(excluded(journeyStops.lat), journeyStops.lat),
 					lon: coalesce(excluded(journeyStops.lon), journeyStops.lon),
 				},
+				setWhere: stopsChangedSql,
 			});
 	}
 }
+
+// Only write on conflict when something observable actually changed. Turns
+// the typical "nothing new" poll into a read-only no-op and cuts D1 write
+// amplification from ~25 rows/poll to ~0-2.
+const stopsChangedSql = sql`
+	COALESCE(${excluded(journeyStops.rtDepTime)}, '') != COALESCE(${journeyStops.rtDepTime}, '')
+	OR COALESCE(${excluded(journeyStops.rtArrTime)}, '') != COALESCE(${journeyStops.rtArrTime}, '')
+	OR ${excluded(journeyStops.cancelled)} > ${journeyStops.cancelled}
+	OR (${journeyStops.lat} IS NULL AND ${excluded(journeyStops.lat)} IS NOT NULL)
+	OR (${journeyStops.lon} IS NULL AND ${excluded(journeyStops.lon)} IS NOT NULL)
+`;
 
 async function upsertJourneyRunFromMgate(
 	db: Db,
@@ -448,6 +488,7 @@ async function upsertJourneyRunFromMgate(
 				polyline: sql`COALESCE(${excluded(journeyRuns.polyline)}, ${journeyRuns.polyline})`,
 				snapshotAt: excluded(journeyRuns.snapshotAt),
 			},
+			setWhere: runChangedSql,
 		});
 }
 
@@ -512,6 +553,7 @@ async function upsertMgateStops(
 					lat: coalesce(excluded(journeyStops.lat), journeyStops.lat),
 					lon: coalesce(excluded(journeyStops.lon), journeyStops.lon),
 				},
+				setWhere: stopsChangedSql,
 			});
 	}
 }

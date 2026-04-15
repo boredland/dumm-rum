@@ -1,5 +1,7 @@
 import { handle } from "@astrojs/cloudflare/handler";
+import { sql } from "drizzle-orm";
 import { createDb } from "./db/client";
+import { journeyPositions } from "./db/schema";
 import { runCollection } from "./lib/collect";
 import { processJourneyBatch } from "./lib/journeyPoller";
 import { snapshotJourneys } from "./lib/journeyRuns";
@@ -72,6 +74,20 @@ export default {
 						),
 					)
 					.catch((e) => console.error("journey snapshot failed:", e)),
+			);
+		}
+
+		// 03:00 tick: drop journey_positions older than 24h. /api/live-map only
+		// reads the newest fix per journey_ref — history otherwise grows without
+		// bound and drives storage + row counts.
+		if (berlinNow.hour() === 3) {
+			const cutoff = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+			ctx.waitUntil(
+				db
+					.delete(journeyPositions)
+					.where(sql`${journeyPositions.capturedAt} < ${cutoff}`)
+					.then(() => console.log(`journey_positions pruned below ${cutoff}`))
+					.catch((e) => console.error("journey_positions prune failed:", e)),
 			);
 		}
 
