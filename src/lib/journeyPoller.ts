@@ -3,18 +3,14 @@ import type { Db } from "../db/client";
 import { createDb } from "../db/client";
 import { coalesce, d1BatchSize, excluded } from "../db/helpers";
 import { journeyPositions, journeyRuns, journeyStops } from "../db/schema";
-import { createHafasClient } from "./hafas";
-import type { components } from "./hafas-types";
 import { mgateJourneyDetailsBatch } from "./mgate";
 import { notifyJourneyIssues } from "./telegram";
-import { berlinTime, extractPolyline, nowBerlin, pickKey } from "./utils";
+import { berlinTime, nowBerlin } from "./utils";
 
-type JourneyDetail = components["schemas"]["JourneyDetail"];
-
-// How many consecutive transient mgate failures before falling through to
-// REST. mgate's PARAMETER error can flip back to OK on the next call, so
-// one blip shouldn't burn REST quota.
-const MGATE_FALLBACK_THRESHOLD = 3;
+// How many consecutive transient mgate failures before giving up on a
+// run and marking it done. mgate's PARAMETER error can flip back to OK
+// on the next call, so one blip shouldn't retire a run.
+const MGATE_MAX_FAIL_COUNT = 5;
 
 async function markRunDone(
 	db: Db,
@@ -80,12 +76,18 @@ export async function processJourneyBatch(
 				continue;
 			}
 
-			if (
-				mgateResult.kind === "transient" &&
-				mgateFailCount + 1 < MGATE_FALLBACK_THRESHOLD
-			) {
+			if (mgateResult.kind === "transient") {
+				const nextFailCount = mgateFailCount + 1;
+				if (nextFailCount >= MGATE_MAX_FAIL_COUNT) {
+					console.error(
+						`mgate gave up on ${journeyRef} after ${MGATE_MAX_FAIL_COUNT} transient errors (last: ${mgateResult.errCode})`,
+					);
+					await markRunDone(db, journeyRef, dayOfOperation);
+					msg.ack();
+					continue;
+				}
 				console.error(
-					`mgate transient error for ${journeyRef} (attempt ${mgateFailCount + 1}/${MGATE_FALLBACK_THRESHOLD}): ${mgateResult.errCode}`,
+					`mgate transient error for ${journeyRef} (attempt ${nextFailCount}/${MGATE_MAX_FAIL_COUNT}): ${mgateResult.errCode}`,
 				);
 				msg.ack();
 				await env.JOURNEY_QUEUE.send(
@@ -93,85 +95,9 @@ export async function processJourneyBatch(
 						journeyRef,
 						dayOfOperation,
 						pollCount,
-						mgateFailCount: mgateFailCount + 1,
+						mgateFailCount: nextFailCount,
 					},
 					{ delaySeconds: 60 },
-				);
-				continue;
-			}
-
-			if (mgateResult.kind === "transient") {
-				console.error(
-					`mgate exhausted for ${journeyRef} after ${MGATE_FALLBACK_THRESHOLD} attempts, trying REST API`,
-				);
-				const client = createHafasClient(pickKey(env.RMV_API_KEY));
-				const { data, error } = await client.GET("/journeyDetail", {
-					params: {
-						query: { id: journeyRef, poly: "1", format: "json" },
-					},
-				});
-
-				if (error || !data) {
-					const errCode =
-						typeof error === "object" && error !== null && "errorCode" in error
-							? (error as { errorCode?: string }).errorCode
-							: undefined;
-					const isQuota = errCode === "API_QUOTA";
-					// SVC_PARAM / PARAMETER from REST after mgate also gave up:
-					// treat as terminal, mark done.
-					const isTerminal = errCode === "SVC_PARAM" || errCode === "PARAMETER";
-					console.error(`journeyDetail failed for ${journeyRef}:`, error);
-					if (isQuota) {
-						msg.ack();
-						await env.JOURNEY_QUEUE.send(
-							{ journeyRef, dayOfOperation, pollCount: pollCount + 1 },
-							{ delaySeconds: 1800 },
-						);
-					} else if (isTerminal) {
-						await markRunDone(db, journeyRef, dayOfOperation);
-						msg.ack();
-					} else {
-						msg.retry();
-					}
-					continue;
-				}
-
-				const detail = data as JourneyDetail;
-				const stops = detail.Stops?.Stop ?? [];
-
-				if (detail.lastPos) {
-					await db.insert(journeyPositions).values({
-						journeyRef,
-						dayOfOperation,
-						lat: detail.lastPos.lat,
-						lon: detail.lastPos.lon,
-						reportedAt: detail.lastPosReported ?? now,
-						routeIdx: detail.lastPassRouteIdx ?? null,
-						rtRouteIdx: detail.rtLastPassRouteIdx ?? null,
-						capturedAt: now,
-					});
-				}
-
-				await upsertJourneyRun(db, journeyRef, dayOfOperation, detail, now);
-				await upsertJourneyStops(db, journeyRef, dayOfOperation, stops);
-
-				const product = detail.Product?.[0];
-				const restLine = product?.line ?? product?.name;
-				const restHasRtData =
-					detail.lastPos != null ||
-					stops.some((s) => s.rtDepTime || s.rtArrTime);
-
-				await handlePollResult(
-					db,
-					env,
-					msg,
-					journeyRef,
-					dayOfOperation,
-					pollCount,
-					restLine,
-					stops,
-					restHasRtData,
-					detail.lastPassRouteIdx,
 				);
 				continue;
 			}
@@ -306,84 +232,6 @@ async function handlePollResult(
 	}
 }
 
-async function upsertJourneyRun(
-	db: Db,
-	ref: string,
-	dayOfOperation: string,
-	detail: JourneyDetail,
-	snapshotAt: string,
-): Promise<void> {
-	const stops = detail.Stops?.Stop ?? [];
-	if (stops.length < 2) return;
-
-	const origin = stops[0];
-	const dest = stops[stops.length - 1];
-	const originDepTime = origin.depTime;
-	const destArrTime = dest.arrTime;
-	if (!originDepTime || !destArrTime) return;
-
-	const product = detail.Product?.[0];
-	const line = product?.line ?? product?.name;
-	if (!line) return;
-
-	const cancelledStops = stops.filter((s) => s.cancelled).length;
-	const hasRtData =
-		stops.some((s) => s.rtDepTime || s.rtArrTime) || detail.lastPos != null;
-
-	const polyline = extractPolyline(detail);
-
-	await db
-		.insert(journeyRuns)
-		.values({
-			journeyRef: ref,
-			dayOfOperation,
-			line,
-			category: product?.catOut ?? null,
-			operator: product?.operator ?? null,
-			lineId: product?.lineId ?? null,
-			originStopId: origin.extId,
-			originName: origin.name,
-			originDepTime,
-			destStopId: dest.extId,
-			destName: dest.name,
-			destArrTime,
-			status: detail.JourneyStatus ?? "P",
-			cancelled: detail.cancelled ? 1 : 0,
-			partCancelled: Number(detail.partCancelled || cancelledStops > 0),
-			cancelledStopCount: cancelledStops,
-			totalStopCount: stops.length,
-			wasTracked: hasRtData ? 1 : 0,
-			pollState: "polling",
-			polyline,
-			snapshotAt,
-		})
-		.onConflictDoUpdate({
-			target: [journeyRuns.journeyRef, journeyRuns.dayOfOperation],
-			set: {
-				line: excluded(journeyRuns.line),
-				category: excluded(journeyRuns.category),
-				operator: excluded(journeyRuns.operator),
-				lineId: excluded(journeyRuns.lineId),
-				originStopId: excluded(journeyRuns.originStopId),
-				originName: excluded(journeyRuns.originName),
-				originDepTime: excluded(journeyRuns.originDepTime),
-				destStopId: excluded(journeyRuns.destStopId),
-				destName: excluded(journeyRuns.destName),
-				destArrTime: excluded(journeyRuns.destArrTime),
-				status: excluded(journeyRuns.status),
-				cancelled: excluded(journeyRuns.cancelled),
-				partCancelled: excluded(journeyRuns.partCancelled),
-				cancelledStopCount: excluded(journeyRuns.cancelledStopCount),
-				totalStopCount: excluded(journeyRuns.totalStopCount),
-				wasTracked: sql`MAX(${journeyRuns.wasTracked}, ${excluded(journeyRuns.wasTracked)})`,
-				pollState: sql`'polling'`,
-				polyline: sql`COALESCE(${excluded(journeyRuns.polyline)}, ${journeyRuns.polyline})`,
-				snapshotAt: excluded(journeyRuns.snapshotAt),
-			},
-			setWhere: runChangedSql,
-		});
-}
-
 // Skip the per-poll run upsert when nothing meaningful changed. snapshotAt
 // becomes slightly stale in exchange, but it's only used for "last updated"
 // display and stays accurate enough at the 5-min poll cadence.
@@ -397,65 +245,9 @@ const runChangedSql = sql`
 	OR ${journeyRuns.pollState} != 'polling'
 `;
 
-type StopType = components["schemas"]["StopType"];
-
-async function upsertJourneyStops(
-	db: Db,
-	journeyRef: string,
-	dayOfOperation: string,
-	stops: StopType[],
-): Promise<void> {
-	if (stops.length === 0) return;
-
-	const batchSize = d1BatchSize(journeyStops);
-
-	for (let i = 0; i < stops.length; i += batchSize) {
-		const batch = stops.slice(i, i + batchSize);
-		await db
-			.insert(journeyStops)
-			.values(
-				batch.map((s, j) => ({
-					journeyRef,
-					dayOfOperation,
-					routeIdx: s.routeIdx ?? i + j,
-					stopId: s.extId,
-					stopName: s.name,
-					depTime: s.depTime ?? null,
-					arrTime: s.arrTime ?? null,
-					rtDepTime: s.rtDepTime ?? null,
-					rtArrTime: s.rtArrTime ?? null,
-					cancelled: s.cancelled ? 1 : 0,
-					lat: s.lat ?? null,
-					lon: s.lon ?? null,
-				})),
-			)
-			.onConflictDoUpdate({
-				target: [
-					journeyStops.journeyRef,
-					journeyStops.dayOfOperation,
-					journeyStops.routeIdx,
-				],
-				set: {
-					rtDepTime: coalesce(
-						excluded(journeyStops.rtDepTime),
-						journeyStops.rtDepTime,
-					),
-					rtArrTime: coalesce(
-						excluded(journeyStops.rtArrTime),
-						journeyStops.rtArrTime,
-					),
-					cancelled: sql`MAX(${journeyStops.cancelled}, ${excluded(journeyStops.cancelled)})`,
-					lat: coalesce(excluded(journeyStops.lat), journeyStops.lat),
-					lon: coalesce(excluded(journeyStops.lon), journeyStops.lon),
-				},
-				setWhere: stopsChangedSql,
-			});
-	}
-}
-
-// Only write on conflict when something observable actually changed. Turns
-// the typical "nothing new" poll into a read-only no-op and cuts D1 write
-// amplification from ~25 rows/poll to ~0-2.
+// Only write stop rows on conflict when something observable actually
+// changed. Turns the typical "nothing new" poll into a read-only no-op
+// and cuts D1 write amplification from ~25 rows/poll to ~0-2.
 const stopsChangedSql = sql`
 	COALESCE(${excluded(journeyStops.rtDepTime)}, '') != COALESCE(${journeyStops.rtDepTime}, '')
 	OR COALESCE(${excluded(journeyStops.rtArrTime)}, '') != COALESCE(${journeyStops.rtArrTime}, '')

@@ -2,23 +2,19 @@ import { eq, sql } from "drizzle-orm";
 import type { Db } from "../db/client";
 import { d1BatchSize, excluded } from "../db/helpers";
 import { journeyRuns } from "../db/schema";
-import { createHafasClient } from "./hafas";
-import type { components } from "./hafas-types";
-import { extractPolyline } from "./utils";
+import { type MgateJourneyDetail, mgateJourneyDetailsBatch } from "./mgate";
 
-type JourneyDetail = components["schemas"]["JourneyDetail"];
 type JourneyRunRow = typeof journeyRuns.$inferInsert;
 
 const FETCH_BATCH = 10;
 
 /**
- * Re-snapshot journey_runs for a given date from /journeyDetail.
+ * Re-snapshot journey_runs for a given date via mgate JourneyDetails.
  * Enriches existing rows with full route topology (origin/dest, stop
- * count) that the initial discovery from /departureBoard doesn't have.
+ * count, polyline) that the initial discovery from StationBoard lacks.
  */
 export async function snapshotJourneys(
 	db: Db,
-	apiKey: string,
 	date: string,
 ): Promise<{ discovered: number; upserted: number; failed: number }> {
 	const refRows = await db
@@ -32,7 +28,6 @@ export async function snapshotJourneys(
 
 	if (refRows.length === 0) return { discovered: 0, upserted: 0, failed: 0 };
 
-	const client = createHafasClient(apiKey);
 	const snapshotAt = new Date().toISOString();
 	const rows: JourneyRunRow[] = [];
 	let failed = 0;
@@ -42,26 +37,19 @@ export async function snapshotJourneys(
 
 	for (let i = 0; i < refs.length; i += FETCH_BATCH) {
 		const chunk = refs.slice(i, i + FETCH_BATCH);
-		const results = await Promise.all(
-			chunk.map((ref) =>
-				client
-					.GET("/journeyDetail", {
-						params: { query: { id: ref, poly: "1", format: "json" } },
-					})
-					.catch(() => null),
-			),
-		);
+		const results = await mgateJourneyDetailsBatch(chunk);
 		for (let j = 0; j < chunk.length; j++) {
 			const ref = chunk[j];
 			const result = results[j];
-			if (!result || result.error || !result.data) {
+			if (result.kind !== "ok") {
 				failed++;
 				continue;
 			}
 			const existing = existingData.get(ref);
 			const row = buildRow(
 				ref,
-				result.data as JourneyDetail,
+				date,
+				result.detail,
 				existing ?? { cancelled: 0, wasTracked: 0 },
 				snapshotAt,
 			);
@@ -115,41 +103,50 @@ export async function snapshotJourneys(
 
 function buildRow(
 	ref: string,
-	detail: JourneyDetail,
+	dayOfOperation: string,
+	detail: MgateJourneyDetail,
 	existing: { cancelled: number; wasTracked: number },
 	snapshotAt: string,
 ): JourneyRunRow | null {
-	const stops = detail.Stops?.Stop ?? [];
+	const stops = detail.stops;
 	if (stops.length < 2) return null;
 
 	const origin = stops[0];
 	const dest = stops[stops.length - 1];
-	const originDepTime = origin.depTime;
-	const destArrTime = dest.arrTime;
-	if (!originDepTime || !destArrTime) return null;
+	if (!origin.depTime || !dest.arrTime) return null;
 
-	const product = detail.Product?.[0];
-	const line = product?.line ?? product?.name;
+	const line = detail.product?.line ?? detail.product?.name;
 	if (!line) return null;
 
 	const cancelledStops = stops.filter((s) => s.cancelled).length;
 
-	const polyline = extractPolyline(detail);
+	let polyline: string | null = null;
+	if (detail.polylineCrd && detail.polylineCrd.length >= 4) {
+		const dim = detail.polylineDim ?? 2;
+		const raw = detail.polylineDelta
+			? decodeDeltaCrd(detail.polylineCrd, dim)
+			: detail.polylineCrd;
+		const points: [number, number][] = [];
+		for (let i = 0; i < raw.length; i += dim) {
+			points.push([raw[i + 1] / 1_000_000, raw[i] / 1_000_000]);
+		}
+		polyline = JSON.stringify(points);
+	}
 
 	return {
 		journeyRef: ref,
-		dayOfOperation: detail.dayOfOperation,
+		dayOfOperation: detail.dayOfOperation ?? dayOfOperation,
 		line,
-		category: product?.catOut ?? null,
-		operator: product?.operator ?? null,
-		lineId: product?.lineId ?? null,
+		category: detail.product?.catOut ?? null,
+		operator: detail.product?.operator ?? null,
+		lineId: null,
 		originStopId: origin.extId,
 		originName: origin.name,
-		originDepTime,
+		originDepTime: origin.depTime,
 		destStopId: dest.extId,
 		destName: dest.name,
-		destArrTime,
-		status: detail.JourneyStatus ?? "P",
+		destArrTime: dest.arrTime,
+		status: detail.status ?? "P",
 		cancelled: Math.max(detail.cancelled ? 1 : 0, existing.cancelled),
 		partCancelled: Number(detail.partCancelled || cancelledStops > 0),
 		cancelledStopCount: cancelledStops,
@@ -158,4 +155,16 @@ function buildRow(
 		polyline,
 		snapshotAt,
 	};
+}
+
+function decodeDeltaCrd(encoded: number[], dim: number): number[] {
+	const result: number[] = [];
+	const acc = new Array(dim).fill(0);
+	for (let i = 0; i < encoded.length; i += dim) {
+		for (let d = 0; d < dim; d++) {
+			acc[d] += encoded[i + d];
+			result.push(acc[d]);
+		}
+	}
+	return result;
 }

@@ -42,6 +42,22 @@ export type MgateResult =
 	| { kind: "transient"; errCode: string | null }
 	| { kind: "terminal"; errCode: string };
 
+export interface MgateStationBoardEntry {
+	journeyRef: string;
+	dayOfOperation: string;
+	line: string;
+	category: string | null;
+	operator: string | null;
+	depTime: string;
+	destName: string;
+	cancelled: boolean;
+	status: string | null;
+}
+
+export type MgateStationBoardResult =
+	| { kind: "ok"; journeys: MgateStationBoardEntry[] }
+	| { kind: "error"; errCode: string | null };
+
 // Error codes we've observed from mgate that indicate a ref is permanently
 // unusable. Everything else — including PARAMETER, which can flip back to OK
 // on the very next call — is treated as transient so we don't burn the REST
@@ -236,4 +252,134 @@ function parseJourneyDetailsRes(svc: MgateSvcRes | undefined): MgateResult {
 			partCancelled: journey.isPartCncl,
 		},
 	};
+}
+
+/**
+ * Query StationBoard for many stations in one mgate POST. Returns one
+ * result slot per input, in order, with per-station error isolation.
+ *
+ * `date`/`time` are HAFAS-native strings (YYYYMMDD / HHMMSS). `dur` is
+ * the forward window in minutes.
+ */
+export async function mgateStationBoardBatch(
+	stationIds: string[],
+	opts: { date: string; time: string; durMinutes: number },
+): Promise<MgateStationBoardResult[]> {
+	if (stationIds.length === 0) return [];
+
+	const body = {
+		svcReqL: stationIds.map((extId) => ({
+			meth: "StationBoard",
+			req: {
+				type: "DEP",
+				stbLoc: { type: "S", extId },
+				date: opts.date,
+				time: opts.time,
+				dur: opts.durMinutes,
+				maxJny: 200,
+			},
+		})),
+		client: CLIENT,
+		ver: "1.62",
+		lang: "deu",
+		auth: AUTH,
+	};
+
+	let resp: Response;
+	try {
+		resp = await fetch(MGATE_URL, {
+			method: "POST",
+			headers: { "Content-Type": "application/json" },
+			body: JSON.stringify(body),
+		});
+	} catch {
+		return stationIds.map(() => ({
+			kind: "error" as const,
+			errCode: null,
+		}));
+	}
+
+	if (!resp.ok)
+		return stationIds.map(() => ({
+			kind: "error" as const,
+			errCode: `HTTP_${resp.status}`,
+		}));
+
+	const data = await resp.json<{ svcResL?: MgateStbRes[] }>();
+	const svcResL = data.svcResL ?? [];
+
+	return stationIds.map((_, i) => parseStationBoardRes(svcResL[i]));
+}
+
+interface MgateStbRes {
+	err?: string;
+	res?: {
+		common?: {
+			prodL?: {
+				name?: string;
+				prodCtx?: {
+					line?: string;
+					catOut?: string;
+					catOutL?: string;
+				};
+				oprX?: number;
+			}[];
+			opL?: { name: string }[];
+		};
+		jnyL?: {
+			jid: string;
+			prodX: number;
+			date?: string;
+			dirTxt?: string;
+			isCncl?: boolean;
+			status?: string;
+			stbStop?: {
+				dTimeS?: string;
+				dTimeR?: string;
+			};
+		}[];
+	};
+}
+
+function parseStationBoardRes(
+	svc: MgateStbRes | undefined,
+): MgateStationBoardResult {
+	if (!svc) return { kind: "error", errCode: null };
+	if (svc.err && svc.err !== "OK") return { kind: "error", errCode: svc.err };
+
+	const common = svc.res?.common;
+	const jnyL = svc.res?.jnyL ?? [];
+	if (!common) return { kind: "ok", journeys: [] };
+
+	const prods = common.prodL ?? [];
+	const ops = common.opL ?? [];
+
+	const journeys: MgateStationBoardEntry[] = [];
+	for (const j of jnyL) {
+		const prod = prods[j.prodX];
+		const ctx = prod?.prodCtx;
+		const line = ctx?.line ?? prod?.name;
+		if (!line || !j.jid || !j.date) continue;
+
+		// Prefer realtime dep time over scheduled when both are present.
+		const rawTime = j.stbStop?.dTimeR ?? j.stbStop?.dTimeS;
+		const depTime = parseTime(rawTime);
+		if (!depTime) continue;
+
+		const dayOfOperation = `${j.date.slice(0, 4)}-${j.date.slice(4, 6)}-${j.date.slice(6, 8)}`;
+
+		journeys.push({
+			journeyRef: j.jid,
+			dayOfOperation,
+			line,
+			category: ctx?.catOutL?.trim() ?? ctx?.catOut?.trim() ?? null,
+			operator: prod?.oprX != null ? (ops[prod.oprX]?.name ?? null) : null,
+			depTime,
+			destName: j.dirTxt ?? "",
+			cancelled: !!j.isCncl,
+			status: j.status ?? null,
+		});
+	}
+
+	return { kind: "ok", journeys };
 }

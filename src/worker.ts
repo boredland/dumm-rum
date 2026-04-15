@@ -67,13 +67,13 @@ export default {
 		const db = createDb(env.DB);
 
 		// 02:00 tick: snapshot yesterday's journeys for topology enrichment.
-		// Fills in origin/dest from /journeyDetail that the cron's skeleton rows lack.
+		// Fills in origin/dest via mgate JourneyDetails — discovery skeletons
+		// only have the origin-station time slice.
 		const berlinNow = nowBerlin();
 		if (berlinNow.hour() === 2) {
 			const yesterday = berlinNow.subtract(1, "day").format("YYYY-MM-DD");
-			const apiKey = env.RMV_API_KEY.split(",")[0].trim();
 			ctx.waitUntil(
-				snapshotJourneys(db, apiKey, yesterday)
+				snapshotJourneys(db, yesterday)
 					.then((r) =>
 						console.log(
 							`journey snapshot for ${yesterday}: discovered=${r.discovered} upserted=${r.upserted} failed=${r.failed}`,
@@ -100,7 +100,6 @@ export default {
 		const { linesToday, operatorsToday } = await runCollection(
 			db,
 			env.AI,
-			env.RMV_API_KEY,
 			env.JOURNEY_QUEUE,
 		);
 

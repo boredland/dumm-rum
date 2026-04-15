@@ -7,7 +7,6 @@
 		"build": "astro build",
 		"preview": "astro preview",
 		"check": "tsgo --noEmit && biome check && knip",
-		"generate:api": "openapi-typescript https://www.rmv.de/hapi/api-doc -o src/lib/hafas-types.ts",
 		"db:generate": "drizzle-kit generate && npm run db:sync",
 		"db:sync": "for f in drizzle/*/migration.sql; do d=$(basename $(dirname $f)); cp $f migrations/$d.sql; done",
 		"db:migrate": "wrangler d1 migrations apply rmv-departures --remote",
@@ -20,8 +19,7 @@
 		"astro": "^6.1.1",
 		"better-all": "^0.0.7",
 		"dayjs": "^1.11.20",
-		"drizzle-orm": "^1.0.0-beta.20",
-		"openapi-fetch": "^0.17.0"
+		"drizzle-orm": "^1.0.0-beta.20"
 	},
 	"devDependencies": {
 		"@biomejs/biome": "^2.4.9",
@@ -31,7 +29,6 @@
 		"drizzle-kit": "^1.0.0-beta.20",
 		"knip": "^6.1.0",
 		"lefthook": "^2.1.4",
-		"openapi-typescript": "^7.13.0",
 		"tailwindcss": "^4.2.2",
 		"typescript": "^5.4.0",
 		"wrangler": "^4.78.0"

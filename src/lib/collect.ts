@@ -9,8 +9,7 @@ import {
 	lineDailyStats,
 	operatorDailyStats,
 } from "../db/schema";
-import { createHafasClient } from "./hafas";
-import type { components } from "./hafas-types";
+import { type MgateStationBoardEntry, mgateStationBoardBatch } from "./mgate";
 import { ghostCaseSql } from "./queries";
 import type { Station } from "./stations";
 import { nameToSlug, STATIONS } from "./stations";
@@ -18,55 +17,27 @@ import {
 	DELAY_THRESHOLD_MIN,
 	nowBerlin,
 	PLANNED_FREQUENCY_MIN,
-	pickKey,
 	todayBerlin,
 } from "./utils";
 
-type Departure = components["schemas"]["Departure"];
-
 const EXCLUDE_CATEGORIES = new Set(["ICE", "IC", "EC"]);
 
-async function discoverJourneys(
+async function discoverStationJourneys(
 	db: Db,
-	apiKey: string,
 	station: Station,
+	journeys: MgateStationBoardEntry[],
 	today: string,
 ): Promise<number> {
-	const client = createHafasClient(apiKey);
-	const start = nowBerlin();
-
-	const { data, error } = await client.GET("/departureBoard", {
-		params: {
-			query: {
-				type: "DEP",
-				id: station.id,
-				date: start.format("YYYY-MM-DD"),
-				time: start.format("HH:mm"),
-				duration: 45,
-				maxJourneys: -1,
-				format: "json",
-			},
-		},
-	});
-
-	if (error || !data) {
-		console.error("HAFAS API error:", error);
-		return 0;
-	}
-
 	const stationExcludes = station.excludeCategories
 		? new Set(station.excludeCategories)
 		: null;
-	const deps = (data.Departure ?? []).filter(
-		(d: Departure) =>
-			d.ProductAtStop?.line &&
-			d.ProductAtStop?.num &&
-			d.JourneyDetailRef?.ref &&
-			!EXCLUDE_CATEGORIES.has(d.ProductAtStop?.catOut ?? "") &&
-			!stationExcludes?.has(d.ProductAtStop?.catOut ?? "") &&
-			!/N$/.test(d.ProductAtStop?.line ?? ""),
+	const filtered = journeys.filter(
+		(j) =>
+			!EXCLUDE_CATEGORIES.has(j.category ?? "") &&
+			!stationExcludes?.has(j.category ?? "") &&
+			!/N$/.test(j.line),
 	);
-	if (deps.length === 0) return 0;
+	if (filtered.length === 0) return 0;
 
 	const snapshotAt = new Date().toISOString();
 	const seen = new Set<string>();
@@ -88,32 +59,30 @@ async function discoverJourneys(
 		snapshotAt: string;
 	}[] = [];
 
-	for (const dep of deps) {
-		const ref = dep.JourneyDetailRef!.ref!;
-		if (seen.has(ref)) continue;
-		seen.add(ref);
-		const p = dep.ProductAtStop!;
+	for (const j of filtered) {
+		if (seen.has(j.journeyRef)) continue;
+		seen.add(j.journeyRef);
 		rows.push({
-			journeyRef: ref,
-			dayOfOperation: dep.date ?? today,
-			line: p.line!,
-			category: p.catOut ?? null,
-			operator: p.operator ?? null,
+			journeyRef: j.journeyRef,
+			dayOfOperation: j.dayOfOperation || today,
+			line: j.line,
+			category: j.category,
+			operator: j.operator,
 			originStopId: station.id,
-			originName: dep.stop ?? station.id,
-			originDepTime: dep.time,
+			originName: station.name,
+			originDepTime: j.depTime,
+			// Placeholder; snapshotJourneys / poller fills the real dest.
 			destStopId: "",
-			destName: dep.direction ?? "",
-			destArrTime: dep.time,
-			status: dep.JourneyStatus ?? "P",
-			cancelled: dep.cancelled ? 1 : 0,
+			destName: j.destName,
+			destArrTime: j.depTime,
+			status: j.status ?? "P",
+			cancelled: j.cancelled ? 1 : 0,
 			totalStopCount: 0,
 			snapshotAt,
 		});
 	}
 
 	const batchSize = d1BatchSize(journeyRuns);
-
 	for (let i = 0; i < rows.length; i += batchSize) {
 		const batch = rows.slice(i, i + batchSize);
 		await db.insert(journeyRuns).values(batch).onConflictDoNothing();
@@ -454,20 +423,36 @@ export interface CollectionResult {
 export async function runCollection(
 	db: Db,
 	ai: Ai,
-	apiKeys: string,
 	queue: Queue<JourneyPollMessage>,
 ): Promise<CollectionResult> {
 	const today = todayBerlin();
+	const now = nowBerlin();
 	const summary: Record<string, number> = {};
-	const results = await Promise.all(
-		STATIONS.map((station) =>
-			discoverJourneys(db, pickKey(apiKeys), station, today).then((count) => ({
-				station,
-				count,
-			})),
-		),
+
+	// One mgate POST covers every configured station. Per-item error
+	// isolation means one bad stop id doesn't fail the whole batch.
+	const boardResults = await mgateStationBoardBatch(
+		STATIONS.map((s) => s.id),
+		{
+			date: now.format("YYYYMMDD"),
+			time: now.format("HHmmss"),
+			durMinutes: 45,
+		},
 	);
-	for (const { station, count } of results) {
+
+	const perStation = await Promise.all(
+		STATIONS.map((station, i) => {
+			const r = boardResults[i];
+			if (r.kind !== "ok") {
+				console.error(`StationBoard failed for ${station.slug}: ${r.errCode}`);
+				return Promise.resolve({ station, count: 0 });
+			}
+			return discoverStationJourneys(db, station, r.journeys, today).then(
+				(count) => ({ station, count }),
+			);
+		}),
+	);
+	for (const { station, count } of perStation) {
 		summary[station.slug] = count;
 		console.log(`${station.slug}: discovered ${count} journeys`);
 	}
