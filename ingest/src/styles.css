@@ -1,0 +1,36 @@
+:root {
+	color-scheme: light dark;
+	--bg: light-dark(#ffffff, #0d1117);
+	--fg: light-dark(#1f2328, #e6edf3);
+	--muted: light-dark(#656d76, #8b949e);
+	--dimmed: light-dark(#848d97, #6e7681);
+	--border: light-dark(#d0d7de, #30363d);
+	--border-dim: light-dark(#e4e7eb, #21262d);
+	--accent: light-dark(#0969da, #2f81f7);
+	--surface: light-dark(#f6f8fa, #161b22);
+	--surface-hover: light-dark(#eff2f5, #1f2937);
+}
+
+*,
+*::before,
+*::after {
+	box-sizing: border-box;
+}
+
+html,
+body {
+	margin: 0;
+	padding: 0;
+	background: var(--bg);
+	color: var(--fg);
+	font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+	line-height: 1.5;
+}
+
+a {
+	color: var(--accent);
+	text-decoration: none;
+}
+a:hover {
+	text-decoration: underline;
+}

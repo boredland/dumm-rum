@@ -21,7 +21,6 @@ function MapPage() {
 	return (
 		<main
 			style={{
-				fontFamily: "system-ui, sans-serif",
 				padding: "1rem",
 				maxWidth: 1200,
 				margin: "0 auto",
@@ -39,8 +38,7 @@ function MapPage() {
 					to="/$lang"
 					params={{ lang: l }}
 					style={{
-						color: "#666",
-						textDecoration: "none",
+						color: "var(--muted)",
 						fontSize: "0.875rem",
 					}}
 				>
@@ -65,9 +63,9 @@ function MapPage() {
 				style={{
 					marginTop: "1rem",
 					paddingTop: "1rem",
-					borderTop: "1px solid #eee",
+					borderTop: "1px solid var(--border-dim)",
 					fontSize: "0.75rem",
-					color: "#888",
+					color: "var(--dimmed)",
 				}}
 			>
 				{l === "de" ? "Datenquelle: RMV" : "Data source: RMV"}

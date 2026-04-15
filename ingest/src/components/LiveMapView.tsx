@@ -137,6 +137,22 @@ export function LiveMapView({
 	// Initialize leaflet once, client-side only.
 	useEffect(() => {
 		let cancelled = false;
+
+		const darkMql = window.matchMedia("(prefers-color-scheme: dark)");
+		const lightTile = {
+			url: "https://tile.memomaps.de/tilegen/{z}/{x}/{y}.png",
+			attribution:
+				'&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &middot; <a href="https://memomaps.de/">memomaps.de</a>',
+			maxZoom: 18,
+		};
+		const darkTile = {
+			url: "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png",
+			attribution:
+				'&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &middot; <a href="https://carto.com/attributions">CARTO</a>',
+			maxZoom: 19,
+		};
+		const themedTile = () => (darkMql.matches ? darkTile : lightTile);
+
 		(async () => {
 			const L = (await import("leaflet")).default;
 			await import("leaflet.fullscreen");
@@ -151,15 +167,13 @@ export function LiveMapView({
 			const fs = (L.control as any).fullscreen;
 			if (fs) fs({ position: "topleft" }).addTo(map);
 
-			const tiles: TileLayer = L.tileLayer(
-				"https://tile.memomaps.de/tilegen/{z}/{x}/{y}.png",
-				{
-					attribution:
-						'&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &middot; <a href="https://memomaps.de/">memomaps.de</a>',
-					maxZoom: 18,
-				},
+			let currentTileLayer: TileLayer = L.tileLayer(
+				themedTile().url,
+				themedTile(),
 			);
-			const osm = L.tileLayer(
+			currentTileLayer.addTo(map);
+
+			const osmFallback = L.tileLayer(
 				"https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
 				{
 					attribution:
@@ -167,19 +181,32 @@ export function LiveMapView({
 					maxZoom: 19,
 				},
 			);
-			tiles.on("tileerror", () => {
-				if (!map.hasLayer(osm)) {
-					tiles.remove();
-					osm.addTo(map);
+			currentTileLayer.on("tileerror", () => {
+				if (!map.hasLayer(osmFallback)) {
+					currentTileLayer.remove();
+					osmFallback.addTo(map);
 				}
 			});
-			tiles.addTo(map);
+
+			const onThemeChange = () => {
+				currentTileLayer.remove();
+				currentTileLayer = L.tileLayer(themedTile().url, themedTile());
+				currentTileLayer.addTo(map);
+			};
+			darkMql.addEventListener("change", onThemeChange);
 			mapRef.current = map;
+
+			// Expose cleanup for the outer effect teardown.
+			(map as unknown as { _themeCleanup?: () => void })._themeCleanup = () =>
+				darkMql.removeEventListener("change", onThemeChange);
 		})();
 
 		return () => {
 			cancelled = true;
 			if (mapRef.current) {
+				(
+					mapRef.current as unknown as { _themeCleanup?: () => void }
+				)._themeCleanup?.();
 				mapRef.current.remove();
 				mapRef.current = null;
 			}
@@ -334,7 +361,7 @@ export function LiveMapView({
 					{visibleCount} {texts.vehicles}
 					{visibleCount === 0 ? ` — ${texts.noVehicles}` : ""}
 				</span>
-				<span style={{ color: "#888" }}>
+				<span style={{ color: "var(--dimmed)" }}>
 					{texts.lastUpdate}: {lastUpdate}
 				</span>
 			</div>
@@ -345,7 +372,7 @@ export function LiveMapView({
 					height: "calc(100dvh - 200px)",
 					minHeight: 400,
 					borderRadius: 8,
-					border: "1px solid #ddd",
+					border: "1px solid var(--border)",
 					overflow: "hidden",
 				}}
 			/>
@@ -368,10 +395,11 @@ export function LiveMapView({
 							fontSize: "0.75rem",
 							fontWeight: 500,
 							borderRadius: 9999,
-							border: "1px solid #ddd",
+							border: "1px solid var(--border)",
 							cursor: "pointer",
-							background: filter === f.key ? "#f0f0f0" : "transparent",
-							color: filter === f.key ? "#000" : "#666",
+							background:
+								filter === f.key ? "var(--surface-hover)" : "transparent",
+							color: filter === f.key ? "var(--fg)" : "var(--muted)",
 						}}
 					>
 						{f.key === "all" ? texts.filterAll : f.label}
