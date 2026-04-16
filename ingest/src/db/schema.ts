@@ -4,7 +4,9 @@ import {
 	integer,
 	pgTable,
 	primaryKey,
+	serial,
 	text,
+	unique,
 } from "drizzle-orm/pg-core";
 
 export const journeyRuns = pgTable(
@@ -70,4 +72,23 @@ export const knownStops = pgTable(
 		delayed: integer().notNull().default(0),
 	},
 	(t) => [index("idx_known_stops_slug").on(t.slug)],
+);
+
+export const telegramSubscriptions = pgTable(
+	"telegram_subscriptions",
+	{
+		id: serial().primaryKey(),
+		chatId: text("chat_id").notNull(),
+		lang: text().notNull().default("de"),
+		line: text().notNull(),
+		direction: text().notNull(),
+		stopId: text("stop_id").notNull().default(""),
+		timeRanges: text("time_ranges"),
+		weekdays: text(),
+		createdAt: text("created_at").notNull(),
+	},
+	(t) => [
+		unique().on(t.chatId, t.line, t.direction, t.stopId),
+		index("idx_telegram_line_dir").on(t.line, t.direction),
+	],
 );
