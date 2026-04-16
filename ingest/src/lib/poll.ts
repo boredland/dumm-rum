@@ -4,6 +4,7 @@ import type { Db } from "../db/client.ts";
 import { excluded } from "../db/helpers.ts";
 import { journeyRuns, journeyStops } from "../db/schema.ts";
 import { type MgateJourneyDetail, mgateJourneyDetailsBatch } from "./mgate.ts";
+import { notifyJourneyIssues } from "./telegram.ts";
 import { berlinTime, nowBerlin } from "./utils.ts";
 
 export interface PollJob {
@@ -140,6 +141,22 @@ export async function processPollBatch(
 				now,
 			);
 			await upsertMgateStops(db, journeyRef, dayOfOperation, mgStops);
+
+			if (pollCount === 0 && process.env.TELEGRAM_BOT_TOKEN) {
+				const mgLine = mgDetail.product?.line ?? mgDetail.product?.name;
+				const dest = mgStops[mgStops.length - 1];
+				if (mgLine) {
+					await notifyJourneyIssues(
+						process.env.TELEGRAM_BOT_TOKEN,
+						journeyRef,
+						dayOfOperation,
+						mgLine,
+						dest?.name ?? "",
+					).catch((e) =>
+						console.error(`telegram notify failed for ${journeyRef}:`, e),
+					);
+				}
+			}
 
 			const mgHasRtData =
 				mgDetail.lastPos != null ||
