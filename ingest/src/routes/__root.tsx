@@ -30,12 +30,15 @@ export const Route = createRootRoute({
 					"Frankfurt public transport reliability tracker — cancellations, delays, ghost departures.",
 			},
 			{ name: "twitter:card", content: "summary" },
+			{ name: "theme-color", content: "#0d1117" },
 		],
 		links: [
 			{
 				rel: "icon",
 				href: "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🚏</text></svg>",
 			},
+			{ rel: "manifest", href: "/manifest.json" },
+			{ rel: "apple-touch-icon", href: "/icon-192.png" },
 		],
 	}),
 	component: RootComponent,
@@ -57,6 +60,11 @@ function RootComponent() {
 				<Outlet />
 				<ScrollToTop />
 				<Scripts />
+				<script
+					dangerouslySetInnerHTML={{
+						__html: `if("serviceWorker"in navigator)navigator.serviceWorker.register("/sw.js")`,
+					}}
+				/>
 			</body>
 		</html>
 	);
