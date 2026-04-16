@@ -1,5 +1,9 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { createServerFn } from "@tanstack/react-start";
+import {
+	DepartureFilterBar,
+	useDepartureFilters,
+} from "../../../../../components/DepartureFilters.tsx";
 import { type Lang, t } from "../../../../../lib/i18n.ts";
 import {
 	getOperatorDayJourneys,
@@ -18,10 +22,7 @@ const loadDay = createServerFn({ method: "GET" })
 		) {
 			throw new Error("invalid input");
 		}
-		const { operator, date } = input as {
-			operator: unknown;
-			date: unknown;
-		};
+		const { operator, date } = input as { operator: unknown; date: unknown };
 		if (typeof operator !== "string" || typeof date !== "string") {
 			throw new Error("invalid input");
 		}
@@ -43,9 +44,7 @@ const loadDay = createServerFn({ method: "GET" })
 
 export const Route = createFileRoute("/$lang/operator/$operator/day/$date")({
 	loader: async ({ params }) =>
-		await loadDay({
-			data: { operator: params.operator, date: params.date },
-		}),
+		await loadDay({ data: { operator: params.operator, date: params.date } }),
 	component: OperatorDay,
 });
 
@@ -70,6 +69,7 @@ function OperatorDay() {
 	const { operator, date, journeys } = Route.useLoaderData();
 	const { lang } = Route.useParams();
 	const l = lang as Lang;
+	const filters = useDepartureFilters(journeys);
 
 	const pretty = new Date(`${date}T00:00:00`).toLocaleDateString(l, {
 		weekday: "long",
@@ -94,9 +94,13 @@ function OperatorDay() {
 
 			<section>
 				<h2 className="text-xs uppercase tracking-wide text-muted font-semibold mb-3">
-					{t(l, "section.all_departures")} ({journeys.length})
+					{t(l, "section.all_departures")} ({filters.filtered.length}/
+					{journeys.length})
 				</h2>
-				{journeys.length === 0 ? (
+
+				<DepartureFilterBar lang={l} {...filters} />
+
+				{filters.filtered.length === 0 ? (
 					<p className="text-sm text-dimmed">{t(l, "table.no_departures")}</p>
 				) : (
 					<div className="overflow-x-auto">
@@ -111,7 +115,7 @@ function OperatorDay() {
 								</tr>
 							</thead>
 							<tbody>
-								{journeys.map((j) => {
+								{filters.filtered.map((j) => {
 									const delay = delayMin(j.date, j.time, j.rtTime);
 									return (
 										<tr
