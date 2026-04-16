@@ -10,7 +10,7 @@ import {
 } from "../../../lib/mgate.ts";
 
 const FRANKFURT_CENTER = { lat: 50.1109, lon: 8.6821 };
-const POLL_INTERVAL = 30_000;
+const POLL_INTERVAL = 15_000;
 const PER_SIZE = 35_000;
 const PER_STEP = 5_000;
 
