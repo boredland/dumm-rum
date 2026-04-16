@@ -43,17 +43,33 @@ Bun.serve({
 		if (/\.[a-z0-9]+$/i.test(url.pathname)) {
 			const file = Bun.file(`${CLIENT_DIR}${url.pathname}`);
 			if (await file.exists()) {
+				const noCache = url.pathname.endsWith("/sw.js");
 				return new Response(file, {
 					headers: {
-						"Cache-Control": url.pathname.startsWith("/assets/")
-							? "public, max-age=31536000, immutable"
-							: "public, max-age=300",
+						"Cache-Control": noCache
+							? "no-cache"
+							: url.pathname.startsWith("/assets/")
+								? "public, max-age=31536000, immutable"
+								: "public, max-age=300",
 					},
 				});
 			}
 		}
 
-		return entry.fetch(req);
+		const res = await entry.fetch(req);
+
+		if (
+			req.method === "GET" &&
+			!url.pathname.includes("/map") &&
+			!url.searchParams.has("_serverFnId")
+		) {
+			const headers = new Headers(res.headers);
+			if (!headers.has("Cache-Control"))
+				headers.set("Cache-Control", "public, max-age=60, stale-while-revalidate=300");
+			return new Response(res.body, { status: res.status, headers });
+		}
+
+		return res;
 	},
 });
 console.log(`ui listening on :${port}`);
