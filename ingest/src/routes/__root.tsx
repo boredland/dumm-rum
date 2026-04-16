@@ -7,6 +7,7 @@ import {
 	Scripts,
 	useLocation,
 } from "@tanstack/react-router";
+import { useEffect, useState } from "react";
 import { type Lang, languages } from "../lib/i18n.ts";
 
 export const Route = createRootRoute({
@@ -54,8 +55,65 @@ function RootComponent() {
 			</head>
 			<body>
 				<Outlet />
+				<ShareButton lang={lang} />
+				<ScrollToTop />
 				<Scripts />
 			</body>
 		</html>
+	);
+}
+
+function ShareButton({ lang }: { lang: Lang }) {
+	const [copied, setCopied] = useState(false);
+	const label = lang === "de" ? "Teilen" : "Share";
+	const copiedLabel = lang === "de" ? "Link kopiert!" : "Link copied!";
+
+	if (typeof navigator === "undefined") return null;
+
+	const handleClick = async () => {
+		try {
+			if (navigator.share) {
+				await navigator.share({ url: window.location.href });
+			} else {
+				await navigator.clipboard.writeText(window.location.href);
+				setCopied(true);
+				setTimeout(() => setCopied(false), 2000);
+			}
+		} catch {
+			/* user cancelled share dialog */
+		}
+	};
+
+	return (
+		<button
+			type="button"
+			onClick={handleClick}
+			className="fixed bottom-16 right-4 z-50 bg-surface border border-border rounded-full px-3 py-2 text-xs text-muted hover:text-fg shadow-sm cursor-pointer transition-colors"
+		>
+			{copied ? copiedLabel : label}
+		</button>
+	);
+}
+
+function ScrollToTop() {
+	const [visible, setVisible] = useState(false);
+
+	useEffect(() => {
+		const onScroll = () => setVisible(window.scrollY > 400);
+		window.addEventListener("scroll", onScroll, { passive: true });
+		return () => window.removeEventListener("scroll", onScroll);
+	}, []);
+
+	if (!visible) return null;
+
+	return (
+		<button
+			type="button"
+			onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
+			className="fixed bottom-4 right-4 z-50 bg-surface border border-border rounded-full w-10 h-10 flex items-center justify-center text-muted hover:text-fg shadow-sm cursor-pointer transition-colors"
+			aria-label="Scroll to top"
+		>
+			↑
+		</button>
 	);
 }
