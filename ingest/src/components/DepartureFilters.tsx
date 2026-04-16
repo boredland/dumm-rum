@@ -3,6 +3,8 @@ import type { Lang } from "../lib/i18n.ts";
 import { t } from "../lib/i18n.ts";
 import { DELAY_THRESHOLD_MIN } from "../lib/utils.ts";
 
+const TELEGRAM_BOT = "dummrum_bot";
+
 type StatusFilter = "all" | "issues" | "on_time";
 type HoursFilter = "all" | "core";
 
@@ -97,6 +99,7 @@ export function DepartureFilterBar({
 	dirFilter,
 	setDirFilter,
 	directions,
+	lines,
 }: {
 	lang: Lang;
 	statusFilter: StatusFilter;
@@ -106,6 +109,7 @@ export function DepartureFilterBar({
 	dirFilter: string;
 	setDirFilter: (f: string) => void;
 	directions: string[];
+	lines?: string[];
 }) {
 	const pill =
 		"px-3 py-1 text-xs font-medium rounded-full border border-border cursor-pointer transition-colors";
@@ -163,6 +167,53 @@ export function DepartureFilterBar({
 					))}
 				</select>
 			)}
+			{dirFilter !== "all" && lines && lines.length > 0 && (
+				<TelegramLinks
+					lang={lang}
+					lines={lines}
+					direction={dirFilter}
+					hoursFilter={hoursFilter}
+				/>
+			)}
+		</div>
+	);
+}
+
+function telegramDeepLink(
+	line: string,
+	direction: string,
+	timeRanges?: string,
+): string {
+	const parts = [line, direction, timeRanges ?? ""].join("|");
+	const encoded = btoa(parts).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+	return `https://t.me/${TELEGRAM_BOT}?start=s-${encoded}`;
+}
+
+function TelegramLinks({
+	lang,
+	lines,
+	direction,
+	hoursFilter,
+}: {
+	lang: Lang;
+	lines: string[];
+	direction: string;
+	hoursFilter: string;
+}) {
+	const timeRanges = hoursFilter === "core" ? "06:00-09:00,16:00-19:00" : undefined;
+	return (
+		<div className="flex flex-wrap gap-2 items-center">
+			{lines.map((line) => (
+				<a
+					key={line}
+					href={telegramDeepLink(line, direction, timeRanges)}
+					target="_blank"
+					rel="noopener noreferrer"
+					className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-medium rounded-full border border-border text-accent hover:bg-surface-hover transition-colors no-underline"
+				>
+					<span>📱</span> {line} → Telegram
+				</a>
+			))}
 		</div>
 	);
 }

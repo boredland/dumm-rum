@@ -96,7 +96,11 @@ function StationDay() {
 					{departures.length})
 				</h2>
 
-				<DepartureFilterBar lang={l} {...filters} />
+				<DepartureFilterBar
+					lang={l}
+					{...filters}
+					lines={[...new Set(filters.filtered.map((d) => d.line))].sort()}
+				/>
 
 				{filters.filtered.length === 0 ? (
 					<p className="text-sm text-dimmed">{t(l, "table.no_departures")}</p>
