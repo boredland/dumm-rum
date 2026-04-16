@@ -421,15 +421,6 @@ function buildVehicleIcon(
 	return `<div style="position:relative;width:${s}px;height:${s}px;opacity:${opacity}"><svg width="${s}" height="${s}" viewBox="0 0 ${s} ${s}" overflow="visible">${pin}</svg>${label}</div>`;
 }
 
-const CATEGORY_FILTERS = [
-	{ key: "all", label: "All", bit: 1023 },
-	{ key: "ICE", label: "ICE/IC", bit: 3 },
-	{ key: "RE/RB", label: "RE/RB", bit: 4 },
-	{ key: "S-Bahn", label: "S-Bahn", bit: 8 },
-	{ key: "U-Bahn", label: "U-Bahn", bit: 16 },
-	{ key: "Tram", label: "Tram", bit: 32 },
-	{ key: "Bus", label: "Bus", bit: 192 },
-] as const;
 
 function interpolateVehicle(
 	v: Vehicle,
@@ -470,7 +461,7 @@ function MapPage() {
 	const mapRef = useRef<HTMLDivElement>(null);
 	const leafletMap = useRef<L.Map | null>(null);
 	const markersRef = useRef<
-		Map<string, { marker: L.Marker; rt: boolean; iconKey: string }>
+		Map<string, { marker: L.Marker; iconKey: string; layerKey: string }>
 	>(new Map());
 	const vehiclesRef = useRef<Vehicle[]>([]);
 	const timeDeltaRef = useRef(0);
@@ -480,20 +471,18 @@ function MapPage() {
 	const userPanRef = useRef(false);
 	const [vehicleCount, setVehicleCount] = useState(0);
 	const [loading, setLoading] = useState(true);
-	const [filter, setFilter] = useState(1023);
 	const [lastUpdate, setLastUpdate] = useState<Date | null>(null);
 	const [countdown, setCountdown] = useState(POLL_INTERVAL / 1000);
 	const lastFetchRef = useRef(Date.now());
 	const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 	const loadRef = useRef<() => Promise<void>>(async () => {});
-	const rtLayerRef = useRef<L.LayerGroup | null>(null);
-	const schedLayerRef = useRef<L.LayerGroup | null>(null);
+	const categoryLayersRef = useRef<Map<string, L.LayerGroup>>(new Map());
 
 	const syncMarkers = useCallback(async () => {
 		const map = leafletMap.current;
-		const rtLayer = rtLayerRef.current;
-		const schedLayer = schedLayerRef.current;
-		if (!map || !rtLayer || !schedLayer) return;
+		if (!map) return;
+		const layers = categoryLayersRef.current;
+		if (layers.size === 0) return;
 		const L = await import("leaflet");
 		const existing = markersRef.current;
 		const seen = new Set<string>();
@@ -504,7 +493,9 @@ function MapPage() {
 		for (const v of vehiclesRef.current) {
 			seen.add(v.id);
 			const pos = interpolateVehicle(v, Date.now() + timeDeltaRef.current);
-			const layer = v.hasRT ? rtLayer : schedLayer;
+			const layerKey = `${v.category}${v.hasRT ? "" : " (sched)"}`;
+			const layer = layers.get(layerKey);
+			if (!layer) continue;
 			const iconKey = `${size}|${showLabel}|${v.heading}|${v.category}|${v.delay}|${v.occupancy}|${v.hasRT}`;
 
 			const entry = existing.get(v.id);
@@ -521,10 +512,10 @@ function MapPage() {
 					);
 					entry.iconKey = iconKey;
 				}
-				if (entry.rt !== v.hasRT) {
+				if (entry.layerKey !== layerKey) {
 					entry.marker.remove();
 					entry.marker.addTo(layer);
-					entry.rt = v.hasRT;
+					entry.layerKey = layerKey;
 				}
 			} else {
 				const icon = L.divIcon({
@@ -542,7 +533,7 @@ function MapPage() {
 					setFollowName(current?.name ?? v.name);
 					userPanRef.current = false;
 				});
-				existing.set(v.id, { marker, rt: v.hasRT, iconKey });
+				existing.set(v.id, { marker, iconKey, layerKey });
 			}
 
 			const isFollowed = v.id === followIdRef.current;
@@ -580,7 +571,7 @@ function MapPage() {
 					swLon: sw.lng,
 					neLat: ne.lat,
 					neLon: ne.lng,
-					products: filter,
+					products: 1023,
 				},
 			});
 			timeDeltaRef.current = serverTime - Date.now();
@@ -603,7 +594,7 @@ function MapPage() {
 			/* network error, keep stale data */
 		}
 		setLoading(false);
-	}, [filter]);
+	}, []);
 
 	loadRef.current = load;
 
@@ -631,8 +622,9 @@ function MapPage() {
 
 			L.control.zoom({ position: "topright" }).addTo(map);
 
-			const { locate } = await import("leaflet.locatecontrol");
-			locate({
+			const lc = await import("leaflet.locatecontrol");
+			const locateFactory = (lc as unknown as { locate: (opts: Record<string, unknown>) => L.Control }).locate;
+			locateFactory({
 				position: "topright",
 				flyTo: true,
 				keepCurrentZoomLevel: true,
@@ -647,17 +639,31 @@ function MapPage() {
 
 			leafletMap.current = map;
 
-			const rtGroup = L.layerGroup().addTo(map);
-			const schedGroup = L.layerGroup().addTo(map);
-			rtLayerRef.current = rtGroup;
-			schedLayerRef.current = schedGroup;
+			const layers = new Map<string, L.LayerGroup>();
+			const overlays: Record<string, L.LayerGroup> = {};
+			const categories = [
+				"ICE",
+				"IC",
+				"RE/RB",
+				"S-Bahn",
+				"U-Bahn",
+				"Tram",
+				"Bus",
+				"AST",
+				"Other",
+			];
+			for (const cat of categories) {
+				const rtGroup = L.layerGroup().addTo(map);
+				const schedGroup = L.layerGroup().addTo(map);
+				layers.set(cat, rtGroup);
+				layers.set(`${cat} (sched)`, schedGroup);
+				overlays[cat] = rtGroup;
+				overlays[`${cat} (sched)`] = schedGroup;
+			}
+			categoryLayersRef.current = layers;
 
 			L.control
-				.layers(
-					{},
-					{ "RT vehicles": rtGroup, "Schedule vehicles": schedGroup },
-					{ position: "topright", collapsed: false },
-				)
+				.layers({}, overlays, { position: "topright", collapsed: true })
 				.addTo(map);
 
 			map.on("dragstart", () => {
@@ -760,30 +766,6 @@ function MapPage() {
 				>
 					← DummRum
 				</Link>
-				<span className="text-border">|</span>
-				{CATEGORY_FILTERS.map((f) => (
-					<button
-						key={f.key}
-						type="button"
-						onClick={() => setFilter(f.bit)}
-						className={`px-2 py-0.5 text-xs font-medium rounded-full border cursor-pointer transition-colors shrink-0 ${
-							filter === f.bit
-								? "bg-surface-hover text-fg border-border"
-								: "bg-transparent text-muted border-transparent hover:text-fg"
-						}`}
-					>
-						{f.key !== "all" && (
-							<span
-								className="inline-block w-2 h-2 rounded-full mr-1 align-middle"
-								style={{
-									backgroundColor:
-										CATEGORY_COLORS[f.key] ?? CATEGORY_COLORS.Other,
-								}}
-							/>
-						)}
-						{f.label}
-					</button>
-				))}
 				{followName && (
 					<>
 						<span className="text-border">|</span>
