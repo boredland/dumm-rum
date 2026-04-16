@@ -14,6 +14,7 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as LangIndexRouteImport } from './routes/$lang/index'
 import { Route as LangSplatRouteImport } from './routes/$lang/$'
 import { Route as LangStationRouteRouteImport } from './routes/$lang/$station/route'
+import { Route as LangMapIndexRouteImport } from './routes/$lang/map/index'
 import { Route as LangStationIndexRouteImport } from './routes/$lang/$station/index'
 import { Route as LangOperatorOperatorIndexRouteImport } from './routes/$lang/operator/$operator/index'
 import { Route as LangLineLineIndexRouteImport } from './routes/$lang/line/$line/index'
@@ -44,6 +45,11 @@ const LangSplatRoute = LangSplatRouteImport.update({
 const LangStationRouteRoute = LangStationRouteRouteImport.update({
   id: '/$station',
   path: '/$station',
+  getParentRoute: () => LangRouteRoute,
+} as any)
+const LangMapIndexRoute = LangMapIndexRouteImport.update({
+  id: '/map/',
+  path: '/map/',
   getParentRoute: () => LangRouteRoute,
 } as any)
 const LangStationIndexRoute = LangStationIndexRouteImport.update({
@@ -86,6 +92,7 @@ export interface FileRoutesByFullPath {
   '/$lang/$': typeof LangSplatRoute
   '/$lang/': typeof LangIndexRoute
   '/$lang/$station/': typeof LangStationIndexRoute
+  '/$lang/map/': typeof LangMapIndexRoute
   '/$lang/$station/day/$date': typeof LangStationDayDateRoute
   '/$lang/line/$line/': typeof LangLineLineIndexRoute
   '/$lang/operator/$operator/': typeof LangOperatorOperatorIndexRoute
@@ -97,6 +104,7 @@ export interface FileRoutesByTo {
   '/$lang/$': typeof LangSplatRoute
   '/$lang': typeof LangIndexRoute
   '/$lang/$station': typeof LangStationIndexRoute
+  '/$lang/map': typeof LangMapIndexRoute
   '/$lang/$station/day/$date': typeof LangStationDayDateRoute
   '/$lang/line/$line': typeof LangLineLineIndexRoute
   '/$lang/operator/$operator': typeof LangOperatorOperatorIndexRoute
@@ -111,6 +119,7 @@ export interface FileRoutesById {
   '/$lang/$': typeof LangSplatRoute
   '/$lang/': typeof LangIndexRoute
   '/$lang/$station/': typeof LangStationIndexRoute
+  '/$lang/map/': typeof LangMapIndexRoute
   '/$lang/$station/day/$date': typeof LangStationDayDateRoute
   '/$lang/line/$line/': typeof LangLineLineIndexRoute
   '/$lang/operator/$operator/': typeof LangOperatorOperatorIndexRoute
@@ -126,6 +135,7 @@ export interface FileRouteTypes {
     | '/$lang/$'
     | '/$lang/'
     | '/$lang/$station/'
+    | '/$lang/map/'
     | '/$lang/$station/day/$date'
     | '/$lang/line/$line/'
     | '/$lang/operator/$operator/'
@@ -137,6 +147,7 @@ export interface FileRouteTypes {
     | '/$lang/$'
     | '/$lang'
     | '/$lang/$station'
+    | '/$lang/map'
     | '/$lang/$station/day/$date'
     | '/$lang/line/$line'
     | '/$lang/operator/$operator'
@@ -150,6 +161,7 @@ export interface FileRouteTypes {
     | '/$lang/$'
     | '/$lang/'
     | '/$lang/$station/'
+    | '/$lang/map/'
     | '/$lang/$station/day/$date'
     | '/$lang/line/$line/'
     | '/$lang/operator/$operator/'
@@ -197,6 +209,13 @@ declare module '@tanstack/react-router' {
       path: '/$station'
       fullPath: '/$lang/$station'
       preLoaderRoute: typeof LangStationRouteRouteImport
+      parentRoute: typeof LangRouteRoute
+    }
+    '/$lang/map/': {
+      id: '/$lang/map/'
+      path: '/map'
+      fullPath: '/$lang/map/'
+      preLoaderRoute: typeof LangMapIndexRouteImport
       parentRoute: typeof LangRouteRoute
     }
     '/$lang/$station/': {
@@ -261,6 +280,7 @@ interface LangRouteRouteChildren {
   LangStationRouteRoute: typeof LangStationRouteRouteWithChildren
   LangSplatRoute: typeof LangSplatRoute
   LangIndexRoute: typeof LangIndexRoute
+  LangMapIndexRoute: typeof LangMapIndexRoute
   LangLineLineIndexRoute: typeof LangLineLineIndexRoute
   LangOperatorOperatorIndexRoute: typeof LangOperatorOperatorIndexRoute
   LangLineLineDayDateRoute: typeof LangLineLineDayDateRoute
@@ -271,6 +291,7 @@ const LangRouteRouteChildren: LangRouteRouteChildren = {
   LangStationRouteRoute: LangStationRouteRouteWithChildren,
   LangSplatRoute: LangSplatRoute,
   LangIndexRoute: LangIndexRoute,
+  LangMapIndexRoute: LangMapIndexRoute,
   LangLineLineIndexRoute: LangLineLineIndexRoute,
   LangOperatorOperatorIndexRoute: LangOperatorOperatorIndexRoute,
   LangLineLineDayDateRoute: LangLineLineDayDateRoute,
