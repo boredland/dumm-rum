@@ -563,6 +563,69 @@ function MapPage() {
 	const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 	const zoomRef = useRef(13);
 
+	const syncMarkers = useCallback(async () => {
+		const map = leafletMap.current;
+		if (!map) return;
+		const L = await import("leaflet");
+		const existing = markersRef.current;
+		const seen = new Set<string>();
+		const zoom = map.getZoom();
+		const size = getIconSize(zoom);
+		const showLabel = zoom >= 15;
+
+		for (const v of vehiclesRef.current) {
+			if (rtFilter === "rt" && !v.hasRT) continue;
+			if (rtFilter === "sched" && v.hasRT) continue;
+			seen.add(v.id);
+			const pos = interpolateVehicle(v, Date.now() + timeDeltaRef.current);
+
+			const icon = L.divIcon({
+				html: buildVehicleIcon(
+					{ ...v, heading: pos.heading },
+					size,
+					showLabel,
+				),
+				iconSize: [size, size],
+				iconAnchor: [size / 2, size / 2],
+				className: "",
+			});
+
+			let marker = existing.get(v.id);
+			if (marker) {
+				marker.setLatLng([pos.lat, pos.lon]);
+				marker.setIcon(icon);
+			} else {
+				marker = L.marker([pos.lat, pos.lon], { icon }).addTo(map);
+				marker.on("click", () => {
+					followIdRef.current = v.id;
+					setFollowName(v.name);
+					userPanRef.current = false;
+				});
+				existing.set(v.id, marker);
+			}
+
+			const isFollowed = v.id === followIdRef.current;
+			marker.unbindTooltip();
+			marker.bindTooltip(
+				`<strong>${v.name}</strong><br/>→ ${v.direction}${v.operator ? `<br/><span style="opacity:.7">${v.operator}</span>` : ""}`,
+				{
+					direction: "top",
+					offset: [0, -(size / 2 + 4)],
+					permanent: isFollowed,
+					className: isFollowed ? "followed-tooltip" : "",
+				},
+			);
+			if (isFollowed) marker.openTooltip();
+		}
+
+		for (const [id, marker] of existing) {
+			if (!seen.has(id)) {
+				marker.remove();
+				existing.delete(id);
+			}
+		}
+	}, [rtFilter]);
+
 	const load = useCallback(async () => {
 		if (!leafletMap.current) return;
 		const bounds = leafletMap.current.getBounds();
@@ -593,72 +656,12 @@ function MapPage() {
 			setLastUpdate(new Date());
 			lastFetchRef.current = Date.now();
 			setCountdown(POLL_INTERVAL / 1000);
-
-			const map = leafletMap.current;
-			if (!map) return;
-			const L = await import("leaflet");
-			const existing = markersRef.current;
-			const seen = new Set<string>();
-			const zoom = map.getZoom();
-			const size = getIconSize(zoom);
-			const showLabel = zoom >= 15;
-
-			for (const v of vehicles) {
-				if (rtFilter === "rt" && !v.hasRT) continue;
-				if (rtFilter === "sched" && v.hasRT) continue;
-				seen.add(v.id);
-				const pos = interpolateVehicle(v, Date.now() + timeDeltaRef.current);
-
-				const icon = L.divIcon({
-					html: buildVehicleIcon(
-						{ ...v, heading: pos.heading },
-						size,
-						showLabel,
-					),
-					iconSize: [size, size],
-					iconAnchor: [size / 2, size / 2],
-					className: "",
-				});
-
-				let marker = existing.get(v.id);
-				if (marker) {
-					marker.setLatLng([pos.lat, pos.lon]);
-					marker.setIcon(icon);
-				} else {
-					marker = L.marker([pos.lat, pos.lon], { icon }).addTo(map);
-					marker.on("click", () => {
-						followIdRef.current = v.id;
-						setFollowName(v.name);
-						userPanRef.current = false;
-					});
-					existing.set(v.id, marker);
-				}
-
-				const isFollowed = v.id === followIdRef.current;
-				marker.unbindTooltip();
-				marker.bindTooltip(
-					`<strong>${v.name}</strong><br/>→ ${v.direction}${v.operator ? `<br/><span style="opacity:.7">${v.operator}</span>` : ""}`,
-					{
-						direction: "top",
-						offset: [0, -(size / 2 + 4)],
-						permanent: isFollowed,
-						className: isFollowed ? "followed-tooltip" : "",
-					},
-				);
-				if (isFollowed) marker.openTooltip();
-			}
-
-			for (const [id, marker] of existing) {
-				if (!seen.has(id)) {
-					marker.remove();
-					existing.delete(id);
-				}
-			}
+			await syncMarkers();
 		} catch {
 			/* network error, keep stale data */
 		}
 		setLoading(false);
-	}, [filter, rtFilter]);
+	}, [filter, syncMarkers]);
 
 	useEffect(() => {
 		if (!mapRef.current || leafletMap.current) return;
@@ -733,6 +736,10 @@ function MapPage() {
 			if (intervalRef.current) clearInterval(intervalRef.current);
 		};
 	}, [load]);
+
+	useEffect(() => {
+		syncMarkers();
+	}, [syncMarkers]);
 
 	useEffect(() => {
 		const animate = () => {
