@@ -31,6 +31,8 @@ interface Vehicle {
 	icoRes: string;
 	bg: string;
 	fg: string;
+	delay: number | null;
+	occupancy: "L" | "M" | "H" | null;
 	waypoints: Waypoint[];
 	fetchedAt: number;
 }
@@ -229,6 +231,7 @@ const fetchVehicles = createServerFn({ method: "GET" })
 								fg?: { r: number; g: number; b: number };
 							}[];
 							polyL?: { crdEncYX?: string }[];
+							tcocL?: { r?: number; s?: string }[];
 						};
 						jnyL?: {
 							jid: string;
@@ -236,6 +239,12 @@ const fetchVehicles = createServerFn({ method: "GET" })
 							dirTxt?: string;
 							dirGeo?: number;
 							prodX?: number;
+							tcocXL?: number[];
+							stopL?: {
+								dTimeS?: string;
+								dTimeR?: string;
+								dTrnCmpSX?: { tcocX?: number[] };
+							}[];
 							ani?: {
 								mSec?: number[];
 								dirGeo?: number[];
@@ -254,6 +263,7 @@ const fetchVehicles = createServerFn({ method: "GET" })
 			const opL = svc.res.common?.opL ?? [];
 			const icoL = svc.res.common?.icoL ?? [];
 			const polyL = svc.res.common?.polyL ?? [];
+			const tcocL = svc.res.common?.tcocL ?? [];
 			const jnyL = svc.res.jnyL ?? [];
 
 			const decodedPolys = new Map<number, [number, number][]>();
@@ -316,6 +326,25 @@ const fetchVehicles = createServerFn({ method: "GET" })
 					}
 				}
 
+				let delay: number | null = null;
+				for (const s of j.stopL ?? []) {
+					if (s.dTimeS && s.dTimeR) {
+						const sM =
+							Number(s.dTimeS.slice(0, 2)) * 60 + Number(s.dTimeS.slice(2, 4));
+						const rM =
+							Number(s.dTimeR.slice(0, 2)) * 60 + Number(s.dTimeR.slice(2, 4));
+						delay = rM - sM;
+						break;
+					}
+				}
+
+				let occupancy: "L" | "M" | "H" | null = null;
+				const tcocIdx = j.tcocXL?.[0];
+				if (tcocIdx != null && tcocIdx < tcocL.length) {
+					const s = tcocL[tcocIdx].s;
+					if (s === "L" || s === "M" || s === "H") occupancy = s;
+				}
+
 				return {
 					id: j.jid,
 					name: prod?.name?.trim() ?? "?",
@@ -328,6 +357,8 @@ const fetchVehicles = createServerFn({ method: "GET" })
 					icoRes: ico?.res ?? "PROD_GEN",
 					bg,
 					fg,
+					delay,
+					occupancy,
 					waypoints,
 					fetchedAt: serverTime,
 				};
@@ -367,46 +398,34 @@ function resolveIconType(category: string): IconType {
 }
 
 const ICON_SIZE_BY_ZOOM = [
-	20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 22, 26, 30, 34, 38, 42, 48, 52, 56,
+	14, 14, 14, 14, 14, 14, 14, 14, 14, 14, 16, 18, 22, 26, 32, 38, 44, 50, 54,
 ];
 
 function getIconSize(zoom: number): number {
 	return ICON_SIZE_BY_ZOOM[Math.min(zoom, ICON_SIZE_BY_ZOOM.length - 1)] ?? 30;
 }
 
-function buildIconGlyph(type: IconType, fg: string, c: number): string {
-	const r = c * 0.45;
+function buildIconGlyph(type: IconType, fg: string): string {
 	switch (type) {
 		case "S":
-		case "U": {
-			const fs = Math.round(c * 1.05);
-			return `<text x="${c}" y="${c + fs * 0.35}" text-anchor="middle" font-size="${fs}" font-weight="bold" fill="${fg}" font-family="system-ui,sans-serif">${type}</text>`;
-		}
-		case "bus": {
-			const x = c - r;
-			const y = c - r;
-			const w = r * 2;
-			const h = r * 2;
-			return `<rect x="${x}" y="${y}" width="${w}" height="${h * 0.65}" rx="${r * 0.35}" fill="${fg}"/><circle cx="${x + w * 0.25}" cy="${y + h * 0.8}" r="${r * 0.18}" fill="${fg}"/><circle cx="${x + w * 0.75}" cy="${y + h * 0.8}" r="${r * 0.18}" fill="${fg}"/>`;
-		}
-		case "tram": {
-			const x = c - r * 0.7;
-			const y = c - r;
-			const w = r * 1.4;
-			const h = r * 2;
-			return `<rect x="${x}" y="${y}" width="${w}" height="${h * 0.7}" rx="${r * 0.25}" fill="${fg}"/><line x1="${x}" y1="${y + h * 0.32}" x2="${x + w}" y2="${y + h * 0.32}" stroke="${fg}" stroke-width="${r * 0.12}"/><circle cx="${x + w * 0.25}" cy="${y + h * 0.82}" r="${r * 0.15}" fill="${fg}"/><circle cx="${x + w * 0.75}" cy="${y + h * 0.82}" r="${r * 0.15}" fill="${fg}"/>`;
-		}
-		case "train": {
-			const x = c - r * 0.65;
-			const y = c - r;
-			const w = r * 1.3;
-			const h = r * 2;
-			return `<rect x="${x}" y="${y}" width="${w}" height="${h * 0.75}" rx="${r * 0.2}" fill="${fg}"/><rect x="${x + w * 0.1}" y="${y + h * 0.08}" width="${w * 0.8}" height="${h * 0.3}" rx="${r * 0.1}" fill="rgba(0,0,0,0.15)"/><circle cx="${x + w * 0.25}" cy="${y + h * 0.85}" r="${r * 0.15}" fill="${fg}"/><circle cx="${x + w * 0.75}" cy="${y + h * 0.85}" r="${r * 0.15}" fill="${fg}"/>`;
-		}
+		case "U":
+			return `<text x="12" y="16.5" text-anchor="middle" font-size="15" font-weight="bold" fill="${fg}" font-family="system-ui,sans-serif">${type}</text>`;
+		case "bus":
+			return `<rect x="5" y="5" width="14" height="9" rx="3" fill="${fg}"/><circle cx="8" cy="17" r="1.5" fill="${fg}"/><circle cx="16" cy="17" r="1.5" fill="${fg}"/>`;
+		case "tram":
+			return `<rect x="6" y="4" width="12" height="10" rx="2" fill="${fg}"/><line x1="6" y1="8" x2="18" y2="8" stroke="${fg}" stroke-width="1"/><circle cx="8.5" cy="17" r="1.3" fill="${fg}"/><circle cx="15.5" cy="17" r="1.3" fill="${fg}"/>`;
+		case "train":
+			return `<rect x="6.5" y="4" width="11" height="11" rx="2" fill="${fg}"/><rect x="7.5" y="5" width="9" height="4.5" rx="1" fill="rgba(0,0,0,0.15)"/><circle cx="8.5" cy="18" r="1.3" fill="${fg}"/><circle cx="15.5" cy="18" r="1.3" fill="${fg}"/>`;
 		default:
-			return `<circle cx="${c}" cy="${c}" r="${r * 0.4}" fill="${fg}"/>`;
+			return `<circle cx="12" cy="12" r="4" fill="${fg}"/>`;
 	}
 }
+
+const OCCUP_ICONS: Record<string, string> = {
+	L: '<svg width="14" height="10" viewBox="0 0 14 10"><circle cx="3" cy="3" r="2" fill="currentColor" opacity=".9"/><path d="M1 10V8a2 2 0 0 1 4 0v2" fill="currentColor" opacity=".9"/><circle cx="8" cy="3" r="2" fill="currentColor" opacity=".25"/><path d="M6 10V8a2 2 0 0 1 4 0v2" fill="currentColor" opacity=".25"/><circle cx="13" cy="3" r="2" fill="currentColor" opacity=".25"/><path d="M11 10V8a2 2 0 0 1 4 0v2" fill="currentColor" opacity=".25"/></svg>',
+	M: '<svg width="14" height="10" viewBox="0 0 14 10"><circle cx="3" cy="3" r="2" fill="currentColor" opacity=".9"/><path d="M1 10V8a2 2 0 0 1 4 0v2" fill="currentColor" opacity=".9"/><circle cx="8" cy="3" r="2" fill="currentColor" opacity=".9"/><path d="M6 10V8a2 2 0 0 1 4 0v2" fill="currentColor" opacity=".9"/><circle cx="13" cy="3" r="2" fill="currentColor" opacity=".25"/><path d="M11 10V8a2 2 0 0 1 4 0v2" fill="currentColor" opacity=".25"/></svg>',
+	H: '<svg width="14" height="10" viewBox="0 0 14 10"><circle cx="3" cy="3" r="2" fill="currentColor"/><path d="M1 10V8a2 2 0 0 1 4 0v2" fill="currentColor"/><circle cx="8" cy="3" r="2" fill="currentColor"/><path d="M6 10V8a2 2 0 0 1 4 0v2" fill="currentColor"/><circle cx="13" cy="3" r="2" fill="currentColor"/><path d="M11 10V8a2 2 0 0 1 4 0v2" fill="currentColor"/></svg>',
+};
 
 function buildVehicleIcon(
 	v: Vehicle,
@@ -415,19 +434,40 @@ function buildVehicleIcon(
 ): string {
 	const s = size;
 	const c = s / 2;
+	const tailLen = s * 0.38;
+	const svgH = s + tailLen;
 	const iconType = resolveIconType(v.category);
-	const glyph = buildIconGlyph(iconType, v.fg, c);
-
+	const glyph = buildIconGlyph(iconType, v.fg);
 	const headingDeg = v.heading * 11.25;
-	const ar = c * 0.88;
-	const aw = c * 0.3;
-	const arrow = `<polygon points="${c + ar},${c} ${c + ar * 0.65},${c - aw} ${c + ar * 0.65},${c + aw}" fill="${v.bg}" stroke="#fff" stroke-width="1.5" stroke-linejoin="round" transform="rotate(${headingDeg},${c},${c})"/>`;
 
-	const label = showLabel
-		? `<div style="position:absolute;top:${s}px;left:50%;transform:translateX(-50%);white-space:nowrap;background:${v.bg};color:${v.fg};font-size:10px;font-weight:600;padding:1px 4px;border-radius:3px;line-height:1.3;font-family:system-ui,sans-serif;border:1px solid rgba(255,255,255,.6)">${v.name}</div>`
-		: "";
+	const teardrop = `<g transform="rotate(${headingDeg},${c},${c})">
+<path d="M${c},${c - c * 0.88} A${c * 0.88},${c * 0.88} 0 1,0 ${c},${c + c * 0.88} L${c + tailLen},${c} L${c},${c - c * 0.88}Z" fill="${v.bg}" stroke="#fff" stroke-width="1.8"/>
+</g>`;
 
-	return `<div style="position:relative;width:${s}px;height:${s}px"><svg width="${s}" height="${s}" viewBox="0 0 ${s} ${s}">${arrow}<circle cx="${c}" cy="${c}" r="${c * 0.88}" fill="#fff"/><circle cx="${c}" cy="${c}" r="${c * 0.78}" fill="${v.bg}"/>${glyph}</svg>${label}</div>`;
+	const glyphScale = s / 30;
+	const glyphOff = c - 12 * glyphScale;
+	const innerGlyph = `<g transform="translate(${glyphOff},${glyphOff}) scale(${glyphScale})">${glyph}</g>`;
+
+	let label = "";
+	if (showLabel) {
+		const delayColor =
+			v.delay != null && v.delay > 2
+				? "#c0392b"
+				: v.delay != null && v.delay >= 0
+					? "#27ae60"
+					: "#888";
+		const delayText =
+			v.delay != null
+				? `<span style="background:${delayColor};color:#fff;padding:0 3px;border-radius:2px;margin-left:2px">${v.delay > 0 ? `+${v.delay}` : v.delay}</span>`
+				: "";
+		const occupIcon = v.occupancy ? OCCUP_ICONS[v.occupancy] : "";
+		const occupHtml = occupIcon
+			? `<span style="color:#555;margin-left:2px;display:inline-flex;align-items:center">${occupIcon}</span>`
+			: "";
+		label = `<div style="position:absolute;top:${s + 2}px;left:50%;transform:translateX(-50%);white-space:nowrap;display:inline-flex;align-items:center;gap:0;background:#fff;border:1px solid rgba(0,0,0,.15);padding:1px 4px;border-radius:4px;line-height:1.4;font-family:system-ui,sans-serif;font-size:10px;box-shadow:0 1px 3px rgba(0,0,0,.1)"><span style="background:${v.bg};color:${v.fg};padding:0 3px;border-radius:2px;font-weight:700">${v.name}</span>${delayText}${occupHtml}</div>`;
+	}
+
+	return `<div style="position:relative;width:${s}px;height:${s}px"><svg width="${s}" height="${s}" viewBox="0 0 ${s} ${s}" overflow="visible">${teardrop}<circle cx="${c}" cy="${c}" r="${c * 0.62}" fill="#fff"/>${innerGlyph}</svg>${label}</div>`;
 }
 
 const CATEGORY_FILTERS = [
@@ -516,9 +556,7 @@ function MapPage() {
 			});
 			timeDeltaRef.current = serverTime - Date.now();
 			const now = Date.now() + timeDeltaRef.current;
-			const prev = new Map(
-				vehiclesRef.current.map((v) => [v.id, v]),
-			);
+			const prev = new Map(vehiclesRef.current.map((v) => [v.id, v]));
 			for (const v of vehicles) {
 				const old = prev.get(v.id);
 				if (old && old.waypoints.length >= 2 && v.waypoints.length >= 2) {
