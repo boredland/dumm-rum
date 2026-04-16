@@ -63,6 +63,7 @@ const loadStation = createServerFn({ method: "GET" })
 	});
 
 export const Route = createFileRoute("/$lang/$station/")({
+	staleTime: 5 * 60 * 1000,
 	loader: async ({ params }) => await loadStation({ data: params.station }),
 	head: ({ loaderData }) => {
 		const name = loaderData?.stopName ?? "Station";

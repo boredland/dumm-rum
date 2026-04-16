@@ -52,7 +52,10 @@ const getHomeSummaries = createServerFn({ method: "GET" })
 
 type SearchParams = { days?: DaysFilter };
 
+const STALE_TIME = 5 * 60 * 1000;
+
 export const Route = createFileRoute("/$lang/")({
+	staleTime: STALE_TIME,
 	head: () => ({
 		meta: [{ title: "DummRum" }],
 	}),

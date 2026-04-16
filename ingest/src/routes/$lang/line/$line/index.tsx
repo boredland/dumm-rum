@@ -24,6 +24,7 @@ const loadLine = createServerFn({ method: "GET" })
 	);
 
 export const Route = createFileRoute("/$lang/line/$line/")({
+	staleTime: 5 * 60 * 1000,
 	loader: async ({ params }) => await loadLine({ data: params.line }),
 	head: ({ loaderData }) => {
 		const name = loaderData?.line ?? "Line";

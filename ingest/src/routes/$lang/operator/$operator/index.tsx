@@ -27,6 +27,7 @@ const loadOperator = createServerFn({ method: "GET" })
 	);
 
 export const Route = createFileRoute("/$lang/operator/$operator/")({
+	staleTime: 5 * 60 * 1000,
 	loader: async ({ params }) => await loadOperator({ data: params.operator }),
 	head: ({ loaderData }) => {
 		const name = loaderData?.operator ?? "Operator";
