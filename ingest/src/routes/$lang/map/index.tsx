@@ -44,7 +44,6 @@ const PRODUCT_CLASSES: Record<number, string> = {
 	32: "Tram",
 	64: "Bus",
 	128: "Bus",
-	256: "Ferry",
 	512: "AST",
 };
 
@@ -345,36 +344,26 @@ export const Route = createFileRoute("/$lang/map/")({
 	component: MapPage,
 });
 
-const ICON_PATHS: Record<string, string> = {
-	bus: "M20 14a6 6 0 0 0-6-6h-4a6 6 0 0 0-6 6v8a2 2 0 0 0 2 2h1l1 2h2l1-2h2l1 2h2l1-2h1a2 2 0 0 0 2-2v-8zm-12-3h8a3 3 0 0 1 3 3v3H8v-3a3 3 0 0 1 3-3h-3zm-1 11a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3zm10 0a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3z",
-	tram: "M17 4H7a4 4 0 0 0-4 4v10a3 3 0 0 0 3 3l-1 2h2l1-2h8l1 2h2l-1-2a3 3 0 0 0 3-3V8a4 4 0 0 0-4-4zM7 6h10a2 2 0 0 1 2 2v5H5V8a2 2 0 0 1 2-2zm1 14a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3zm8 0a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3z",
-	train:
-		"M17.5 3h-11A3.5 3.5 0 0 0 3 6.5V18a2 2 0 0 0 2 2l-1 2h2l2-2h8l2 2h2l-1-2a2 2 0 0 0 2-2V6.5A3.5 3.5 0 0 0 17.5 3zM7 5h10a1.5 1.5 0 0 1 1.5 1.5V11h-13V6.5A1.5 1.5 0 0 1 7 5zm0.5 15a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3zm9 0a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3z",
-};
+type IconType = "S" | "U" | "bus" | "tram" | "train" | null;
 
-function resolveIcon(
-	icoRes: string,
-	category: string,
-): { type: "letter"; letter: string } | { type: "path"; key: string } | null {
-	const res = icoRes.toUpperCase();
-	if (res.includes("COMM_T") || category === "S-Bahn")
-		return { type: "letter", letter: "S" };
-	if (res.includes("SUB_T") || category === "U-Bahn")
-		return { type: "letter", letter: "U" };
-	if (res.includes("BUS") || category === "Bus" || category === "AST")
-		return { type: "path", key: "bus" };
-	if (res.includes("TRAM") || category === "Tram")
-		return { type: "path", key: "tram" };
-	if (
-		res.includes("ICE") ||
-		res.includes("IC") ||
-		res.includes("REG") ||
-		category === "ICE" ||
-		category === "IC" ||
-		category === "RE/RB"
-	)
-		return { type: "path", key: "train" };
-	return null;
+function resolveIconType(category: string): IconType {
+	switch (category) {
+		case "S-Bahn":
+			return "S";
+		case "U-Bahn":
+			return "U";
+		case "Bus":
+		case "AST":
+			return "bus";
+		case "Tram":
+			return "tram";
+		case "ICE":
+		case "IC":
+		case "RE/RB":
+			return "train";
+		default:
+			return null;
+	}
 }
 
 const ICON_SIZE_BY_ZOOM = [
@@ -385,6 +374,40 @@ function getIconSize(zoom: number): number {
 	return ICON_SIZE_BY_ZOOM[Math.min(zoom, ICON_SIZE_BY_ZOOM.length - 1)] ?? 30;
 }
 
+function buildIconGlyph(type: IconType, fg: string, c: number): string {
+	const r = c * 0.45;
+	switch (type) {
+		case "S":
+		case "U": {
+			const fs = Math.round(c * 1.05);
+			return `<text x="${c}" y="${c + fs * 0.35}" text-anchor="middle" font-size="${fs}" font-weight="bold" fill="${fg}" font-family="system-ui,sans-serif">${type}</text>`;
+		}
+		case "bus": {
+			const x = c - r;
+			const y = c - r;
+			const w = r * 2;
+			const h = r * 2;
+			return `<rect x="${x}" y="${y}" width="${w}" height="${h * 0.65}" rx="${r * 0.35}" fill="${fg}"/><circle cx="${x + w * 0.25}" cy="${y + h * 0.8}" r="${r * 0.18}" fill="${fg}"/><circle cx="${x + w * 0.75}" cy="${y + h * 0.8}" r="${r * 0.18}" fill="${fg}"/>`;
+		}
+		case "tram": {
+			const x = c - r * 0.7;
+			const y = c - r;
+			const w = r * 1.4;
+			const h = r * 2;
+			return `<rect x="${x}" y="${y}" width="${w}" height="${h * 0.7}" rx="${r * 0.25}" fill="${fg}"/><line x1="${x}" y1="${y + h * 0.32}" x2="${x + w}" y2="${y + h * 0.32}" stroke="${fg}" stroke-width="${r * 0.12}"/><circle cx="${x + w * 0.25}" cy="${y + h * 0.82}" r="${r * 0.15}" fill="${fg}"/><circle cx="${x + w * 0.75}" cy="${y + h * 0.82}" r="${r * 0.15}" fill="${fg}"/>`;
+		}
+		case "train": {
+			const x = c - r * 0.65;
+			const y = c - r;
+			const w = r * 1.3;
+			const h = r * 2;
+			return `<rect x="${x}" y="${y}" width="${w}" height="${h * 0.75}" rx="${r * 0.2}" fill="${fg}"/><rect x="${x + w * 0.1}" y="${y + h * 0.08}" width="${w * 0.8}" height="${h * 0.3}" rx="${r * 0.1}" fill="rgba(0,0,0,0.15)"/><circle cx="${x + w * 0.25}" cy="${y + h * 0.85}" r="${r * 0.15}" fill="${fg}"/><circle cx="${x + w * 0.75}" cy="${y + h * 0.85}" r="${r * 0.15}" fill="${fg}"/>`;
+		}
+		default:
+			return `<circle cx="${c}" cy="${c}" r="${r * 0.4}" fill="${fg}"/>`;
+	}
+}
+
 function buildVehicleIcon(
 	v: Vehicle,
 	size: number,
@@ -392,31 +415,19 @@ function buildVehicleIcon(
 ): string {
 	const s = size;
 	const c = s / 2;
-	const resolved = resolveIcon(v.icoRes, v.category);
+	const iconType = resolveIconType(v.category);
+	const glyph = buildIconGlyph(iconType, v.fg, c);
 
-	let iconContent: string;
-	if (resolved?.type === "letter") {
-		const fs = Math.round(s * 0.52);
-		iconContent = `<text x="${c}" y="${c + fs * 0.35}" text-anchor="middle" font-size="${fs}" font-weight="bold" fill="${v.fg}" font-family="system-ui,sans-serif">${resolved.letter}</text>`;
-	} else if (resolved?.type === "path") {
-		const inner = s * 0.5;
-		const off = c - inner / 2;
-		iconContent = `<svg x="${off}" y="${off}" width="${inner}" height="${inner}" viewBox="0 0 24 24"><path d="${ICON_PATHS[resolved.key]}" fill="${v.fg}"/></svg>`;
-	} else {
-		iconContent = `<circle cx="${c}" cy="${c}" r="${s * 0.18}" fill="${v.fg}"/>`;
-	}
-
-	const hasHeading = v.heading >= 0 && v.heading <= 31;
-	const headingDeg = hasHeading ? v.heading * 11.25 : 0;
-	const arrow = hasHeading
-		? `<path d="M${c + c * 0.85},${c} L${c + c * 0.55},${c - c * 0.28} L${c + c * 0.55},${c + c * 0.28}Z" fill="${v.bg}" stroke="#fff" stroke-width="1.5" stroke-linejoin="round" transform="rotate(${headingDeg},${c},${c})"/>`
-		: "";
+	const headingDeg = v.heading * 11.25;
+	const ar = c * 0.88;
+	const aw = c * 0.3;
+	const arrow = `<polygon points="${c + ar},${c} ${c + ar * 0.65},${c - aw} ${c + ar * 0.65},${c + aw}" fill="${v.bg}" stroke="#fff" stroke-width="1.5" stroke-linejoin="round" transform="rotate(${headingDeg},${c},${c})"/>`;
 
 	const label = showLabel
 		? `<div style="position:absolute;top:${s}px;left:50%;transform:translateX(-50%);white-space:nowrap;background:${v.bg};color:${v.fg};font-size:10px;font-weight:600;padding:1px 4px;border-radius:3px;line-height:1.3;font-family:system-ui,sans-serif;border:1px solid rgba(255,255,255,.6)">${v.name}</div>`
 		: "";
 
-	return `<div style="position:relative;width:${s}px;height:${s}px"><svg width="${s}" height="${s}" viewBox="0 0 ${s} ${s}">${arrow}<circle cx="${c}" cy="${c}" r="${c * 0.92}" fill="#fff"/><circle cx="${c}" cy="${c}" r="${c * 0.8}" fill="${v.bg}"/>${iconContent}</svg>${label}</div>`;
+	return `<div style="position:relative;width:${s}px;height:${s}px"><svg width="${s}" height="${s}" viewBox="0 0 ${s} ${s}">${arrow}<circle cx="${c}" cy="${c}" r="${c * 0.88}" fill="#fff"/><circle cx="${c}" cy="${c}" r="${c * 0.78}" fill="${v.bg}"/>${glyph}</svg>${label}</div>`;
 }
 
 const CATEGORY_FILTERS = [
@@ -446,10 +457,16 @@ function interpolateVehicle(
 	now: number,
 ): { lat: number; lon: number; heading: number } {
 	const wps = v.waypoints;
-	if (wps.length < 2) return { lat: v.lat, lon: v.lon, heading: v.heading };
+	const fb = v.heading;
+	if (wps.length < 2) return { lat: v.lat, lon: v.lon, heading: fb };
 
-	if (now <= wps[0].t) return wps[0];
-	if (now >= wps[wps.length - 1].t) return wps[wps.length - 1];
+	const h = (wp: Waypoint) => (wp.heading >= 0 ? wp.heading : fb);
+
+	if (now <= wps[0].t) return { ...wps[0], heading: h(wps[0]) };
+	if (now >= wps[wps.length - 1].t) {
+		const last = wps[wps.length - 1];
+		return { ...last, heading: h(last) };
+	}
 
 	for (let i = 0; i < wps.length - 1; i++) {
 		if (now >= wps[i].t && now < wps[i + 1].t) {
@@ -457,11 +474,11 @@ function interpolateVehicle(
 			return {
 				lat: wps[i].lat + ratio * (wps[i + 1].lat - wps[i].lat),
 				lon: wps[i].lon + ratio * (wps[i + 1].lon - wps[i].lon),
-				heading: wps[i + 1].heading >= 0 ? wps[i + 1].heading : wps[i].heading,
+				heading: wps[i + 1].heading >= 0 ? wps[i + 1].heading : h(wps[i]),
 			};
 		}
 	}
-	return wps[wps.length - 1];
+	return { ...wps[wps.length - 1], heading: fb };
 }
 
 function MapPage() {
