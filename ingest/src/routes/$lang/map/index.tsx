@@ -444,7 +444,7 @@ function buildVehicleIcon(
 	const r = c * 0.84;
 	const iconType = resolveIconType(v.category);
 	const glyph = buildIconGlyph(iconType, v.bg);
-	const headingDeg = v.heading * 11.25;
+	const headingDeg = v.heading * 11.25 - 90;
 
 	const tipDist = r * 1.6;
 	const spread = r * 0.55;
