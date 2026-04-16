@@ -37,6 +37,8 @@ export const journeyRuns = pgTable(
 		primaryKey({ columns: [t.journeyRef, t.dayOfOperation] }),
 		index("idx_journey_runs_day").on(t.dayOfOperation),
 		index("idx_journey_runs_poll_state").on(t.pollState, t.dayOfOperation),
+		index("idx_journey_runs_line").on(t.line, t.dayOfOperation),
+		index("idx_journey_runs_operator").on(t.operator, t.dayOfOperation),
 	],
 );
 
@@ -59,6 +61,7 @@ export const journeyStops = pgTable(
 	(t) => [
 		primaryKey({ columns: [t.journeyRef, t.dayOfOperation, t.routeIdx] }),
 		index("idx_journey_stops_day").on(t.dayOfOperation),
+		index("idx_journey_stops_stop_day").on(t.stopId, t.dayOfOperation),
 	],
 );
 

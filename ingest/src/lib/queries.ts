@@ -154,16 +154,18 @@ export async function getOperatorSummaries(
 		}
 	}
 
-	return statsRows.map((r) => ({
-		operator: r.operator as string,
-		lines: lineMap.get(r.operator as string) ?? [],
-		categories: [...(catMap.get(r.operator as string) ?? [])],
-		total: Number(r.total),
-		cancelled: Number(r.cancelled),
-		ghost: Number(r.ghost),
-		delayed: Number(r.delayed),
-		avgDelay: r.avgDelay === null ? null : Number(r.avgDelay),
-	}));
+	return statsRows
+		.filter((r): r is typeof r & { operator: string } => r.operator != null)
+		.map((r) => ({
+			operator: r.operator,
+			lines: lineMap.get(r.operator) ?? [],
+			categories: [...(catMap.get(r.operator) ?? [])],
+			total: Number(r.total),
+			cancelled: Number(r.cancelled),
+			ghost: Number(r.ghost),
+			delayed: Number(r.delayed),
+			avgDelay: r.avgDelay === null ? null : Number(r.avgDelay),
+		}));
 }
 
 // ─── Line summaries ────────────────────────────────────────────────────

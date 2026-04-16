@@ -2,7 +2,7 @@ import { and, eq, sql } from "drizzle-orm";
 import type PgBoss from "pg-boss";
 import type { Db } from "../db/client.ts";
 import { excluded } from "../db/helpers.ts";
-import { journeyPositions, journeyRuns, journeyStops } from "../db/schema.ts";
+import { journeyRuns, journeyStops } from "../db/schema.ts";
 import { type MgateJourneyDetail, mgateJourneyDetailsBatch } from "./mgate.ts";
 import { berlinTime, nowBerlin } from "./utils.ts";
 
@@ -131,19 +131,6 @@ export async function processPollBatch(
 
 			const mgDetail = mgateResult.detail;
 			const mgStops = mgDetail.stops;
-
-			if (mgDetail.lastPos) {
-				await db.insert(journeyPositions).values({
-					journeyRef,
-					dayOfOperation,
-					lat: mgDetail.lastPos.lat,
-					lon: mgDetail.lastPos.lon,
-					reportedAt: mgDetail.lastPosReported ?? now,
-					routeIdx: mgDetail.lastPassRouteIdx ?? null,
-					rtRouteIdx: null,
-					capturedAt: now,
-				});
-			}
 
 			await upsertJourneyRunFromMgate(
 				db,
@@ -275,11 +262,6 @@ async function upsertJourneyRunFromMgate(
 	const hasRtData =
 		mg.lastPos != null || stops.some((s) => s.rtDepTime || s.rtArrTime);
 
-	const polyline =
-		mg.polylinePoints && mg.polylinePoints.length >= 2
-			? JSON.stringify(mg.polylinePoints)
-			: null;
-
 	await db
 		.insert(journeyRuns)
 		.values({
@@ -301,7 +283,6 @@ async function upsertJourneyRunFromMgate(
 			totalStopCount: stops.length,
 			wasTracked: hasRtData,
 			pollState: "polling",
-			polyline,
 			snapshotAt,
 		})
 		.onConflictDoUpdate({
@@ -323,7 +304,6 @@ async function upsertJourneyRunFromMgate(
 				totalStopCount: excluded(journeyRuns.totalStopCount),
 				wasTracked: sql`${journeyRuns.wasTracked} OR ${excluded(journeyRuns.wasTracked)}`,
 				pollState: sql`'polling'`,
-				polyline: sql`COALESCE(${excluded(journeyRuns.polyline)}, ${journeyRuns.polyline})`,
 				snapshotAt: excluded(journeyRuns.snapshotAt),
 			},
 		});
