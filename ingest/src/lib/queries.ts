@@ -716,6 +716,16 @@ export async function getStopDayDepartures(
 	}));
 }
 
+/** Earliest day_of_operation across all journey_runs. */
+export async function getOldestDate(): Promise<string | null> {
+	const rows = await db
+		.select({
+			date: sql<string | null>`MIN(${journeyRuns.dayOfOperation})`,
+		})
+		.from(journeyRuns);
+	return rows[0]?.date ?? null;
+}
+
 function dedupeCsv(s: string): string[] {
 	return [...new Set(s.split(","))].filter(Boolean);
 }

@@ -5,6 +5,7 @@ import { type Lang, t } from "../../lib/i18n.ts";
 import {
 	type DaysFilter,
 	getLineSummaries,
+	getOldestDate,
 	getOperatorSummaries,
 	getStopSummaries,
 	type LineSummary,
@@ -36,14 +37,16 @@ const getHomeSummaries = createServerFn({ method: "GET" })
 			operators: OperatorSummary[];
 			stops: StopSummary[];
 			days: DaysFilter;
+			oldestDate: string | null;
 		}> => {
 			const filter = { days };
-			const [lines, operators, stops] = await Promise.all([
+			const [lines, operators, stops, oldestDate] = await Promise.all([
 				getLineSummaries(filter),
 				getOperatorSummaries(filter),
 				getStopSummaries(),
+				getOldestDate(),
 			]);
-			return { lines, operators, stops, days };
+			return { lines, operators, stops, days, oldestDate };
 		},
 	);
 
@@ -87,7 +90,13 @@ const DAY_FILTERS: {
 ];
 
 function Index() {
-	const { lines, operators, stops, days: activeDays } = Route.useLoaderData();
+	const {
+		lines,
+		operators,
+		stops,
+		days: activeDays,
+		oldestDate,
+	} = Route.useLoaderData();
 	const { lang } = Route.useParams();
 	const l = lang as Lang;
 	const other: Lang = l === "de" ? "en" : "de";
@@ -176,6 +185,16 @@ function Index() {
 					🚏 {t(l, "home.title")}
 				</h1>
 				<p className="text-muted text-sm">{t(l, "home.subtitle")}</p>
+				{oldestDate && (
+					<p className="text-xs text-dimmed">
+						{t(l, "stat.since")}{" "}
+						{new Date(`${oldestDate}T00:00:00`).toLocaleDateString(l, {
+							year: "numeric",
+							month: "long",
+							day: "numeric",
+						})}
+					</p>
+				)}
 			</header>
 
 			<details className="text-sm text-muted">
