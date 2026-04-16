@@ -4,10 +4,17 @@ import { type Lang, t } from "../../../lib/i18n.ts";
 import {
 	type DayStats,
 	findStopBySlug,
+	getStopDayDepartures,
 	getStopStats,
+	type StopDayDeparture,
 } from "../../../lib/queries.ts";
 import { categoryIcons } from "../../../lib/stations.ts";
-import { onTimeRate, pct, shortStationName } from "../../../lib/utils.ts";
+import {
+	onTimeRate,
+	pct,
+	shortStationName,
+	todayBerlin,
+} from "../../../lib/utils.ts";
 
 interface StationData {
 	stopName: string;
@@ -15,6 +22,7 @@ interface StationData {
 	stopIds: string[];
 	days: DayStats[];
 	lastChange: string | null;
+	nextDepartures: StopDayDeparture[];
 }
 
 const loadStation = createServerFn({ method: "GET" })
@@ -25,13 +33,28 @@ const loadStation = createServerFn({ method: "GET" })
 	.handler(async ({ data: slug }): Promise<StationData> => {
 		const stop = await findStopBySlug(slug);
 		if (!stop) throw new Error("not found");
-		const stats = await getStopStats(stop.stopIds);
+		const today = todayBerlin();
+		const [stats, departures] = await Promise.all([
+			getStopStats(stop.stopIds),
+			getStopDayDepartures(stop.stopIds, today),
+		]);
+		const nowTime = new Date().toLocaleTimeString("de", {
+			hour: "2-digit",
+			minute: "2-digit",
+			second: "2-digit",
+			hour12: false,
+			timeZone: "Europe/Berlin",
+		});
+		const nextDepartures = departures
+			.filter((d) => d.time >= nowTime)
+			.slice(0, 20);
 		return {
 			stopName: stop.stopName,
 			categories: stop.categories,
 			stopIds: stop.stopIds,
 			days: stats.days,
 			lastChange: stats.lastChange,
+			nextDepartures,
 		};
 	});
 
@@ -56,7 +79,8 @@ function borderForCancRate(rate: number): string {
 }
 
 function StationIndex() {
-	const { stopName, categories, days, lastChange } = Route.useLoaderData();
+	const { stopName, categories, days, lastChange, nextDepartures } =
+		Route.useLoaderData();
 	const { lang, station } = Route.useParams();
 	const l = lang as Lang;
 
@@ -107,6 +131,70 @@ function StationIndex() {
 						label={t(l, "stat.reliability")}
 						value={`${onTimeRate(today.cancelled, today.delayed, today.total)}%`}
 					/>
+				</section>
+			)}
+
+			{nextDepartures.length > 0 && (
+				<section>
+					<h2 className="text-xs uppercase tracking-wide text-muted font-semibold mb-3">
+						{t(l, "section.next_departures")} ({nextDepartures.length})
+					</h2>
+					<div className="overflow-x-auto">
+						<table className="w-full text-sm">
+							<thead>
+								<tr className="text-left text-xs uppercase text-muted border-b border-border-dim">
+									<th className="py-2 pr-3">{t(l, "table.time")}</th>
+									<th className="py-2 pr-3">{t(l, "table.line")}</th>
+									<th className="py-2 pr-3">{t(l, "table.direction")}</th>
+									<th className="py-2 pr-3">{t(l, "table.status")}</th>
+								</tr>
+							</thead>
+							<tbody>
+								{nextDepartures.map((d) => {
+									const delay =
+										d.rtTime && d.time
+											? Math.round(
+													(new Date(`${d.date}T${d.rtTime}`).getTime() -
+														new Date(`${d.date}T${d.time}`).getTime()) /
+														60_000,
+												)
+											: null;
+									return (
+										<tr
+											key={`${d.time}-${d.line}-${d.direction}`}
+											className="border-b border-border-dim"
+										>
+											<td className="py-2 pr-3 whitespace-nowrap tabular-nums">
+												{d.time.slice(0, 5)}
+												{d.rtTime && d.rtTime !== d.time && (
+													<span className="ml-1 text-dimmed">
+														→ {d.rtTime.slice(0, 5)}
+													</span>
+												)}
+											</td>
+											<td className="py-2 pr-3 font-semibold">{d.line}</td>
+											<td className="py-2 pr-3 truncate" title={d.direction}>
+												{d.direction}
+											</td>
+											<td className="py-2 pr-3">
+												{d.cancelled ? (
+													<span className="text-red-500">❌</span>
+												) : d.ghost ? (
+													<span className="text-purple-400">👻</span>
+												) : delay !== null && delay >= 8 ? (
+													<span className="text-amber-500">
+														⏳ +{delay} min
+													</span>
+												) : (
+													<span className="text-emerald-500">✅</span>
+												)}
+											</td>
+										</tr>
+									);
+								})}
+							</tbody>
+						</table>
+					</div>
 				</section>
 			)}
 
