@@ -1,6 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { createServerFn } from "@tanstack/react-start";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { type Lang, t } from "../../lib/i18n.ts";
 import {
 	type DaysFilter,
@@ -93,6 +93,17 @@ function Index() {
 	const other: Lang = l === "de" ? "en" : "de";
 	const [query, setQuery] = useState("");
 	const q = query.toLowerCase().trim();
+	const searchRef = useRef<HTMLInputElement>(null);
+	useEffect(() => {
+		const handler = (e: KeyboardEvent) => {
+			if ((e.ctrlKey || e.metaKey) && e.key === "k") {
+				e.preventDefault();
+				searchRef.current?.focus();
+			}
+		};
+		document.addEventListener("keydown", handler);
+		return () => document.removeEventListener("keydown", handler);
+	}, []);
 	const [openSections, setOpenSections] = useState<Set<string>>(new Set());
 	const toggleSection = (key: string, open: boolean) => {
 		setOpenSections((prev) => {
@@ -151,6 +162,22 @@ function Index() {
 				<p className="text-muted text-sm">{t(l, "home.subtitle")}</p>
 			</header>
 
+			<details className="text-sm text-muted">
+				<summary className="cursor-pointer select-none font-medium">
+					{t(l, "home.methodology_title")}
+				</summary>
+				<ul className="mt-2 list-disc pl-5 space-y-1">
+					<li>{t(l, "home.methodology_collection")}</li>
+					<li>{t(l, "home.methodology_cancellation")}</li>
+					<li>{t(l, "home.methodology_delay")}</li>
+					<li>{t(l, "home.methodology_delayed")}</li>
+					<li>{t(l, "home.methodology_ghost")}</li>
+					<li>{t(l, "home.methodology_reliability")}</li>
+					<li>{t(l, "home.methodology_dedup")}</li>
+					<li>{t(l, "home.methodology_colors")}</li>
+				</ul>
+			</details>
+
 			<div className="flex flex-wrap gap-2">
 				{DAY_FILTERS.map((f) => {
 					const active = activeDays === f.key;
@@ -181,12 +208,16 @@ function Index() {
 
 			<div className="relative">
 				<input
+					ref={searchRef}
 					type="search"
 					placeholder={t(l, "search.placeholder")}
 					value={query}
 					onChange={(e) => setQuery(e.target.value)}
 					className="w-full bg-surface border border-border rounded-xl px-4 py-2.5 text-sm placeholder:text-muted focus:outline-none focus:border-accent"
 				/>
+				<kbd className="absolute right-3 top-1/2 -translate-y-1/2 text-[0.6rem] text-dimmed bg-surface-hover border border-border-dim rounded px-1.5 py-0.5 pointer-events-none">
+					Ctrl K
+				</kbd>
 			</div>
 
 			<Section
