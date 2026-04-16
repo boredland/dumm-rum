@@ -219,8 +219,10 @@ function StopCard({ stop, lang }: { stop: StopSummary; lang: Lang }) {
 function OperatorCard({ op, lang }: { op: OperatorSummary; lang: Lang }) {
 	const score = onTimeRate(op.cancelled, op.delayed, op.total);
 	return (
-		<div
-			className={`bg-surface border ${borderForScore(score)} rounded-xl p-4`}
+		<Link
+			to="/$lang/operator/$operator"
+			params={{ lang, operator: op.operator }}
+			className={`bg-surface border ${borderForScore(score)} rounded-xl p-4 no-underline text-fg hover:bg-surface-hover transition-colors`}
 		>
 			<div className="text-[0.7rem] uppercase tracking-wide text-muted mb-1">
 				{categoryIcons(op.categories)}
@@ -245,6 +247,6 @@ function OperatorCard({ op, lang }: { op: OperatorSummary; lang: Lang }) {
 					{t(lang, "stat.reliability")}: {score}%
 				</div>
 			)}
-		</div>
+		</Link>
 	);
 }
