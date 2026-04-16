@@ -194,7 +194,17 @@ function Index() {
 				<h1 className="text-3xl font-bold flex items-center gap-2">
 					🚏 {t(l, "home.title")}
 				</h1>
-				<p className="text-muted text-sm">{t(l, "home.subtitle")}</p>
+				<p className="text-muted text-sm">
+					{t(l, "home.subtitle")}
+					{" · "}
+					<Link
+						to="/$lang/map"
+						params={{ lang: l }}
+						className="text-accent hover:underline"
+					>
+						{l === "de" ? "Live-Karte" : "Live Map"} →
+					</Link>
+				</p>
 				{oldestDate && (
 					<p className="text-xs text-dimmed">
 						{t(l, "stat.since")}{" "}
