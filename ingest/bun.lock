@@ -12,6 +12,7 @@
         "drizzle-orm": "^1.0.0-beta.20",
         "leaflet": "^1.9.4",
         "leaflet-fullscreen": "^1.0.2",
+        "leaflet.locatecontrol": "^0.89.0",
         "pg-boss": "^10.3.2",
         "postgres": "^3.4.7",
         "react": "^19.2.5",
@@ -506,6 +507,8 @@
     "leaflet": ["leaflet@1.9.4", "", {}, "sha512-nxS1ynzJOmOlHp+iL3FyWqK89GtNL8U8rvlMOsQdTTssxZwCXh8N2NB3GDQOL+YR3XnWyZAxwQixURb+FA74PA=="],
 
     "leaflet-fullscreen": ["leaflet-fullscreen@1.0.2", "", {}, "sha512-1Yxm8RZg6KlKX25+hbP2H/wnOAphH7hFcvuADJFb4QZTN7uOSN9Hsci5EZpow8vtNej9OGzu59Jxmn+0qKOO9Q=="],
+
+    "leaflet.locatecontrol": ["leaflet.locatecontrol@0.89.0", "", { "peerDependencies": { "leaflet": "^1.9.0 || >=2.0.0-alpha.1" } }, "sha512-BTf8V802jXhlX4BBHmDg46ja10pPjSOOQuqB9LK+EeEHJMn+Vb7VownvE67nCfTGB4kEexl1gYF8v9rJyAUv0w=="],
 
     "lefthook": ["lefthook@2.1.5", "", { "optionalDependencies": { "lefthook-darwin-arm64": "2.1.5", "lefthook-darwin-x64": "2.1.5", "lefthook-freebsd-arm64": "2.1.5", "lefthook-freebsd-x64": "2.1.5", "lefthook-linux-arm64": "2.1.5", "lefthook-linux-x64": "2.1.5", "lefthook-openbsd-arm64": "2.1.5", "lefthook-openbsd-x64": "2.1.5", "lefthook-windows-arm64": "2.1.5", "lefthook-windows-x64": "2.1.5" }, "bin": { "lefthook": "bin/index.js" } }, "sha512-yB9IFWurFllusbPZqvG0EavTmpNXPya2MuO7Li7YT78xAj3uCQ3AgmW9TVUbTTsSMhsegbiAMRpwfEk2TP1P0A=="],
 

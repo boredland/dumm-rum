@@ -9,6 +9,12 @@ import {
 	MGATE_URL,
 } from "../../../lib/mgate.ts";
 
+declare module "leaflet" {
+	namespace control {
+		function locate(options?: Record<string, unknown>): L.Control;
+	}
+}
+
 const FRANKFURT_CENTER = { lat: 50.1109, lon: 8.6821 };
 const POLL_INTERVAL = 30_000;
 const PER_SIZE = 35_000;
@@ -621,6 +627,16 @@ function MapPage() {
 
 			L.control.zoom({ position: "topright" }).addTo(map);
 
+			await import("leaflet.locatecontrol");
+			L.control
+				.locate({
+					position: "topright",
+					flyTo: true,
+					keepCurrentZoomLevel: true,
+					strings: { title: "My location" },
+				})
+				.addTo(map);
+
 			L.tileLayer("https://tileserver.memomaps.de/tilegen/{z}/{x}/{y}.png", {
 				maxZoom: 18,
 				attribution:
@@ -729,6 +745,10 @@ function MapPage() {
 			<link
 				rel="stylesheet"
 				href="https://unpkg.com/leaflet-fullscreen@1.0.2/dist/leaflet.fullscreen.css"
+			/>
+			<link
+				rel="stylesheet"
+				href="https://unpkg.com/leaflet.locatecontrol@0.89.0/dist/L.Control.Locate.min.css"
 			/>
 			<div className="flex items-center gap-2 px-3 py-2 bg-surface border-b border-border z-[1000] overflow-x-auto shrink-0">
 				<Link
