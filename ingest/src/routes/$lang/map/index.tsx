@@ -368,9 +368,16 @@ const fetchVehicles = createServerFn({ method: "GET" })
 		},
 	);
 
+type MapSearch = { z?: number; lat?: number; lon?: number };
+
 export const Route = createFileRoute("/$lang/map/")({
 	head: () => ({
 		meta: [{ title: "DummRum — Live Map" }],
+	}),
+	validateSearch: (search: Record<string, unknown>): MapSearch => ({
+		z: typeof search.z === "number" ? search.z : undefined,
+		lat: typeof search.lat === "number" ? search.lat : undefined,
+		lon: typeof search.lon === "number" ? search.lon : undefined,
 	}),
 	component: MapPage,
 });
@@ -526,6 +533,8 @@ function interpolateVehicle(
 function MapPage() {
 	const { lang } = Route.useParams();
 	const l = lang as Lang;
+	const search = Route.useSearch();
+	const navigate = Route.useNavigate();
 	const mapRef = useRef<HTMLDivElement>(null);
 	const leafletMap = useRef<L.Map | null>(null);
 	const markersRef = useRef<Map<string, L.Marker>>(new Map());
@@ -635,9 +644,13 @@ function MapPage() {
 
 			await import("leaflet-fullscreen");
 
+			const initLat = search.lat ?? FRANKFURT_CENTER.lat;
+			const initLon = search.lon ?? FRANKFURT_CENTER.lon;
+			const initZoom = search.z ?? 13;
+
 			const map = L.map(mapRef.current!, {
-				center: [FRANKFURT_CENTER.lat, FRANKFURT_CENTER.lon],
-				zoom: 13,
+				center: [initLat, initLon],
+				zoom: initZoom,
 				zoomControl: false,
 				fullscreenControl: { position: "topright" },
 			});
@@ -655,6 +668,16 @@ function MapPage() {
 
 			map.on("moveend", () => {
 				load();
+				const c = map.getCenter();
+				const z = map.getZoom();
+				navigate({
+					search: {
+						z: Math.round(z),
+						lat: Math.round(c.lat * 1e5) / 1e5,
+						lon: Math.round(c.lng * 1e5) / 1e5,
+					},
+					replace: true,
+				});
 			});
 
 			map.on("zoomend", () => {
