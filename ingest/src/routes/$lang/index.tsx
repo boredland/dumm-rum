@@ -3,6 +3,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { useState } from "react";
 import { type Lang, t } from "../../lib/i18n.ts";
 import {
+	type DaysFilter,
 	getLineSummaries,
 	getOperatorSummaries,
 	getStopSummaries,
@@ -13,23 +14,52 @@ import {
 import { categoryIcons, slugForStop } from "../../lib/stations.ts";
 import { onTimeRate, pct, shortStationName } from "../../lib/utils.ts";
 
-const getHomeSummaries = createServerFn({ method: "GET" }).handler(
-	async (): Promise<{
-		lines: LineSummary[];
-		operators: OperatorSummary[];
-		stops: StopSummary[];
-	}> => {
-		const [lines, operators, stops] = await Promise.all([
-			getLineSummaries(),
-			getOperatorSummaries(),
-			getStopSummaries(),
-		]);
-		return { lines, operators, stops };
-	},
-);
+const VALID_DAYS = new Set<DaysFilter>([
+	"all",
+	"today",
+	"weekdays",
+	"weekends",
+]);
+
+const getHomeSummaries = createServerFn({ method: "GET" })
+	.inputValidator((days: unknown): DaysFilter => {
+		if (typeof days === "string" && VALID_DAYS.has(days as DaysFilter)) {
+			return days as DaysFilter;
+		}
+		return "today";
+	})
+	.handler(
+		async ({
+			data: days,
+		}): Promise<{
+			lines: LineSummary[];
+			operators: OperatorSummary[];
+			stops: StopSummary[];
+			days: DaysFilter;
+		}> => {
+			const filter = { days };
+			const [lines, operators, stops] = await Promise.all([
+				getLineSummaries(filter),
+				getOperatorSummaries(filter),
+				getStopSummaries(),
+			]);
+			return { lines, operators, stops, days };
+		},
+	);
+
+type SearchParams = { days?: DaysFilter };
 
 export const Route = createFileRoute("/$lang/")({
-	loader: async () => await getHomeSummaries(),
+	validateSearch: (search: Record<string, unknown>): SearchParams => ({
+		days:
+			typeof search.days === "string" &&
+			VALID_DAYS.has(search.days as DaysFilter)
+				? (search.days as DaysFilter)
+				: undefined,
+	}),
+	loaderDeps: ({ search }) => ({ days: search.days }),
+	loader: async ({ deps }) =>
+		await getHomeSummaries({ data: deps.days ?? "today" }),
 	component: Index,
 });
 
@@ -43,8 +73,18 @@ function matchesQuery(q: string, ...fields: string[]): boolean {
 	return fields.some((f) => f.toLowerCase().includes(q));
 }
 
+const DAY_FILTERS: {
+	key: DaysFilter;
+	labelKey: "days.today" | "days.all" | "days.weekdays" | "days.weekends";
+}[] = [
+	{ key: "today", labelKey: "days.today" },
+	{ key: "all", labelKey: "days.all" },
+	{ key: "weekdays", labelKey: "days.weekdays" },
+	{ key: "weekends", labelKey: "days.weekends" },
+];
+
 function Index() {
-	const { lines, operators, stops } = Route.useLoaderData();
+	const { lines, operators, stops, days: activeDays } = Route.useLoaderData();
 	const { lang } = Route.useParams();
 	const l = lang as Lang;
 	const other: Lang = l === "de" ? "en" : "de";
@@ -98,6 +138,27 @@ function Index() {
 				</h1>
 				<p className="text-muted text-sm">{t(l, "home.subtitle")}</p>
 			</header>
+
+			<div className="flex flex-wrap gap-2">
+				{DAY_FILTERS.map((f) => {
+					const active = activeDays === f.key;
+					return (
+						<Link
+							key={f.key}
+							to="/$lang"
+							params={{ lang: l }}
+							search={f.key === "today" ? {} : { days: f.key }}
+							className={`px-3 py-1.5 text-xs font-medium rounded-full border border-border no-underline transition-colors ${
+								active
+									? "bg-surface-hover text-fg"
+									: "bg-transparent text-muted hover:text-fg"
+							}`}
+						>
+							{t(l, f.labelKey)}
+						</Link>
+					);
+				})}
+			</div>
 
 			<OverviewCards
 				lines={lines}
