@@ -12,6 +12,7 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as LangRouteRouteImport } from './routes/$lang/route'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as LangIndexRouteImport } from './routes/$lang/index'
+import { Route as LangSplatRouteImport } from './routes/$lang/$'
 import { Route as LangStationRouteRouteImport } from './routes/$lang/$station/route'
 import { Route as LangStationIndexRouteImport } from './routes/$lang/$station/index'
 import { Route as LangOperatorOperatorIndexRouteImport } from './routes/$lang/operator/$operator/index'
@@ -33,6 +34,11 @@ const IndexRoute = IndexRouteImport.update({
 const LangIndexRoute = LangIndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => LangRouteRoute,
+} as any)
+const LangSplatRoute = LangSplatRouteImport.update({
+  id: '/$',
+  path: '/$',
   getParentRoute: () => LangRouteRoute,
 } as any)
 const LangStationRouteRoute = LangStationRouteRouteImport.update({
@@ -77,6 +83,7 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/$lang': typeof LangRouteRouteWithChildren
   '/$lang/$station': typeof LangStationRouteRouteWithChildren
+  '/$lang/$': typeof LangSplatRoute
   '/$lang/': typeof LangIndexRoute
   '/$lang/$station/': typeof LangStationIndexRoute
   '/$lang/$station/day/$date': typeof LangStationDayDateRoute
@@ -87,6 +94,7 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/$lang/$': typeof LangSplatRoute
   '/$lang': typeof LangIndexRoute
   '/$lang/$station': typeof LangStationIndexRoute
   '/$lang/$station/day/$date': typeof LangStationDayDateRoute
@@ -100,6 +108,7 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/$lang': typeof LangRouteRouteWithChildren
   '/$lang/$station': typeof LangStationRouteRouteWithChildren
+  '/$lang/$': typeof LangSplatRoute
   '/$lang/': typeof LangIndexRoute
   '/$lang/$station/': typeof LangStationIndexRoute
   '/$lang/$station/day/$date': typeof LangStationDayDateRoute
@@ -114,6 +123,7 @@ export interface FileRouteTypes {
     | '/'
     | '/$lang'
     | '/$lang/$station'
+    | '/$lang/$'
     | '/$lang/'
     | '/$lang/$station/'
     | '/$lang/$station/day/$date'
@@ -124,6 +134,7 @@ export interface FileRouteTypes {
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
+    | '/$lang/$'
     | '/$lang'
     | '/$lang/$station'
     | '/$lang/$station/day/$date'
@@ -136,6 +147,7 @@ export interface FileRouteTypes {
     | '/'
     | '/$lang'
     | '/$lang/$station'
+    | '/$lang/$'
     | '/$lang/'
     | '/$lang/$station/'
     | '/$lang/$station/day/$date'
@@ -171,6 +183,13 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/$lang/'
       preLoaderRoute: typeof LangIndexRouteImport
+      parentRoute: typeof LangRouteRoute
+    }
+    '/$lang/$': {
+      id: '/$lang/$'
+      path: '/$'
+      fullPath: '/$lang/$'
+      preLoaderRoute: typeof LangSplatRouteImport
       parentRoute: typeof LangRouteRoute
     }
     '/$lang/$station': {
@@ -240,6 +259,7 @@ const LangStationRouteRouteWithChildren =
 
 interface LangRouteRouteChildren {
   LangStationRouteRoute: typeof LangStationRouteRouteWithChildren
+  LangSplatRoute: typeof LangSplatRoute
   LangIndexRoute: typeof LangIndexRoute
   LangLineLineIndexRoute: typeof LangLineLineIndexRoute
   LangOperatorOperatorIndexRoute: typeof LangOperatorOperatorIndexRoute
@@ -249,6 +269,7 @@ interface LangRouteRouteChildren {
 
 const LangRouteRouteChildren: LangRouteRouteChildren = {
   LangStationRouteRoute: LangStationRouteRouteWithChildren,
+  LangSplatRoute: LangSplatRoute,
   LangIndexRoute: LangIndexRoute,
   LangLineLineIndexRoute: LangLineLineIndexRoute,
   LangOperatorOperatorIndexRoute: LangOperatorOperatorIndexRoute,
