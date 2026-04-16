@@ -104,6 +104,13 @@ function Index() {
 				</p>
 			</header>
 
+			<OverviewCards
+				lines={lines}
+				stops={stops}
+				operators={operators}
+				lang={l}
+			/>
+
 			<div className="relative">
 				<input
 					type="search"
@@ -289,5 +296,177 @@ function OperatorCard({ op, lang }: { op: OperatorSummary; lang: Lang }) {
 				</div>
 			)}
 		</Link>
+	);
+}
+
+// ─── Overview cards (OTP + worst offenders) ────────────────────────────
+
+type Worst = { name: string; count: number; rate: number };
+
+function findWorst(
+	items: { name: string; count: number; total: number }[],
+): Worst | null {
+	let worst: Worst | null = null;
+	for (const item of items) {
+		if (item.count === 0) continue;
+		const rate = item.total > 0 ? item.count / item.total : 0;
+		if (
+			!worst ||
+			rate > worst.rate ||
+			(rate === worst.rate && item.count > worst.count)
+		) {
+			worst = { name: item.name, count: item.count, rate };
+		}
+	}
+	return worst;
+}
+
+function OverviewCards({
+	lines,
+	stops,
+	operators,
+	lang,
+}: {
+	lines: LineSummary[];
+	stops: StopSummary[];
+	operators: OperatorSummary[];
+	lang: Lang;
+}) {
+	let totalAll = 0;
+	let cancelledAll = 0;
+	let ghostAll = 0;
+	let delayedAll = 0;
+	for (const l of lines) {
+		totalAll += l.total;
+		cancelledAll += l.cancelled;
+		ghostAll += l.ghost;
+		delayedAll += l.delayed;
+	}
+	if (totalAll === 0) return null;
+
+	const score = onTimeRate(cancelledAll, delayedAll, totalAll);
+	const scoreWithGhosts = onTimeRate(
+		cancelledAll + ghostAll,
+		delayedAll,
+		totalAll,
+	);
+	const scoreColor =
+		score < 80
+			? "text-red-500"
+			: score < 90
+				? "text-amber-500"
+				: "text-emerald-500";
+
+	const lineItems = (key: "cancelled" | "ghost" | "delayed") =>
+		lines.map((l) => ({ name: l.line, count: l[key], total: l.total }));
+	const stopItems = (key: "cancelled" | "ghost" | "delayed") =>
+		stops.map((s) => ({
+			name: shortStationName(s.stopName),
+			count: s[key],
+			total: s.journeyCount,
+		}));
+	const opItems = (key: "cancelled" | "ghost" | "delayed") =>
+		operators.map((o) => ({ name: o.operator, count: o[key], total: o.total }));
+
+	return (
+		<div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+			<div className="bg-surface border border-border rounded-xl p-5">
+				<div className="text-[0.7rem] uppercase tracking-wide text-muted mb-1">
+					{t(lang, "home.overall_score")}
+				</div>
+				<div className={`text-5xl font-bold tabular-nums ${scoreColor}`}>
+					{score}
+					<span className="text-lg text-muted">%</span>
+				</div>
+				{ghostAll > 0 && (
+					<div className="text-sm text-purple-400 mt-1">
+						👻 {scoreWithGhosts}%
+					</div>
+				)}
+				<div className="text-sm text-muted mt-1">
+					{totalAll.toLocaleString(lang)}{" "}
+					{t(lang, "stat.departures").toLowerCase()}
+				</div>
+			</div>
+
+			<WorstCard
+				title={t(lang, "home.most_cancellations")}
+				line={findWorst(lineItems("cancelled"))}
+				station={findWorst(stopItems("cancelled"))}
+				op={findWorst(opItems("cancelled"))}
+				lang={lang}
+				color="text-red-500"
+			/>
+			<WorstCard
+				title={t(lang, "home.most_ghosts")}
+				line={findWorst(lineItems("ghost"))}
+				station={findWorst(stopItems("ghost"))}
+				op={findWorst(opItems("ghost"))}
+				lang={lang}
+				color="text-purple-400"
+			/>
+			<WorstCard
+				title={t(lang, "home.most_delays")}
+				line={findWorst(lineItems("delayed"))}
+				station={findWorst(stopItems("delayed"))}
+				op={findWorst(opItems("delayed"))}
+				lang={lang}
+				color="text-amber-500"
+			/>
+		</div>
+	);
+}
+
+function WorstCard({
+	title,
+	line,
+	station,
+	op,
+	lang,
+	color,
+}: {
+	title: string;
+	line: Worst | null;
+	station: Worst | null;
+	op: Worst | null;
+	lang: Lang;
+	color: string;
+}) {
+	const hasAny =
+		(line?.count ?? 0) + (station?.count ?? 0) + (op?.count ?? 0) > 0;
+	return (
+		<div className="bg-surface border border-border rounded-xl p-5">
+			<div className="text-[0.7rem] uppercase tracking-wide text-muted mb-1">
+				{title}
+			</div>
+			{!hasAny && <div className="text-2xl font-bold text-emerald-500">0</div>}
+			{line && line.count > 0 && (
+				<div className="text-sm mt-1">
+					<span className={`${color} font-semibold`}>
+						{(line.rate * 100).toFixed(1)}%
+					</span>{" "}
+					<span className="text-muted">{t(lang, "home.line")}</span>{" "}
+					<span className="font-semibold">{line.name}</span>
+				</div>
+			)}
+			{station && station.count > 0 && (
+				<div className="text-sm mt-1 truncate" title={station.name}>
+					<span className={`${color} font-semibold`}>
+						{(station.rate * 100).toFixed(1)}%
+					</span>{" "}
+					<span className="text-muted">{t(lang, "home.station")}</span>{" "}
+					<span className="font-semibold">{station.name}</span>
+				</div>
+			)}
+			{op && op.count > 0 && (
+				<div className="text-sm mt-1 truncate" title={op.name}>
+					<span className={`${color} font-semibold`}>
+						{(op.rate * 100).toFixed(1)}%
+					</span>{" "}
+					<span className="text-muted">{t(lang, "home.operator")}</span>{" "}
+					<span className="font-semibold">{op.name}</span>
+				</div>
+			)}
+		</div>
 	);
 }
