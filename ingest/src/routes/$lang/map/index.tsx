@@ -475,9 +475,9 @@ function MapPage() {
 	const navigate = Route.useNavigate();
 	const mapRef = useRef<HTMLDivElement>(null);
 	const leafletMap = useRef<L.Map | null>(null);
-	const markersRef = useRef<Map<string, { marker: L.Marker; rt: boolean }>>(
-		new Map(),
-	);
+	const markersRef = useRef<
+		Map<string, { marker: L.Marker; rt: boolean; iconKey: string }>
+	>(new Map());
 	const vehiclesRef = useRef<Vehicle[]>([]);
 	const timeDeltaRef = useRef(0);
 	const animRef = useRef<number | null>(null);
@@ -511,24 +511,34 @@ function MapPage() {
 			seen.add(v.id);
 			const pos = interpolateVehicle(v, Date.now() + timeDeltaRef.current);
 			const layer = v.hasRT ? rtLayer : schedLayer;
-
-			const icon = L.divIcon({
-				html: buildVehicleIcon(v, pos.heading, size, showLabel),
-				iconSize: [size, size],
-				iconAnchor: [size / 2, size / 2],
-				className: "",
-			});
+			const iconKey = `${size}|${showLabel}|${v.heading}|${v.category}|${v.delay}|${v.occupancy}|${v.hasRT}`;
 
 			const entry = existing.get(v.id);
 			if (entry) {
 				entry.marker.setLatLng([pos.lat, pos.lon]);
-				entry.marker.setIcon(icon);
+				if (entry.iconKey !== iconKey) {
+					entry.marker.setIcon(
+						L.divIcon({
+							html: buildVehicleIcon(v, pos.heading, size, showLabel),
+							iconSize: [size, size],
+							iconAnchor: [size / 2, size / 2],
+							className: "",
+						}),
+					);
+					entry.iconKey = iconKey;
+				}
 				if (entry.rt !== v.hasRT) {
 					entry.marker.remove();
 					entry.marker.addTo(layer);
 					entry.rt = v.hasRT;
 				}
 			} else {
+				const icon = L.divIcon({
+					html: buildVehicleIcon(v, pos.heading, size, showLabel),
+					iconSize: [size, size],
+					iconAnchor: [size / 2, size / 2],
+					className: "",
+				});
 				const marker = L.marker([pos.lat, pos.lon], { icon }).addTo(layer);
 				marker.on("click", () => {
 					const current = vehiclesRef.current.find(
@@ -538,7 +548,7 @@ function MapPage() {
 					setFollowName(current?.name ?? v.name);
 					userPanRef.current = false;
 				});
-				existing.set(v.id, { marker, rt: v.hasRT });
+				existing.set(v.id, { marker, rt: v.hasRT, iconKey });
 			}
 
 			const isFollowed = v.id === followIdRef.current;
