@@ -1,6 +1,6 @@
-const MGATE_URL = "https://www.rmv.de/auskunft/bin/jp/mgate.exe";
-const AUTH = { type: "AID", aid: "uAWgheC24jhp6GdY" };
-const CLIENT = { id: "RMV", type: "WEB", name: "webapp", l: "vs_rmv" };
+export const MGATE_URL = "https://www.rmv.de/auskunft/bin/jp/mgate.exe";
+export const AUTH = { type: "AID", aid: "uAWgheC24jhp6GdY" };
+export const CLIENT = { id: "RMV", type: "WEB", name: "webapp", l: "vs_rmv" };
 
 interface MgateStop {
 	name: string;
@@ -307,7 +307,7 @@ function decodeDeltaCrd(encoded: number[], dim: number): number[] {
  * Standard Google-algorithm polyline decoder, lat-before-lon order.
  * Produces [lat, lon] degree pairs.
  */
-function decodeEncodedPolyline(str: string): [number, number][] {
+export function decodeEncodedPolyline(str: string): [number, number][] {
 	const factor = 1e5;
 	let index = 0;
 	let lat = 0;

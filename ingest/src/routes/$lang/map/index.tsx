@@ -2,10 +2,12 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { createServerFn } from "@tanstack/react-start";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { Lang } from "../../../lib/i18n.ts";
-
-const MGATE_URL = "https://www.rmv.de/auskunft/bin/jp/mgate.exe";
-const AUTH = { type: "AID", aid: "uAWgheC24jhp6GdY" };
-const CLIENT = { id: "RMV", type: "WEB", name: "webapp", l: "vs_rmv" };
+import {
+	AUTH,
+	CLIENT,
+	decodeEncodedPolyline,
+	MGATE_URL,
+} from "../../../lib/mgate.ts";
 
 const FRANKFURT_CENTER = { lat: 50.1109, lon: 8.6821 };
 const POLL_INTERVAL = 30_000;
@@ -28,9 +30,7 @@ interface Vehicle {
 	heading: number;
 	category: string;
 	operator: string;
-	icoRes: string;
 	bg: string;
-	fg: string;
 	delay: number | null;
 	occupancy: "L" | "M" | "H" | null;
 	hasRT: boolean;
@@ -57,38 +57,25 @@ function classifyProduct(cls: number): string {
 	return "Other";
 }
 
-function rgbToHex(r: number, g: number, b: number): string {
-	return `#${((1 << 24) | (r << 16) | (g << 8) | b).toString(16).slice(1)}`;
-}
+const CATEGORY_COLORS: Record<string, string> = {
+	ICE: "#000000",
+	IC: "#000000",
+	"RE/RB": "#000000",
+	"S-Bahn": "#009757",
+	"U-Bahn": "#0065ae",
+	Tram: "#ef7d00",
+	Bus: "#a71680",
+	AST: "#d5a601",
+	Other: "#666",
+};
 
-function decodePolyline(encoded: string): [number, number][] {
-	const points: [number, number][] = [];
-	let index = 0;
-	let lat = 0;
-	let lng = 0;
-	while (index < encoded.length) {
-		let result = 1;
-		let shift = 0;
-		let b: number;
-		do {
-			b = encoded.charCodeAt(index++) - 63 - 1;
-			result += b << shift;
-			shift += 5;
-		} while (b >= 0x1f);
-		lat += result & 1 ? ~(result >> 1) : result >> 1;
-		result = 1;
-		shift = 0;
-		do {
-			b = encoded.charCodeAt(index++) - 63 - 1;
-			result += b << shift;
-			shift += 5;
-		} while (b >= 0x1f);
-		lng += result & 1 ? ~(result >> 1) : result >> 1;
-		points.push([lat / 1e5, lng / 1e5]);
-	}
-	return points;
+function escapeHtml(s: string): string {
+	return s
+		.replace(/&/g, "&amp;")
+		.replace(/</g, "&lt;")
+		.replace(/>/g, "&gt;")
+		.replace(/"/g, "&quot;");
 }
-
 
 const fetchVehicles = createServerFn({ method: "GET" })
 	.inputValidator(
@@ -194,11 +181,6 @@ const fetchVehicles = createServerFn({ method: "GET" })
 								oprX?: number;
 							}[];
 							opL?: { name: string }[];
-							icoL?: {
-								res?: string;
-								bg?: { r: number; g: number; b: number };
-								fg?: { r: number; g: number; b: number };
-							}[];
 							polyL?: { crdEncYX?: string }[];
 							tcocL?: { r?: number; s?: string }[];
 						};
@@ -212,12 +194,10 @@ const fetchVehicles = createServerFn({ method: "GET" })
 							stopL?: {
 								dTimeS?: string;
 								dTimeR?: string;
-								dTrnCmpSX?: { tcocX?: number[] };
 							}[];
 							ani?: {
 								mSec?: number[];
 								dirGeo?: number[];
-								proc?: number[];
 								polyG?: { polyXL?: number[] };
 							};
 						}[];
@@ -230,7 +210,6 @@ const fetchVehicles = createServerFn({ method: "GET" })
 
 			const prodL = svc.res.common?.prodL ?? [];
 			const opL = svc.res.common?.opL ?? [];
-			const icoL = svc.res.common?.icoL ?? [];
 			const polyL = svc.res.common?.polyL ?? [];
 			const tcocL = svc.res.common?.tcocL ?? [];
 			const jnyL = svc.res.jnyL ?? [];
@@ -240,24 +219,8 @@ const fetchVehicles = createServerFn({ method: "GET" })
 			const vehicles: Vehicle[] = jnyL.map((j) => {
 				const prod = j.prodX != null ? prodL[j.prodX] : undefined;
 				const oprIdx = prod?.oprX;
-				const icoIdx = prod?.icoX;
-				const ico =
-					icoIdx != null && icoIdx < icoL.length ? icoL[icoIdx] : undefined;
-
 				const category = classifyProduct(prod?.cls ?? 0);
-				const CATEGORY_BG: Record<string, string> = {
-					ICE: "#000000",
-					IC: "#000000",
-					"RE/RB": "#000000",
-					"S-Bahn": "#009757",
-					"U-Bahn": "#0065ae",
-					Tram: "#ef7d00",
-					Bus: "#a71680",
-					AST: "#d5a601",
-				};
-				const bg = CATEGORY_BG[category] ?? "#666";
-				const fg = "#ffffff";
-
+				const bg = CATEGORY_COLORS[category] ?? "#666";
 				const hasRT = (j.stopL ?? []).some((s) => s.dTimeR != null);
 
 				const ani = j.ani;
@@ -270,7 +233,7 @@ const fetchVehicles = createServerFn({ method: "GET" })
 						if (!decodedPolys.has(polyIdx)) {
 							const encoded = polyL[polyIdx]?.crdEncYX;
 							if (encoded)
-								decodedPolys.set(polyIdx, decodePolyline(encoded));
+								decodedPolys.set(polyIdx, decodeEncodedPolyline(encoded));
 						}
 						polyPoints = decodedPolys.get(polyIdx);
 					}
@@ -300,7 +263,6 @@ const fetchVehicles = createServerFn({ method: "GET" })
 								heading,
 							});
 						}
-
 					}
 				}
 
@@ -332,9 +294,7 @@ const fetchVehicles = createServerFn({ method: "GET" })
 					heading: j.dirGeo ?? 0,
 					category,
 					operator: oprIdx != null ? (opL[oprIdx]?.name ?? "") : "",
-					icoRes: ico?.res ?? "PROD_GEN",
 					bg,
-					fg,
 					delay,
 					occupancy,
 					hasRT,
@@ -394,14 +354,14 @@ function getIconSize(zoom: number): number {
 const RMV_GLYPHS: Record<string, string> = {
 	bus: '<path d="M86.75,32c0-1.88-.66-2.45-2.44-2.45H18.54c-1.22,0-1.71.66-1.87,1.79,0,0-3.42,20.1-3.42,23.68v6.7c0,1.22.56,1.88,1.78,1.88h5.02a.04.04,0,0,0,.04-.03,12.03,12.03,0,0,1,23.89,0,.04.04,0,0,0,.04.03h12.77a.04.04,0,0,0,.04-.03,12.03,12.03,0,0,1,23.89,0,.04.04,0,0,0,.04.03h3.55c1.78,0,2.44-.66,2.44-2.45V32zm-68.3,18a.04.04,0,0,1-.04-.04l1.84-15.14c.16-1.15.73-1.15,1.22-1.15h6.61a.04.04,0,0,1,.04.04V50a.04.04,0,0,1-.04.04H18.45zm13.95-4.08a.04.04,0,0,1-.04-.04V33.7a.04.04,0,0,1,.04-.04h13.81a.04.04,0,0,1,.04.04v12.17a.04.04,0,0,1-.04.04H32.4zm18.1,0a.04.04,0,0,1-.04-.04V33.7a.04.04,0,0,1,.04-.04h13.81a.04.04,0,0,1,.04.04v12.17a.04.04,0,0,1-.04.04H50.5zm18.11,0a.04.04,0,0,1-.04-.04V33.7a.04.04,0,0,1,.04-.04h13.89a.04.04,0,0,1,.04.04v12.17a.04.04,0,0,1-.04.04H68.61z"/><circle cx="68.77" cy="66.33" r="8.17"/><circle cx="32.03" cy="66.33" r="8.17"/>',
 	tram: '<path fill-rule="evenodd" d="M86.75,39.69c0-2.82-2.31-4.59-5.15-4.59H43l7.42-7.6a.82.82,0,0,0,0-1.15L37.89,13.83a.82.82,0,0,0-1.15,0L24.12,26.35a.82.82,0,0,0,0,1.15l7.44,7.6H21.26c-3.55,0-4.77,1.15-5.15,4.59l-2.84,24.98c-.15,1.16.53,2.31,1.69,2.31h3.52a5.1,5.1,0,0,0,9.81,0,5.1,5.1,0,0,0,9.81,0,5.1,5.1,0,0,0-1.13-3.2h24.65a5.1,5.1,0,0,0-1.13,3.2,5.1,5.1,0,0,0,9.81,0,5.1,5.1,0,0,0,9.81,0,5.1,5.1,0,0,0,0-.38h3.42c1.69,0,2.84-1.15,2.84-2.83V39.69zM18.49,60.7a.82.82,0,0,1-.81-.9l2.13-19.38a.82.82,0,0,1,.81-.73h6.68a.82.82,0,0,1,.82.82V59.88a.82.82,0,0,1-.82.82H18.49zM37.9,34.53a.82.82,0,0,1-1.15,0l-7.13-7.03a.82.82,0,0,1,0-1.16l7.13-7.09a.82.82,0,0,1,1.15,0l7.07,7.09a.82.82,0,0,1,0,1.16L37.9,34.53zM33.02,50.24a.82.82,0,0,1-.82-.82V40.52a.82.82,0,0,1,.82-.82h8.07a.82.82,0,0,1,.82.82v8.91a.82.82,0,0,1-.82.82H33.02zm13.77,0a.82.82,0,0,1-.82-.82V40.52a.82.82,0,0,1,.82-.82h7.83a.82.82,0,0,1,.82.82v8.91a.82.82,0,0,1-.82.82H46.79zm13.54,0a.82.82,0,0,1-.82-.82V40.52a.82.82,0,0,1,.82-.82h7.78a.82.82,0,0,1,.82.82v8.91a.82.82,0,0,1-.82.82H60.33zm13.54,10.46a.82.82,0,0,1-.82-.82V40.5a.82.82,0,0,1,.82-.82h7.99a.82.82,0,0,1,.82.82V59.88a.82.82,0,0,1-.82.82H73.87z"/>',
-	train: '<path d="M72.32,37.63a5.5,5.5,0,0,0-.09-.45c-.45-1.69-3.48-12.81-6.7-16.02-2.94-2.94-9.8-3.48-15.52-3.48s-12.59.54-15.52,3.48c-2.73,2.73-5.41,11.6-6.44,15.28a11.7,11.7,0,0,0-.44,3.32v24.48c0,5.41,4.01,8.58,8.57,8.58h27.64c4.55,0,8.57-3.16,8.57-8.58V38.45a5.3,5.3,0,0,0-.07-.82zM31.96,37.76a.82.82,0,0,1-.81-1.1l3.16-9.81a.82.82,0,0,1,.8-.59h12.02a.85.85,0,0,1,.85.85v9.8a.85.85,0,0,1-.85.85H31.96zM38.5,68.26a4.1,4.1,0,1,1,4.1-4.1A4.1,4.1,0,0,1,38.5,68.26zm1.76,7.41a.85.85,0,0,0-.85-.85h-2.39a.85.85,0,0,0-.85.85v5.8a.85.85,0,0,0,.85.85h2.39a.85.85,0,0,0,.85-.85V75.67zM50.02,48.88a4.1,4.1,0,1,1,4.1-4.1A4.1,4.1,0,0,1,50.02,48.88zm2.86-11.12a.85.85,0,0,1-.85-.85v-9.8a.85.85,0,0,1,.85-.85h12.03a.82.82,0,0,1,.8.59l3.16,9.8a.82.82,0,0,1-.81,1.1H52.88zM61.51,68.26a4.1,4.1,0,1,1,4.1-4.1A4.1,4.1,0,0,1,61.51,68.26zm2.32,7.41a.85.85,0,0,0-.85-.85h-2.39a.85.85,0,0,0-.85.85v5.8a.85.85,0,0,0,.85.85h2.39a.85.85,0,0,0,.85-.85V75.67z"/>',
-	ice: '<rect x="15.6" y="34" width="6.2" height="32.1"/><path d="M51.1,57.9a8.1,8.1,0,0,1-6.7,3.05,8.3,8.3,0,0,1-6-2.83c-1.5-1.91-2.26-4.53-2.26-7.8s.82-6.01,2.44-8.14a7.6,7.6,0,0,1,6.18-3.17c2.66,0,4.6.6,5.78,1.77l.32.32,2.62-5.27-.24-.16a16.1,16.1,0,0,0-8.83-2.27c-4.29,0-7.85,1.62-10.6,4.8A17.4,17.4,0,0,0,29.87,50.3c0,5.05,1.25,9.1,3.72,12.03,2.49,2.95,6.01,4.45,10.49,4.45,4.46,0,7.91-1.25,10.24-3.73l.17-.18-2.96-5.13-.33.16z"/><polygon points="82.38 39.57 82.38 33.96 61.66 33.96 61.66 66.04 82.14 66.04 82.14 60.44 67.89 60.44 67.89 51.67 78.28 51.67 78.28 46.27 67.89 46.27 67.89 39.57 82.38 39.57"/>',
+	train:
+		'<path d="M72.32,37.63a5.5,5.5,0,0,0-.09-.45c-.45-1.69-3.48-12.81-6.7-16.02-2.94-2.94-9.8-3.48-15.52-3.48s-12.59.54-15.52,3.48c-2.73,2.73-5.41,11.6-6.44,15.28a11.7,11.7,0,0,0-.44,3.32v24.48c0,5.41,4.01,8.58,8.57,8.58h27.64c4.55,0,8.57-3.16,8.57-8.58V38.45a5.3,5.3,0,0,0-.07-.82zM31.96,37.76a.82.82,0,0,1-.81-1.1l3.16-9.81a.82.82,0,0,1,.8-.59h12.02a.85.85,0,0,1,.85.85v9.8a.85.85,0,0,1-.85.85H31.96zM38.5,68.26a4.1,4.1,0,1,1,4.1-4.1A4.1,4.1,0,0,1,38.5,68.26zm1.76,7.41a.85.85,0,0,0-.85-.85h-2.39a.85.85,0,0,0-.85.85v5.8a.85.85,0,0,0,.85.85h2.39a.85.85,0,0,0,.85-.85V75.67zM50.02,48.88a4.1,4.1,0,1,1,4.1-4.1A4.1,4.1,0,0,1,50.02,48.88zm2.86-11.12a.85.85,0,0,1-.85-.85v-9.8a.85.85,0,0,1,.85-.85h12.03a.82.82,0,0,1,.8.59l3.16,9.8a.82.82,0,0,1-.81,1.1H52.88zM61.51,68.26a4.1,4.1,0,1,1,4.1-4.1A4.1,4.1,0,0,1,61.51,68.26zm2.32,7.41a.85.85,0,0,0-.85-.85h-2.39a.85.85,0,0,0-.85.85v5.8a.85.85,0,0,0,.85.85h2.39a.85.85,0,0,0,.85-.85V75.67z"/>',
 	S: '<path d="M69.15,37.62c-2.8-2.59-5.42-4.78-8.45-6.37-4.85-2.56-9.92-4.07-15.44-3.12-2.9.5-4.88,2.32-5.26,4.61-.48,2.92.64,5.32,3.34,6.89,3.42,2,7.3,2.6,11.05,3.55,2.68.68,5.33,1.42,7.94,2.37,11.33,4.12,12.56,16.1,6.69,23.98-5.11,6.86-12.22,9.47-20.47,9.01-7.09-.4-13.55-2.76-19.37-6.93-.86-.62-1.23-1.25-1.2-2.34.08-2.98.03-5.96.03-9.41,1.82,2.18,3.46,4.01,5.38,5.52,5.39,4.22,11.32,6.79,18.29,6.2,2.23-.19,4.24-.98,5.91-2.52,2.83-2.62,2.73-6.39-.26-8.84-1.96-1.61-4.35-2.33-6.72-3.05-4.5-1.36-9.14-2.27-13.44-4.26-4.6-2.13-8.05-5.26-9.23-10.54-1.44-6.48,1.21-13.25,6.71-16.83,8.13-5.29,16.66-4.98,25.39-1.91,2.9,1.02,5.6,2.49,8.09,4.32.47.35,1.03.6,1.03,1.34,0,2.66,0,5.32,0,8.34z"/>',
 	U: '<path d="M27.57,42.62V26.77c-.01-.97.21-1.28,1.25-1.26,4.18.06,8.37.07,12.55,0,1.09-.02,1.43.2,1.42,1.35-.05,9.72-.03,19.45-.03,29.17,0,.58-.01,1.16.08,1.73.64,4.04,3.22,6.04,7.47,5.8a8.5,8.5,0,0,0,2.01-.19c3.15-.55,4.89-2.72,5.01-6.3.06-1.78.01-3.55.01-5.33V27.87c-.01-1.02.23-1.34,1.31-1.32,4.23.07,8.46.06,12.69,0,.98-.01,1.17.28,1.17,1.19-.03,9.72-.02,19.45-.02,29.17,0,9.93-4.46,15.58-14.31,17.73-6.28,1.37-12.61,1.23-18.8-.64-7.51-2.27-11.68-7.94-11.75-15.82-.03-4.83,0-9.67,0-14.56z"/>',
 };
 
 function buildIconGlyph(type: IconType, fill: string): string {
-	const key = type === "S" || type === "U" ? type : type ?? "";
+	const key = type === "S" || type === "U" ? type : (type ?? "");
 	const path = RMV_GLYPHS[key];
 	if (path) return `<g fill="${fill}">${path}</g>`;
 	return `<circle cx="50" cy="50" r="20" fill="${fill}"/>`;
@@ -415,6 +375,7 @@ const OCCUP_ICONS: Record<string, string> = {
 
 function buildVehicleIcon(
 	v: Vehicle,
+	heading: number,
 	size: number,
 	showLabel: boolean,
 ): string {
@@ -423,7 +384,7 @@ function buildVehicleIcon(
 	const r = c * 0.84;
 	const iconType = resolveIconType(v.category);
 	const glyph = buildIconGlyph(iconType, v.bg);
-	const headingDeg = -11.25 * v.heading;
+	const headingDeg = -11.25 * heading;
 
 	const tipDist = r * 1.6;
 	const spread = r * 0.55;
@@ -452,7 +413,8 @@ function buildVehicleIcon(
 		const occupHtml = occupIcon
 			? `<span style="color:#555;margin-left:2px;display:inline-flex;align-items:center">${occupIcon}</span>`
 			: "";
-		label = `<div style="position:absolute;top:${s + 2}px;left:50%;transform:translateX(-50%);white-space:nowrap;display:inline-flex;align-items:center;gap:0;background:#fff;border:1px solid rgba(0,0,0,.15);padding:1px 4px;border-radius:4px;line-height:1.4;font-family:system-ui,sans-serif;font-size:10px;box-shadow:0 1px 3px rgba(0,0,0,.1)"><span style="background:${v.bg};color:${v.fg};padding:0 3px;border-radius:2px;font-weight:700">${v.name}</span>${delayText}${occupHtml}</div>`;
+		const safeName = escapeHtml(v.name);
+		label = `<div style="position:absolute;top:${s + 2}px;left:50%;transform:translateX(-50%);white-space:nowrap;display:inline-flex;align-items:center;gap:0;background:#fff;border:1px solid rgba(0,0,0,.15);padding:1px 4px;border-radius:4px;line-height:1.4;font-family:system-ui,sans-serif;font-size:10px;box-shadow:0 1px 3px rgba(0,0,0,.1)"><span style="background:${v.bg};color:#fff;padding:0 3px;border-radius:2px;font-weight:700">${safeName}</span>${delayText}${occupHtml}</div>`;
 	}
 
 	const opacity = v.hasRT ? 1 : 0.45;
@@ -469,18 +431,6 @@ const CATEGORY_FILTERS = [
 	{ key: "Bus", label: "Bus", bit: 192 },
 ] as const;
 
-const CATEGORY_COLORS: Record<string, string> = {
-	ICE: "#000000",
-	IC: "#000000",
-	"RE/RB": "#000000",
-	"S-Bahn": "#009757",
-	"U-Bahn": "#0065ae",
-	Tram: "#ef7d00",
-	Bus: "#a71680",
-	AST: "#d5a601",
-	Other: "#666",
-};
-
 function interpolateVehicle(
 	v: Vehicle,
 	now: number,
@@ -491,10 +441,11 @@ function interpolateVehicle(
 
 	const h = (wp: Waypoint) => (wp.heading >= 0 ? wp.heading : fb);
 
-	if (now <= wps[0].t) return { ...wps[0], heading: h(wps[0]) };
+	if (now <= wps[0].t)
+		return { lat: wps[0].lat, lon: wps[0].lon, heading: h(wps[0]) };
 	if (now >= wps[wps.length - 1].t) {
 		const last = wps[wps.length - 1];
-		return { ...last, heading: h(last) };
+		return { lat: last.lat, lon: last.lon, heading: h(last) };
 	}
 
 	for (let i = 0; i < wps.length - 1; i++) {
@@ -507,7 +458,8 @@ function interpolateVehicle(
 			};
 		}
 	}
-	return { ...wps[wps.length - 1], heading: fb };
+	const last = wps[wps.length - 1];
+	return { lat: last.lat, lon: last.lon, heading: fb };
 }
 
 function MapPage() {
@@ -532,7 +484,7 @@ function MapPage() {
 	const [countdown, setCountdown] = useState(POLL_INTERVAL / 1000);
 	const lastFetchRef = useRef(Date.now());
 	const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
-	const zoomRef = useRef(13);
+	const loadRef = useRef<() => Promise<void>>(async () => {});
 
 	const syncMarkers = useCallback(async () => {
 		const map = leafletMap.current;
@@ -551,11 +503,7 @@ function MapPage() {
 			const pos = interpolateVehicle(v, Date.now() + timeDeltaRef.current);
 
 			const icon = L.divIcon({
-				html: buildVehicleIcon(
-					{ ...v, heading: pos.heading },
-					size,
-					showLabel,
-				),
+				html: buildVehicleIcon(v, pos.heading, size, showLabel),
 				iconSize: [size, size],
 				iconAnchor: [size / 2, size / 2],
 				className: "",
@@ -568,8 +516,9 @@ function MapPage() {
 			} else {
 				marker = L.marker([pos.lat, pos.lon], { icon }).addTo(map);
 				marker.on("click", () => {
+					const current = vehiclesRef.current.find((cv) => cv.id === v.id);
 					followIdRef.current = v.id;
-					setFollowName(v.name);
+					setFollowName(current?.name ?? v.name);
 					userPanRef.current = false;
 				});
 				existing.set(v.id, marker);
@@ -578,7 +527,7 @@ function MapPage() {
 			const isFollowed = v.id === followIdRef.current;
 			marker.unbindTooltip();
 			marker.bindTooltip(
-				`<strong>${v.name}</strong><br/>→ ${v.direction}${v.operator ? `<br/><span style="opacity:.7">${v.operator}</span>` : ""}`,
+				`<strong>${escapeHtml(v.name)}</strong><br/>→ ${escapeHtml(v.direction)}${v.operator ? `<br/><span style="opacity:.7">${escapeHtml(v.operator)}</span>` : ""}`,
 				{
 					direction: "top",
 					offset: [0, -(size / 2 + 4)],
@@ -634,6 +583,8 @@ function MapPage() {
 		setLoading(false);
 	}, [filter, syncMarkers]);
 
+	loadRef.current = load;
+
 	useEffect(() => {
 		if (!mapRef.current || leafletMap.current) return;
 
@@ -665,7 +616,6 @@ function MapPage() {
 			}).addTo(map);
 
 			leafletMap.current = map;
-			zoomRef.current = map.getZoom();
 
 			map.on("dragstart", () => {
 				userPanRef.current = true;
@@ -674,7 +624,7 @@ function MapPage() {
 			});
 
 			map.on("moveend", () => {
-				load();
+				loadRef.current?.();
 				const c = map.getCenter();
 				const z = map.getZoom();
 				navigate({
@@ -688,7 +638,7 @@ function MapPage() {
 			});
 
 			map.on("zoomend", () => {
-				zoomRef.current = map.getZoom();
+				syncMarkers();
 			});
 
 			load();
@@ -696,12 +646,16 @@ function MapPage() {
 
 		return () => {
 			cancelled = true;
+			if (leafletMap.current) {
+				leafletMap.current.remove();
+				leafletMap.current = null;
+			}
 		};
-	}, [load]);
+	}, []);
 
 	useEffect(() => {
 		if (intervalRef.current) clearInterval(intervalRef.current);
-		intervalRef.current = setInterval(load, POLL_INTERVAL);
+		intervalRef.current = setInterval(() => loadRef.current?.(), POLL_INTERVAL);
 		load();
 		return () => {
 			if (intervalRef.current) clearInterval(intervalRef.current);
