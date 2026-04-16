@@ -7,9 +7,11 @@
       "dependencies": {
         "@tanstack/react-router": "^1.168.22",
         "@tanstack/react-start": "^1.167.41",
+        "@types/leaflet-fullscreen": "^1.0.10",
         "dayjs": "^1.11.20",
         "drizzle-orm": "^1.0.0-beta.20",
         "leaflet": "^1.9.4",
+        "leaflet-fullscreen": "^1.0.2",
         "pg-boss": "^10.3.2",
         "postgres": "^3.4.7",
         "react": "^19.2.5",
@@ -317,6 +319,8 @@
 
     "@types/leaflet": ["@types/leaflet@1.9.21", "", { "dependencies": { "@types/geojson": "*" } }, "sha512-TbAd9DaPGSnzp6QvtYngntMZgcRk+igFELwR2N99XZn7RXUdKgsXMR+28bUO0rPsWp8MIu/f47luLIQuSLYv/w=="],
 
+    "@types/leaflet-fullscreen": ["@types/leaflet-fullscreen@1.0.10", "", { "dependencies": { "@types/leaflet": "^1.9" } }, "sha512-lBCyxZ8bp7YN+Fa8SBImD3DdqNxn547I7l1lC8EPoLQAGuU2dIeAsAhLYst/cRG6NWRv+hJJLvGNxpKv6q9fWA=="],
+
     "@types/mssql": ["@types/mssql@9.1.11", "", { "dependencies": { "@types/node": "*", "tarn": "^3.0.1", "tedious": "*" } }, "sha512-vcujgrDbDezCxNDO4KY6gjwduLYOKfrexpRUwhoysRvcXZ3+IgZ/PMYFDgh8c3cQIxZ6skAwYo+H6ibMrBWPjQ=="],
 
     "@types/node": ["@types/node@25.6.0", "", { "dependencies": { "undici-types": "~7.19.0" } }, "sha512-+qIYRKdNYJwY3vRCZMdJbPLJAtGjQBudzZzdzwQYkEPQd+PJGixUL5QfvCLDaULoLv+RhT3LDkwEfKaAkgSmNQ=="],
@@ -500,6 +504,8 @@
     "jws": ["jws@4.0.1", "", { "dependencies": { "jwa": "^2.0.1", "safe-buffer": "^5.0.1" } }, "sha512-EKI/M/yqPncGUUh44xz0PxSidXFr/+r0pA70+gIYhjv+et7yxM+s29Y+VGDkovRofQem0fs7Uvf4+YmAdyRduA=="],
 
     "leaflet": ["leaflet@1.9.4", "", {}, "sha512-nxS1ynzJOmOlHp+iL3FyWqK89GtNL8U8rvlMOsQdTTssxZwCXh8N2NB3GDQOL+YR3XnWyZAxwQixURb+FA74PA=="],
+
+    "leaflet-fullscreen": ["leaflet-fullscreen@1.0.2", "", {}, "sha512-1Yxm8RZg6KlKX25+hbP2H/wnOAphH7hFcvuADJFb4QZTN7uOSN9Hsci5EZpow8vtNej9OGzu59Jxmn+0qKOO9Q=="],
 
     "lefthook": ["lefthook@2.1.5", "", { "optionalDependencies": { "lefthook-darwin-arm64": "2.1.5", "lefthook-darwin-x64": "2.1.5", "lefthook-freebsd-arm64": "2.1.5", "lefthook-freebsd-x64": "2.1.5", "lefthook-linux-arm64": "2.1.5", "lefthook-linux-x64": "2.1.5", "lefthook-openbsd-arm64": "2.1.5", "lefthook-openbsd-x64": "2.1.5", "lefthook-windows-arm64": "2.1.5", "lefthook-windows-x64": "2.1.5" }, "bin": { "lefthook": "bin/index.js" } }, "sha512-yB9IFWurFllusbPZqvG0EavTmpNXPya2MuO7Li7YT78xAj3uCQ3AgmW9TVUbTTsSMhsegbiAMRpwfEk2TP1P0A=="],
 
