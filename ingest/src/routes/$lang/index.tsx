@@ -1,4 +1,4 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, useRouter } from "@tanstack/react-router";
 import { createServerFn } from "@tanstack/react-start";
 import { useEffect, useRef, useState } from "react";
 import { type Lang, t } from "../../lib/i18n.ts";
@@ -92,6 +92,8 @@ const DAY_FILTERS: {
 	{ key: "weekends", labelKey: "days.weekends" },
 ];
 
+const REFETCH_INTERVAL = 5 * 60 * 1000;
+
 function Index() {
 	const {
 		lines,
@@ -102,6 +104,13 @@ function Index() {
 	} = Route.useLoaderData();
 	const { lang } = Route.useParams();
 	const l = lang as Lang;
+	const router = useRouter();
+
+	useEffect(() => {
+		if (activeDays !== "today") return;
+		const id = setInterval(() => router.invalidate(), REFETCH_INTERVAL);
+		return () => clearInterval(id);
+	}, [activeDays, router]);
 	const other: Lang = l === "de" ? "en" : "de";
 	const [query, setQuery] = useState("");
 	const q = query.toLowerCase().trim();
