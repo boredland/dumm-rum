@@ -1,1 +1,0 @@
-CREATE INDEX `idx_departures_line_date` ON `departures` (`line`,`date`);

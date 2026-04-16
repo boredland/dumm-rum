@@ -1,5 +1,0 @@
----
-const accept = Astro.request.headers.get("accept-language") ?? "";
-const prefersDe = accept.toLowerCase().includes("de");
-return Astro.redirect(prefersDe ? "/de" : "/en", 302);
----

@@ -1,1 +1,0 @@
-ALTER TABLE `telegram_subscriptions` ADD `lang` text DEFAULT 'de' NOT NULL;

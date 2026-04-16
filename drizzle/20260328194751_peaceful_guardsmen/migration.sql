@@ -1,1 +1,0 @@
-ALTER TABLE `departures` ADD `messages` text;

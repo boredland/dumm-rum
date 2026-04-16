@@ -1,1 +1,0 @@
-ALTER TABLE `haikus` ADD `haiku_de` text;

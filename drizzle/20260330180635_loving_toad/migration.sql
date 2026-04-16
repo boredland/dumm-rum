@@ -1,1 +1,0 @@
-ALTER TABLE `departures` DROP COLUMN `messages`;
