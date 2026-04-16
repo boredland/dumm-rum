@@ -55,43 +55,10 @@ function RootComponent() {
 			</head>
 			<body>
 				<Outlet />
-				{!pathname.includes("/map") && <ShareButton lang={lang} />}
-				{!pathname.includes("/map") && <ScrollToTop />}
+				<ScrollToTop />
 				<Scripts />
 			</body>
 		</html>
-	);
-}
-
-function ShareButton({ lang }: { lang: Lang }) {
-	const [copied, setCopied] = useState(false);
-	const label = lang === "de" ? "Teilen" : "Share";
-	const copiedLabel = lang === "de" ? "Link kopiert!" : "Link copied!";
-
-	if (typeof navigator === "undefined") return null;
-
-	const handleClick = async () => {
-		try {
-			if (navigator.share) {
-				await navigator.share({ url: window.location.href });
-			} else {
-				await navigator.clipboard.writeText(window.location.href);
-				setCopied(true);
-				setTimeout(() => setCopied(false), 2000);
-			}
-		} catch {
-			/* user cancelled share dialog */
-		}
-	};
-
-	return (
-		<button
-			type="button"
-			onClick={handleClick}
-			className="fixed bottom-16 right-4 z-50 bg-surface border border-border rounded-full px-3 py-2 text-xs text-muted hover:text-fg shadow-sm cursor-pointer transition-colors"
-		>
-			{copied ? copiedLabel : label}
-		</button>
 	);
 }
 
