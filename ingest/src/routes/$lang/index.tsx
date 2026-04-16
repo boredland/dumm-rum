@@ -97,11 +97,6 @@ function Index() {
 					🚏 {t(l, "home.title")}
 				</h1>
 				<p className="text-muted text-sm">{t(l, "home.subtitle")}</p>
-				<p className="text-sm">
-					<Link to="/$lang/map" params={{ lang: l }}>
-						{t(l, "map.title")} →
-					</Link>
-				</p>
 			</header>
 
 			<OverviewCards
