@@ -1,5 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { createServerFn } from "@tanstack/react-start";
+import { useState } from "react";
 import { type Lang, t } from "../../lib/i18n.ts";
 import {
 	getLineSummaries,
@@ -38,11 +39,56 @@ function borderForScore(score: number): string {
 	return "border-emerald-500";
 }
 
+function matchesQuery(q: string, ...fields: string[]): boolean {
+	return fields.some((f) => f.toLowerCase().includes(q));
+}
+
 function Index() {
 	const { lines, operators, stops } = Route.useLoaderData();
 	const { lang } = Route.useParams();
 	const l = lang as Lang;
 	const other: Lang = l === "de" ? "en" : "de";
+	const [query, setQuery] = useState("");
+	const q = query.toLowerCase().trim();
+
+	const filteredLines = [...lines]
+		.filter(
+			(line) =>
+				!q ||
+				matchesQuery(
+					q,
+					line.line,
+					line.category,
+					line.operators.join(" "),
+					line.destinations.join(" "),
+				),
+		)
+		.sort((a, b) => {
+			const sa = onTimeRate(a.cancelled, a.delayed, a.total);
+			const sb = onTimeRate(b.cancelled, b.delayed, b.total);
+			return (
+				sa - sb || a.line.localeCompare(b.line, undefined, { numeric: true })
+			);
+		});
+
+	const filteredStops = stops.filter(
+		(stop) =>
+			!q ||
+			matchesQuery(
+				q,
+				shortStationName(stop.stopName),
+				stop.stopName,
+				stop.lines.join(" "),
+			),
+	);
+
+	const filteredOps = [...operators]
+		.filter((op) => !q || matchesQuery(q, op.operator, op.lines.join(" ")))
+		.sort((a, b) => {
+			const sa = onTimeRate(a.cancelled, a.delayed, a.total);
+			const sb = onTimeRate(b.cancelled, b.delayed, b.total);
+			return sa - sb || a.operator.localeCompare(b.operator);
+		});
 
 	return (
 		<main className="mx-auto max-w-5xl p-6 space-y-10">
@@ -58,46 +104,41 @@ function Index() {
 				</p>
 			</header>
 
+			<div className="relative">
+				<input
+					type="search"
+					placeholder={t(l, "search.placeholder")}
+					value={query}
+					onChange={(e) => setQuery(e.target.value)}
+					className="w-full bg-surface border border-border rounded-xl px-4 py-2.5 text-sm placeholder:text-muted focus:outline-none focus:border-accent"
+				/>
+			</div>
+
 			<Section
-				title={`${t(l, "home.lines")} (${lines.length})`}
+				title={`${t(l, "home.lines")} (${filteredLines.length})`}
 				gridClass="grid grid-cols-[repeat(auto-fit,minmax(180px,1fr))] gap-3"
 			>
-				{[...lines]
-					.sort((a, b) => {
-						const sa = onTimeRate(a.cancelled, a.delayed, a.total);
-						const sb = onTimeRate(b.cancelled, b.delayed, b.total);
-						return (
-							sa - sb ||
-							a.line.localeCompare(b.line, undefined, { numeric: true })
-						);
-					})
-					.map((line) => (
-						<LineCard key={line.line} line={line} lang={l} />
-					))}
+				{filteredLines.map((line) => (
+					<LineCard key={line.line} line={line} lang={l} />
+				))}
 			</Section>
 
 			<Section
-				title={`${t(l, "home.stations")} (${stops.length})`}
+				title={`${t(l, "home.stations")} (${filteredStops.length})`}
 				gridClass="grid grid-cols-[repeat(auto-fit,minmax(220px,1fr))] gap-3"
 			>
-				{stops.slice(0, 40).map((stop) => (
+				{filteredStops.slice(0, q ? 200 : 40).map((stop) => (
 					<StopCard key={stop.stopName} stop={stop} lang={l} />
 				))}
 			</Section>
 
 			<Section
-				title={`${t(l, "home.operators")} (${operators.length})`}
+				title={`${t(l, "home.operators")} (${filteredOps.length})`}
 				gridClass="grid grid-cols-[repeat(auto-fit,minmax(260px,1fr))] gap-3"
 			>
-				{[...operators]
-					.sort((a, b) => {
-						const sa = onTimeRate(a.cancelled, a.delayed, a.total);
-						const sb = onTimeRate(b.cancelled, b.delayed, b.total);
-						return sa - sb || a.operator.localeCompare(b.operator);
-					})
-					.map((op) => (
-						<OperatorCard key={op.operator} op={op} lang={l} />
-					))}
+				{filteredOps.map((op) => (
+					<OperatorCard key={op.operator} op={op} lang={l} />
+				))}
 			</Section>
 
 			<footer className="pt-8 border-t border-border-dim flex items-center gap-3 text-xs text-dimmed">
