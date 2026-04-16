@@ -33,6 +33,7 @@ interface Vehicle {
 	fg: string;
 	delay: number | null;
 	occupancy: "L" | "M" | "H" | null;
+	hasRT: boolean;
 	waypoints: Waypoint[];
 	fetchedAt: number;
 }
@@ -342,6 +343,10 @@ const fetchVehicles = createServerFn({ method: "GET" })
 					if (s === "L" || s === "M" || s === "H") occupancy = s;
 				}
 
+				const hasRT = (j.stopL ?? []).some(
+					(s) => s.dTimeR != null || s.dTrnCmpSX != null,
+				);
+
 				return {
 					id: j.jid,
 					name: prod?.name?.trim() ?? "?",
@@ -356,6 +361,7 @@ const fetchVehicles = createServerFn({ method: "GET" })
 					fg,
 					delay,
 					occupancy,
+					hasRT,
 					waypoints,
 					fetchedAt: serverTime,
 				};
@@ -473,7 +479,8 @@ function buildVehicleIcon(
 		label = `<div style="position:absolute;top:${s + 2}px;left:50%;transform:translateX(-50%);white-space:nowrap;display:inline-flex;align-items:center;gap:0;background:#fff;border:1px solid rgba(0,0,0,.15);padding:1px 4px;border-radius:4px;line-height:1.4;font-family:system-ui,sans-serif;font-size:10px;box-shadow:0 1px 3px rgba(0,0,0,.1)"><span style="background:${v.bg};color:${v.fg};padding:0 3px;border-radius:2px;font-weight:700">${v.name}</span>${delayText}${occupHtml}</div>`;
 	}
 
-	return `<div style="position:relative;width:${s}px;height:${s}px"><svg width="${s}" height="${s}" viewBox="0 0 ${s} ${s}" overflow="visible">${pin}</svg>${label}</div>`;
+	const opacity = v.hasRT ? 1 : 0.45;
+	return `<div style="position:relative;width:${s}px;height:${s}px;opacity:${opacity}"><svg width="${s}" height="${s}" viewBox="0 0 ${s} ${s}" overflow="visible">${pin}</svg>${label}</div>`;
 }
 
 const CATEGORY_FILTERS = [
