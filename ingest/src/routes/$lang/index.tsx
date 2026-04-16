@@ -127,10 +127,17 @@ function Index() {
 	const matchesCat = (categories: string | string[]) => {
 		if (catFilter === "all") return true;
 		const cats = Array.isArray(categories) ? categories : [categories];
+		const normalize = (c: string): string => {
+			if (c === "S") return "S-Bahn";
+			if (/bus$/i.test(c) || c === "AST") return "Bus";
+			if (/stra(ß|ss)enbahn/i.test(c) || c === "Str") return "Tram";
+			return c;
+		};
+		const normalized = cats.map(normalize);
 		if (catFilter === "RE,RB")
-			return cats.some((c) => c === "RE" || c === "RB");
-		if (catFilter === "S") return cats.some((c) => c === "S" || c === "S-Bahn");
-		return cats.includes(catFilter);
+			return normalized.some((c) => c === "RE" || c === "RB");
+		if (catFilter === "S") return normalized.some((c) => c === "S-Bahn");
+		return normalized.includes(catFilter);
 	};
 
 	const filteredLines = [...lines]
