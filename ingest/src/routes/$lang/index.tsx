@@ -259,9 +259,9 @@ function Index() {
 			</div>
 
 			<OverviewCards
-				lines={lines}
-				stops={stops}
-				operators={operators}
+				lines={filteredLines}
+				stops={filteredStops}
+				operators={filteredOps}
 				lang={l}
 			/>
 
