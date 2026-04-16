@@ -266,7 +266,21 @@ const fetchVehicles = createServerFn({ method: "GET" })
 				const ico =
 					icoIdx != null && icoIdx < icoL.length ? icoL[icoIdx] : undefined;
 
-				const bg = ico?.bg ? rgbToHex(ico.bg.r, ico.bg.g, ico.bg.b) : "#666";
+				const category = classifyProduct(prod?.cls ?? 0);
+				const CATEGORY_BG: Record<string, string> = {
+					ICE: "#000000",
+					IC: "#000000",
+					"RE/RB": "#000000",
+					"S-Bahn": "#009757",
+					"U-Bahn": "#0065ae",
+					Tram: "#d87f3f",
+					Bus: "#a71680",
+					AST: "#d5a601",
+				};
+				const bg =
+					ico?.bg && (ico.bg.r || ico.bg.g || ico.bg.b)
+						? rgbToHex(ico.bg.r, ico.bg.g, ico.bg.b)
+						: (CATEGORY_BG[category] ?? "#666");
 				const fg = ico?.fg ? rgbToHex(ico.fg.r, ico.fg.g, ico.fg.b) : "#fff";
 
 				const ani = j.ani;
@@ -310,7 +324,7 @@ const fetchVehicles = createServerFn({ method: "GET" })
 					lon: j.pos.x / 1_000_000,
 					direction: j.dirTxt ?? "",
 					heading: j.dirGeo ?? 0,
-					category: classifyProduct(prod?.cls ?? 0),
+					category,
 					operator: oprIdx != null ? (opL[oprIdx]?.name ?? "") : "",
 					icoRes: ico?.res ?? "PROD_GEN",
 					bg,
@@ -332,22 +346,36 @@ export const Route = createFileRoute("/$lang/map/")({
 });
 
 const ICON_PATHS: Record<string, string> = {
-	PROD_BUS:
-		"M20 14a6 6 0 0 0-6-6h-4a6 6 0 0 0-6 6v8a2 2 0 0 0 2 2h1l1 2h2l1-2h2l1 2h2l1-2h1a2 2 0 0 0 2-2v-8zm-12-3h8a3 3 0 0 1 3 3v3H8v-3a3 3 0 0 1 3-3h-3zm-1 11a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3zm10 0a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3z",
-	PROD_TRAM:
-		"M17 4H7a4 4 0 0 0-4 4v10a3 3 0 0 0 3 3l-1 2h2l1-2h8l1 2h2l-1-2a3 3 0 0 0 3-3V8a4 4 0 0 0-4-4zM7 6h10a2 2 0 0 1 2 2v5H5V8a2 2 0 0 1 2-2zm1 14a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3zm8 0a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3z",
-	PROD_REG:
-		"M17.5 3h-11A3.5 3.5 0 0 0 3 6.5V18a2 2 0 0 0 2 2l-1 2h2l2-2h8l2 2h2l-1-2a2 2 0 0 0 2-2V6.5A3.5 3.5 0 0 0 17.5 3zM7 5h10a1.5 1.5 0 0 1 1.5 1.5V11h-13V6.5A1.5 1.5 0 0 1 7 5zm0.5 15a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3zm9 0a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3z",
-	PROD_ICE:
-		"M17.5 3h-11A3.5 3.5 0 0 0 3 6.5V18a2 2 0 0 0 2 2l-1 2h2l2-2h8l2 2h2l-1-2a2 2 0 0 0 2-2V6.5A3.5 3.5 0 0 0 17.5 3zM7 5h10a1.5 1.5 0 0 1 1.5 1.5V11h-13V6.5A1.5 1.5 0 0 1 7 5zm0.5 15a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3zm9 0a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3z",
-	PROD_IC:
+	bus: "M20 14a6 6 0 0 0-6-6h-4a6 6 0 0 0-6 6v8a2 2 0 0 0 2 2h1l1 2h2l1-2h2l1 2h2l1-2h1a2 2 0 0 0 2-2v-8zm-12-3h8a3 3 0 0 1 3 3v3H8v-3a3 3 0 0 1 3-3h-3zm-1 11a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3zm10 0a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3z",
+	tram: "M17 4H7a4 4 0 0 0-4 4v10a3 3 0 0 0 3 3l-1 2h2l1-2h8l1 2h2l-1-2a3 3 0 0 0 3-3V8a4 4 0 0 0-4-4zM7 6h10a2 2 0 0 1 2 2v5H5V8a2 2 0 0 1 2-2zm1 14a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3zm8 0a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3z",
+	train:
 		"M17.5 3h-11A3.5 3.5 0 0 0 3 6.5V18a2 2 0 0 0 2 2l-1 2h2l2-2h8l2 2h2l-1-2a2 2 0 0 0 2-2V6.5A3.5 3.5 0 0 0 17.5 3zM7 5h10a1.5 1.5 0 0 1 1.5 1.5V11h-13V6.5A1.5 1.5 0 0 1 7 5zm0.5 15a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3zm9 0a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3z",
 };
 
-const ICON_LETTERS: Record<string, string> = {
-	PROD_COMM_T: "S",
-	PROD_SUB_T: "U",
-};
+function resolveIcon(
+	icoRes: string,
+	category: string,
+): { type: "letter"; letter: string } | { type: "path"; key: string } | null {
+	const res = icoRes.toUpperCase();
+	if (res.includes("COMM_T") || category === "S-Bahn")
+		return { type: "letter", letter: "S" };
+	if (res.includes("SUB_T") || category === "U-Bahn")
+		return { type: "letter", letter: "U" };
+	if (res.includes("BUS") || category === "Bus" || category === "AST")
+		return { type: "path", key: "bus" };
+	if (res.includes("TRAM") || category === "Tram")
+		return { type: "path", key: "tram" };
+	if (
+		res.includes("ICE") ||
+		res.includes("IC") ||
+		res.includes("REG") ||
+		category === "ICE" ||
+		category === "IC" ||
+		category === "RE/RB"
+	)
+		return { type: "path", key: "train" };
+	return null;
+}
 
 const ICON_SIZE_BY_ZOOM = [
 	20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 22, 26, 30, 34, 38, 42, 48, 52, 56,
@@ -362,44 +390,33 @@ function buildVehicleIcon(
 	size: number,
 	showLabel: boolean,
 ): string {
-	const r = size / 2;
-	const arrowSize = size + 10;
-	const arrowR = arrowSize / 2;
-	const headingDeg = v.heading >= 0 ? v.heading * 11.25 : 0;
-
-	const letterKey = Object.keys(ICON_LETTERS).find((k) =>
-		v.icoRes.includes(k.replace("PROD_", "")),
-	);
-	const pathKey = Object.keys(ICON_PATHS).find((k) =>
-		v.icoRes.includes(k.replace("PROD_", "")),
-	);
+	const s = size;
+	const c = s / 2;
+	const resolved = resolveIcon(v.icoRes, v.category);
 
 	let iconContent: string;
-	if (letterKey) {
-		const letter = ICON_LETTERS[letterKey];
-		iconContent = `<text x="12" y="17.5" text-anchor="middle" font-size="16" font-weight="bold" fill="${v.fg}" font-family="system-ui,sans-serif">${letter}</text>`;
-	} else if (pathKey) {
-		iconContent = `<g transform="scale(${size / 48})"><path d="${ICON_PATHS[pathKey]}" fill="${v.fg}"/></g>`;
+	if (resolved?.type === "letter") {
+		const fs = Math.round(s * 0.52);
+		iconContent = `<text x="${c}" y="${c + fs * 0.35}" text-anchor="middle" font-size="${fs}" font-weight="bold" fill="${v.fg}" font-family="system-ui,sans-serif">${resolved.letter}</text>`;
+	} else if (resolved?.type === "path") {
+		const inner = s * 0.5;
+		const off = c - inner / 2;
+		iconContent = `<svg x="${off}" y="${off}" width="${inner}" height="${inner}" viewBox="0 0 24 24"><path d="${ICON_PATHS[resolved.key]}" fill="${v.fg}"/></svg>`;
 	} else {
-		iconContent = `<circle cx="12" cy="12" r="6" fill="${v.fg}"/>`;
+		iconContent = `<circle cx="${c}" cy="${c}" r="${s * 0.18}" fill="${v.fg}"/>`;
 	}
 
-	const arrow =
-		v.heading >= 0
-			? `<polygon points="${arrowR + arrowR * 0.7},${arrowR} ${arrowR + arrowR * 0.35},${arrowR - arrowR * 0.3} ${arrowR + arrowR * 0.35},${arrowR + arrowR * 0.3}" fill="${v.bg}" stroke="#fff" stroke-width="1.5" transform="rotate(${headingDeg},${arrowR},${arrowR})"/>`
-			: "";
-
-	const label = showLabel
-		? `<div style="position:absolute;top:${arrowSize}px;left:50%;transform:translateX(-50%);white-space:nowrap;background:${v.bg};color:${v.fg};font-size:10px;font-weight:600;padding:1px 4px;border-radius:3px;line-height:1.3;font-family:system-ui,sans-serif;border:1px solid rgba(255,255,255,.6)">${v.name}</div>`
+	const hasHeading = v.heading >= 0 && v.heading <= 31;
+	const headingDeg = hasHeading ? v.heading * 11.25 : 0;
+	const arrow = hasHeading
+		? `<path d="M${c + c * 0.85},${c} L${c + c * 0.55},${c - c * 0.28} L${c + c * 0.55},${c + c * 0.28}Z" fill="${v.bg}" stroke="#fff" stroke-width="1.5" stroke-linejoin="round" transform="rotate(${headingDeg},${c},${c})"/>`
 		: "";
 
-	return `<div style="position:relative;width:${arrowSize}px;height:${arrowSize}px">
-<svg width="${arrowSize}" height="${arrowSize}" viewBox="0 0 ${arrowSize} ${arrowSize}">
-${arrow}
-<circle cx="${arrowR}" cy="${arrowR}" r="${r * 0.92}" fill="#fff"/>
-<circle cx="${arrowR}" cy="${arrowR}" r="${r * 0.8}" fill="${v.bg}"/>
-<svg x="${arrowR - 12}" y="${arrowR - 12}" width="24" height="24" viewBox="0 0 24 24">${iconContent}</svg>
-</svg>${label}</div>`;
+	const label = showLabel
+		? `<div style="position:absolute;top:${s}px;left:50%;transform:translateX(-50%);white-space:nowrap;background:${v.bg};color:${v.fg};font-size:10px;font-weight:600;padding:1px 4px;border-radius:3px;line-height:1.3;font-family:system-ui,sans-serif;border:1px solid rgba(255,255,255,.6)">${v.name}</div>`
+		: "";
+
+	return `<div style="position:relative;width:${s}px;height:${s}px"><svg width="${s}" height="${s}" viewBox="0 0 ${s} ${s}">${arrow}<circle cx="${c}" cy="${c}" r="${c * 0.92}" fill="#fff"/><circle cx="${c}" cy="${c}" r="${c * 0.8}" fill="${v.bg}"/>${iconContent}</svg>${label}</div>`;
 }
 
 const CATEGORY_FILTERS = [
@@ -460,6 +477,8 @@ function MapPage() {
 	const [loading, setLoading] = useState(true);
 	const [filter, setFilter] = useState(1023);
 	const [lastUpdate, setLastUpdate] = useState<Date | null>(null);
+	const [countdown, setCountdown] = useState(POLL_INTERVAL / 1000);
+	const lastFetchRef = useRef(Date.now());
 	const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 	const zoomRef = useRef(13);
 
@@ -479,9 +498,22 @@ function MapPage() {
 				},
 			});
 			timeDeltaRef.current = serverTime - Date.now();
+			const now = Date.now() + timeDeltaRef.current;
+			const prev = new Map(
+				vehiclesRef.current.map((v) => [v.id, v]),
+			);
+			for (const v of vehicles) {
+				const old = prev.get(v.id);
+				if (old && old.waypoints.length >= 2 && v.waypoints.length >= 2) {
+					const cur = interpolateVehicle(old, now);
+					v.waypoints[0] = { ...v.waypoints[0], lat: cur.lat, lon: cur.lon };
+				}
+			}
 			vehiclesRef.current = vehicles;
 			setVehicleCount(vehicles.length);
 			setLastUpdate(new Date());
+			lastFetchRef.current = Date.now();
+			setCountdown(POLL_INTERVAL / 1000);
 
 			const map = leafletMap.current;
 			if (!map) return;
@@ -491,47 +523,35 @@ function MapPage() {
 			const zoom = map.getZoom();
 			const size = getIconSize(zoom);
 			const showLabel = zoom >= 15;
-			const arrowSize = size + 10;
 
 			for (const v of vehicles) {
 				seen.add(v.id);
 				const pos = interpolateVehicle(v, Date.now() + timeDeltaRef.current);
 
+				const icon = L.divIcon({
+					html: buildVehicleIcon(
+						{ ...v, heading: pos.heading },
+						size,
+						showLabel,
+					),
+					iconSize: [size, size],
+					iconAnchor: [size / 2, size / 2],
+					className: "",
+				});
+
 				let marker = existing.get(v.id);
 				if (marker) {
 					marker.setLatLng([pos.lat, pos.lon]);
-					marker.setIcon(
-						L.divIcon({
-							html: buildVehicleIcon(
-								{ ...v, heading: pos.heading },
-								size,
-								showLabel,
-							),
-							iconSize: [arrowSize, arrowSize],
-							iconAnchor: [arrowSize / 2, arrowSize / 2],
-							className: "",
-						}),
-					);
+					marker.setIcon(icon);
 				} else {
-					marker = L.marker([pos.lat, pos.lon], {
-						icon: L.divIcon({
-							html: buildVehicleIcon(
-								{ ...v, heading: pos.heading },
-								size,
-								showLabel,
-							),
-							iconSize: [arrowSize, arrowSize],
-							iconAnchor: [arrowSize / 2, arrowSize / 2],
-							className: "",
-						}),
-					}).addTo(map);
+					marker = L.marker([pos.lat, pos.lon], { icon }).addTo(map);
 					existing.set(v.id, marker);
 				}
 
 				marker.unbindTooltip();
 				marker.bindTooltip(
 					`<strong>${v.name}</strong><br/>→ ${v.direction}${v.operator ? `<br/><span style="opacity:.7">${v.operator}</span>` : ""}`,
-					{ direction: "top", offset: [0, -(arrowSize / 2 + 4)] },
+					{ direction: "top", offset: [0, -(size / 2 + 4)] },
 				);
 			}
 
@@ -619,6 +639,14 @@ function MapPage() {
 		};
 	}, []);
 
+	useEffect(() => {
+		const tick = setInterval(() => {
+			const elapsed = (Date.now() - lastFetchRef.current) / 1000;
+			setCountdown(Math.max(0, Math.round(POLL_INTERVAL / 1000 - elapsed)));
+		}, 1000);
+		return () => clearInterval(tick);
+	}, []);
+
 	return (
 		<div className="fixed inset-0 flex flex-col">
 			<link
@@ -661,7 +689,7 @@ function MapPage() {
 						{f.label}
 					</button>
 				))}
-				<span className="ml-auto text-xs text-dimmed tabular-nums shrink-0">
+				<span className="ml-auto text-xs text-dimmed tabular-nums shrink-0 flex items-center gap-1.5">
 					{loading ? "…" : `${vehicleCount} vehicles`}
 					{lastUpdate && (
 						<>
@@ -672,6 +700,15 @@ function MapPage() {
 								second: "2-digit",
 							})}
 						</>
+					)}
+					{!loading && (
+						<span
+							className="inline-block w-3 h-3 rounded-full border border-dimmed shrink-0"
+							title={`Refresh in ${countdown}s`}
+							style={{
+								background: `conic-gradient(var(--accent) ${(1 - countdown / (POLL_INTERVAL / 1000)) * 360}deg, transparent 0deg)`,
+							}}
+						/>
 					)}
 				</span>
 			</div>
