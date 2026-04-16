@@ -66,9 +66,7 @@ async function discoverStationJourneys(
 			destStopId: "",
 			destName: j.destName,
 			destArrTime: j.depTime,
-			status: j.status ?? "P",
 			cancelled: j.cancelled,
-			totalStopCount: 0,
 			snapshotAt,
 		});
 	}

@@ -275,9 +275,7 @@ async function upsertJourneyRunFromMgate(
 			destStopId: dest.extId,
 			destName: dest.name,
 			destArrTime: dest.arrTime,
-			status: mg.status ?? "P",
 			cancelled: !!mg.cancelled,
-			totalStopCount: stops.length,
 			wasTracked: hasRtData,
 			pollState: "polling",
 			snapshotAt,
@@ -294,9 +292,7 @@ async function upsertJourneyRunFromMgate(
 				destStopId: excluded(journeyRuns.destStopId),
 				destName: excluded(journeyRuns.destName),
 				destArrTime: excluded(journeyRuns.destArrTime),
-				status: excluded(journeyRuns.status),
 				cancelled: sql`${journeyRuns.cancelled} OR ${excluded(journeyRuns.cancelled)}`,
-				totalStopCount: excluded(journeyRuns.totalStopCount),
 				wasTracked: sql`${journeyRuns.wasTracked} OR ${excluded(journeyRuns.wasTracked)}`,
 				pollState: sql`'polling'`,
 				snapshotAt: excluded(journeyRuns.snapshotAt),
@@ -323,8 +319,6 @@ async function upsertMgateStops(
 		rtDepTime: s.rtDepTime ?? null,
 		rtArrTime: s.rtArrTime ?? null,
 		cancelled: !!s.cancelled,
-		lat: s.lat ?? null,
-		lon: s.lon ?? null,
 	}));
 
 	await db
@@ -340,8 +334,6 @@ async function upsertMgateStops(
 				rtDepTime: sql`COALESCE(${excluded(journeyStops.rtDepTime)}, ${journeyStops.rtDepTime})`,
 				rtArrTime: sql`COALESCE(${excluded(journeyStops.rtArrTime)}, ${journeyStops.rtArrTime})`,
 				cancelled: sql`${journeyStops.cancelled} OR ${excluded(journeyStops.cancelled)}`,
-				lat: sql`COALESCE(${excluded(journeyStops.lat)}, ${journeyStops.lat})`,
-				lon: sql`COALESCE(${excluded(journeyStops.lon)}, ${journeyStops.lon})`,
 			},
 		});
 }

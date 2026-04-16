@@ -4,7 +4,6 @@ import {
 	integer,
 	pgTable,
 	primaryKey,
-	real,
 	text,
 } from "drizzle-orm/pg-core";
 
@@ -22,9 +21,7 @@ export const journeyRuns = pgTable(
 		destStopId: text("dest_stop_id").notNull(),
 		destName: text("dest_name").notNull(),
 		destArrTime: text("dest_arr_time").notNull(),
-		status: text().notNull(),
 		cancelled: boolean().notNull().default(false),
-		totalStopCount: integer("total_stop_count").notNull(),
 		wasTracked: boolean("was_tracked").notNull().default(false),
 		pollState: text("poll_state"),
 		snapshotAt: text("snapshot_at").notNull(),
@@ -51,8 +48,6 @@ export const journeyStops = pgTable(
 		rtDepTime: text("rt_dep_time"),
 		rtArrTime: text("rt_arr_time"),
 		cancelled: boolean().notNull().default(false),
-		lat: real(),
-		lon: real(),
 	},
 	(t) => [
 		primaryKey({ columns: [t.journeyRef, t.dayOfOperation, t.routeIdx] }),
@@ -61,8 +56,6 @@ export const journeyStops = pgTable(
 	],
 );
 
-// Slug lookup for station pages. Populated by past materialize runs;
-// read by findStopBySlug for slug→stopId resolution.
 export const knownStops = pgTable(
 	"known_stops",
 	{
@@ -75,7 +68,6 @@ export const knownStops = pgTable(
 		cancelled: integer().notNull().default(0),
 		ghost: integer().notNull().default(0),
 		delayed: integer().notNull().default(0),
-		updatedAt: text("updated_at").notNull(),
 	},
 	(t) => [index("idx_known_stops_slug").on(t.slug)],
 );
