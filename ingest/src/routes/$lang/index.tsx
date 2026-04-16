@@ -50,6 +50,9 @@ const getHomeSummaries = createServerFn({ method: "GET" })
 type SearchParams = { days?: DaysFilter };
 
 export const Route = createFileRoute("/$lang/")({
+	head: () => ({
+		meta: [{ title: "DummRum" }],
+	}),
 	validateSearch: (search: Record<string, unknown>): SearchParams => ({
 		days:
 			typeof search.days === "string" &&
@@ -230,6 +233,12 @@ function Index() {
 					/>
 				</a>
 				<span>{l === "de" ? "Datenquelle: RMV" : "Data source: RMV"}</span>
+				<a
+					href="https://github.com/boredland/dumm-rum"
+					className="text-dimmed hover:text-fg transition-colors"
+				>
+					{t(l, "nav.github")}
+				</a>
 				<span className="ml-auto">
 					<Link to="/$lang" params={{ lang: other }}>
 						{other.toUpperCase()}

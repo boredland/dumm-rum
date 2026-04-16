@@ -24,6 +24,9 @@ const loadOperator = createServerFn({ method: "GET" })
 
 export const Route = createFileRoute("/$lang/operator/$operator/")({
 	loader: async ({ params }) => await loadOperator({ data: params.operator }),
+	head: ({ loaderData }) => ({
+		meta: [{ title: `${loaderData?.operator ?? "Operator"} — DummRum` }],
+	}),
 	component: OperatorIndex,
 });
 
