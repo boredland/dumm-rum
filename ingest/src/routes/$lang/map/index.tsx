@@ -343,9 +343,7 @@ const fetchVehicles = createServerFn({ method: "GET" })
 					if (s === "L" || s === "M" || s === "H") occupancy = s;
 				}
 
-				const hasRT = (j.stopL ?? []).some(
-					(s) => s.dTimeR != null || s.dTrnCmpSX != null,
-				);
+				const hasRT = (j.stopL ?? []).some((s) => s.dTimeR != null);
 
 				return {
 					id: j.jid,
