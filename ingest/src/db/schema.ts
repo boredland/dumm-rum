@@ -5,7 +5,6 @@ import {
 	pgTable,
 	primaryKey,
 	real,
-	serial,
 	text,
 } from "drizzle-orm/pg-core";
 
@@ -25,12 +24,9 @@ export const journeyRuns = pgTable(
 		destArrTime: text("dest_arr_time").notNull(),
 		status: text().notNull(),
 		cancelled: boolean().notNull().default(false),
-		partCancelled: boolean("part_cancelled").notNull().default(false),
-		cancelledStopCount: integer("cancelled_stop_count").notNull().default(0),
 		totalStopCount: integer("total_stop_count").notNull(),
 		wasTracked: boolean("was_tracked").notNull().default(false),
 		pollState: text("poll_state"),
-		polyline: text(),
 		snapshotAt: text("snapshot_at").notNull(),
 	},
 	(t) => [
@@ -65,66 +61,8 @@ export const journeyStops = pgTable(
 	],
 );
 
-export const journeyPositions = pgTable(
-	"journey_positions",
-	{
-		id: serial().primaryKey(),
-		journeyRef: text("journey_ref").notNull(),
-		dayOfOperation: text("day_of_operation").notNull(),
-		lat: real().notNull(),
-		lon: real().notNull(),
-		reportedAt: text("reported_at").notNull(),
-		routeIdx: integer("route_idx"),
-		rtRouteIdx: integer("rt_route_idx"),
-		capturedAt: text("captured_at").notNull(),
-	},
-	(t) => [
-		index("idx_journey_pos_ref_day").on(t.journeyRef, t.dayOfOperation),
-		index("idx_journey_pos_captured").on(t.capturedAt),
-	],
-);
-
-// Pre-aggregated per-operator / per-line / per-stop rollups produced by the
-// materialize* jobs. Stats pages read from these instead of scanning the
-// full journey_runs / journey_stops tables on every request.
-
-export const operatorDailyStats = pgTable(
-	"operator_daily_stats",
-	{
-		operator: text().notNull(),
-		date: text().notNull(),
-		total: integer().notNull().default(0),
-		cancelled: integer().notNull().default(0),
-		ghost: integer().notNull().default(0),
-		delayed: integer().notNull().default(0),
-		avgDelay: real("avg_delay"),
-	},
-	(t) => [
-		primaryKey({ columns: [t.operator, t.date] }),
-		index("idx_operator_daily_stats_date").on(t.date),
-	],
-);
-
-export const lineDailyStats = pgTable(
-	"line_daily_stats",
-	{
-		line: text().notNull(),
-		date: text().notNull(),
-		total: integer().notNull().default(0),
-		cancelled: integer().notNull().default(0),
-		ghost: integer().notNull().default(0),
-		delayed: integer().notNull().default(0),
-		avgDelay: real("avg_delay"),
-		category: text(),
-		operators: text(),
-		destinations: text(),
-	},
-	(t) => [
-		primaryKey({ columns: [t.line, t.date] }),
-		index("idx_line_daily_stats_date").on(t.date),
-	],
-);
-
+// Slug lookup for station pages. Populated by past materialize runs;
+// read by findStopBySlug for slug→stopId resolution.
 export const knownStops = pgTable(
 	"known_stops",
 	{

@@ -258,7 +258,6 @@ async function upsertJourneyRunFromMgate(
 	const line = mg.product?.line ?? mg.product?.name;
 	if (!line) return;
 
-	const cancelledStops = stops.filter((s) => s.cancelled).length;
 	const hasRtData =
 		mg.lastPos != null || stops.some((s) => s.rtDepTime || s.rtArrTime);
 
@@ -278,8 +277,6 @@ async function upsertJourneyRunFromMgate(
 			destArrTime: dest.arrTime,
 			status: mg.status ?? "P",
 			cancelled: !!mg.cancelled,
-			partCancelled: !!(mg.partCancelled || cancelledStops > 0),
-			cancelledStopCount: cancelledStops,
 			totalStopCount: stops.length,
 			wasTracked: hasRtData,
 			pollState: "polling",
@@ -299,8 +296,6 @@ async function upsertJourneyRunFromMgate(
 				destArrTime: excluded(journeyRuns.destArrTime),
 				status: excluded(journeyRuns.status),
 				cancelled: sql`${journeyRuns.cancelled} OR ${excluded(journeyRuns.cancelled)}`,
-				partCancelled: sql`${journeyRuns.partCancelled} OR ${excluded(journeyRuns.partCancelled)}`,
-				cancelledStopCount: sql`GREATEST(${journeyRuns.cancelledStopCount}, ${excluded(journeyRuns.cancelledStopCount)})`,
 				totalStopCount: excluded(journeyRuns.totalStopCount),
 				wasTracked: sql`${journeyRuns.wasTracked} OR ${excluded(journeyRuns.wasTracked)}`,
 				pollState: sql`'polling'`,
