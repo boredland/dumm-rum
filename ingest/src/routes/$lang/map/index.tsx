@@ -627,11 +627,18 @@ function MapPage() {
 					existing.set(v.id, marker);
 				}
 
+				const isFollowed = v.id === followIdRef.current;
 				marker.unbindTooltip();
 				marker.bindTooltip(
 					`<strong>${v.name}</strong><br/>→ ${v.direction}${v.operator ? `<br/><span style="opacity:.7">${v.operator}</span>` : ""}`,
-					{ direction: "top", offset: [0, -(size / 2 + 4)] },
+					{
+						direction: "top",
+						offset: [0, -(size / 2 + 4)],
+						permanent: isFollowed,
+						className: isFollowed ? "followed-tooltip" : "",
+					},
 				);
+				if (isFollowed) marker.openTooltip();
 			}
 
 			for (const [id, marker] of existing) {
