@@ -90,6 +90,15 @@ function Index() {
 	const other: Lang = l === "de" ? "en" : "de";
 	const [query, setQuery] = useState("");
 	const q = query.toLowerCase().trim();
+	const [openSections, setOpenSections] = useState<Set<string>>(new Set());
+	const toggleSection = (key: string, open: boolean) => {
+		setOpenSections((prev) => {
+			const next = new Set(prev);
+			if (open) next.add(key);
+			else next.delete(key);
+			return next;
+		});
+	};
 
 	const filteredLines = [...lines]
 		.filter(
@@ -180,6 +189,8 @@ function Index() {
 			<Section
 				title={`${t(l, "home.lines")} (${filteredLines.length})`}
 				gridClass="grid grid-cols-[repeat(auto-fit,minmax(180px,1fr))] gap-3"
+				open={openSections.has("lines") || (!!q && filteredLines.length > 0)}
+				onToggle={(open) => toggleSection("lines", open)}
 			>
 				{filteredLines.map((line) => (
 					<LineCard key={line.line} line={line} lang={l} />
@@ -189,6 +200,8 @@ function Index() {
 			<Section
 				title={`${t(l, "home.stations")} (${filteredStops.length})`}
 				gridClass="grid grid-cols-[repeat(auto-fit,minmax(220px,1fr))] gap-3"
+				open={openSections.has("stops") || (!!q && filteredStops.length > 0)}
+				onToggle={(open) => toggleSection("stops", open)}
 			>
 				{filteredStops.slice(0, q ? 200 : 40).map((stop) => (
 					<StopCard key={stop.stopName} stop={stop} lang={l} />
@@ -198,6 +211,8 @@ function Index() {
 			<Section
 				title={`${t(l, "home.operators")} (${filteredOps.length})`}
 				gridClass="grid grid-cols-[repeat(auto-fit,minmax(260px,1fr))] gap-3"
+				open={openSections.has("operators") || (!!q && filteredOps.length > 0)}
+				onToggle={(open) => toggleSection("operators", open)}
 			>
 				{filteredOps.map((op) => (
 					<OperatorCard key={op.operator} op={op} lang={l} />
@@ -228,14 +243,22 @@ function Index() {
 function Section({
 	title,
 	gridClass,
+	open,
+	onToggle,
 	children,
 }: {
 	title: string;
 	gridClass: string;
+	open: boolean;
+	onToggle: (open: boolean) => void;
 	children: React.ReactNode;
 }) {
 	return (
-		<details className="group" open>
+		<details
+			className="group"
+			open={open}
+			onToggle={(e) => onToggle((e.target as HTMLDetailsElement).open)}
+		>
 			<summary className="text-xs uppercase tracking-wide text-muted font-semibold mb-3 cursor-pointer select-none">
 				{title}
 			</summary>
