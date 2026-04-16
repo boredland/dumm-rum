@@ -469,7 +469,9 @@ function MapPage() {
 	const navigate = Route.useNavigate();
 	const mapRef = useRef<HTMLDivElement>(null);
 	const leafletMap = useRef<L.Map | null>(null);
-	const markersRef = useRef<Map<string, L.Marker>>(new Map());
+	const markersRef = useRef<Map<string, { marker: L.Marker; rt: boolean }>>(
+		new Map(),
+	);
 	const vehiclesRef = useRef<Vehicle[]>([]);
 	const timeDeltaRef = useRef(0);
 	const animRef = useRef<number | null>(null);
@@ -479,16 +481,19 @@ function MapPage() {
 	const [vehicleCount, setVehicleCount] = useState(0);
 	const [loading, setLoading] = useState(true);
 	const [filter, setFilter] = useState(1023);
-	const [rtFilter, setRtFilter] = useState<"all" | "rt" | "sched">("all");
 	const [lastUpdate, setLastUpdate] = useState<Date | null>(null);
 	const [countdown, setCountdown] = useState(POLL_INTERVAL / 1000);
 	const lastFetchRef = useRef(Date.now());
 	const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 	const loadRef = useRef<() => Promise<void>>(async () => {});
+	const rtLayerRef = useRef<L.LayerGroup | null>(null);
+	const schedLayerRef = useRef<L.LayerGroup | null>(null);
 
 	const syncMarkers = useCallback(async () => {
 		const map = leafletMap.current;
-		if (!map) return;
+		const rtLayer = rtLayerRef.current;
+		const schedLayer = schedLayerRef.current;
+		if (!map || !rtLayer || !schedLayer) return;
 		const L = await import("leaflet");
 		const existing = markersRef.current;
 		const seen = new Set<string>();
@@ -497,10 +502,9 @@ function MapPage() {
 		const showLabel = zoom >= 15;
 
 		for (const v of vehiclesRef.current) {
-			if (rtFilter === "rt" && !v.hasRT) continue;
-			if (rtFilter === "sched" && v.hasRT) continue;
 			seen.add(v.id);
 			const pos = interpolateVehicle(v, Date.now() + timeDeltaRef.current);
+			const layer = v.hasRT ? rtLayer : schedLayer;
 
 			const icon = L.divIcon({
 				html: buildVehicleIcon(v, pos.heading, size, showLabel),
@@ -509,24 +513,32 @@ function MapPage() {
 				className: "",
 			});
 
-			let marker = existing.get(v.id);
-			if (marker) {
-				marker.setLatLng([pos.lat, pos.lon]);
-				marker.setIcon(icon);
+			const entry = existing.get(v.id);
+			if (entry) {
+				entry.marker.setLatLng([pos.lat, pos.lon]);
+				entry.marker.setIcon(icon);
+				if (entry.rt !== v.hasRT) {
+					entry.marker.remove();
+					entry.marker.addTo(layer);
+					entry.rt = v.hasRT;
+				}
 			} else {
-				marker = L.marker([pos.lat, pos.lon], { icon }).addTo(map);
+				const marker = L.marker([pos.lat, pos.lon], { icon }).addTo(layer);
 				marker.on("click", () => {
-					const current = vehiclesRef.current.find((cv) => cv.id === v.id);
+					const current = vehiclesRef.current.find(
+						(cv) => cv.id === v.id,
+					);
 					followIdRef.current = v.id;
 					setFollowName(current?.name ?? v.name);
 					userPanRef.current = false;
 				});
-				existing.set(v.id, marker);
+				existing.set(v.id, { marker, rt: v.hasRT });
 			}
 
 			const isFollowed = v.id === followIdRef.current;
-			marker.unbindTooltip();
-			marker.bindTooltip(
+			const m = existing.get(v.id)!.marker;
+			m.unbindTooltip();
+			m.bindTooltip(
 				`<strong>${escapeHtml(v.name)}</strong><br/>→ ${escapeHtml(v.direction)}${v.operator ? `<br/><span style="opacity:.7">${escapeHtml(v.operator)}</span>` : ""}`,
 				{
 					direction: "top",
@@ -535,16 +547,16 @@ function MapPage() {
 					className: isFollowed ? "followed-tooltip" : "",
 				},
 			);
-			if (isFollowed) marker.openTooltip();
+			if (isFollowed) m.openTooltip();
 		}
 
-		for (const [id, marker] of existing) {
+		for (const [id, entry] of existing) {
 			if (!seen.has(id)) {
-				marker.remove();
+				entry.marker.remove();
 				existing.delete(id);
 			}
 		}
-	}, [rtFilter]);
+	}, []);
 
 	const load = useCallback(async () => {
 		if (!leafletMap.current) return;
@@ -581,7 +593,7 @@ function MapPage() {
 			/* network error, keep stale data */
 		}
 		setLoading(false);
-	}, [filter, syncMarkers]);
+	}, [filter]);
 
 	loadRef.current = load;
 
@@ -616,6 +628,19 @@ function MapPage() {
 			}).addTo(map);
 
 			leafletMap.current = map;
+
+			const rtGroup = L.layerGroup().addTo(map);
+			const schedGroup = L.layerGroup().addTo(map);
+			rtLayerRef.current = rtGroup;
+			schedLayerRef.current = schedGroup;
+
+			L.control
+				.layers(
+					{},
+					{ "RT vehicles": rtGroup, "Schedule vehicles": schedGroup },
+					{ position: "topright", collapsed: false },
+				)
+				.addTo(map);
 
 			map.on("dragstart", () => {
 				userPanRef.current = true;
@@ -663,18 +688,14 @@ function MapPage() {
 	}, [load]);
 
 	useEffect(() => {
-		syncMarkers();
-	}, [syncMarkers]);
-
-	useEffect(() => {
 		const animate = () => {
 			const now = Date.now() + timeDeltaRef.current;
 			const existing = markersRef.current;
 			for (const v of vehiclesRef.current) {
-				const marker = existing.get(v.id);
-				if (!marker || v.waypoints.length < 2) continue;
+				const entry = existing.get(v.id);
+				if (!entry || v.waypoints.length < 2) continue;
 				const pos = interpolateVehicle(v, now);
-				marker.setLatLng([pos.lat, pos.lon]);
+				entry.marker.setLatLng([pos.lat, pos.lon]);
 				if (
 					v.id === followIdRef.current &&
 					leafletMap.current &&
@@ -738,27 +759,6 @@ function MapPage() {
 								}}
 							/>
 						)}
-						{f.label}
-					</button>
-				))}
-				<span className="text-border">|</span>
-				{(
-					[
-						{ key: "all", label: "All" },
-						{ key: "rt", label: "RT" },
-						{ key: "sched", label: "Sched" },
-					] as const
-				).map((f) => (
-					<button
-						key={f.key}
-						type="button"
-						onClick={() => setRtFilter(f.key)}
-						className={`px-2 py-0.5 text-xs font-medium rounded-full border cursor-pointer transition-colors shrink-0 ${
-							rtFilter === f.key
-								? "bg-surface-hover text-fg border-border"
-								: "bg-transparent text-muted border-transparent hover:text-fg"
-						}`}
-					>
 						{f.label}
 					</button>
 				))}
