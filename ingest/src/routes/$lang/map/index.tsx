@@ -434,13 +434,13 @@ function buildVehicleIcon(
 ): string {
 	const s = size;
 	const c = s / 2;
-	const r = c * 0.82;
+	const r = c * 0.84;
 	const iconType = resolveIconType(v.category);
-	const glyph = buildIconGlyph(iconType, v.fg);
+	const glyph = buildIconGlyph(iconType, v.bg);
 	const headingDeg = v.heading * 11.25;
 
-	const tipLen = r * 0.7;
-	const halfSpread = 25;
+	const tipLen = r * 0.9;
+	const halfSpread = 35;
 	const a1 = 90 - halfSpread;
 	const a2 = 90 + halfSpread;
 	const rad1 = (a1 * Math.PI) / 180;
@@ -452,9 +452,9 @@ function buildVehicleIcon(
 	const tx = c + r + tipLen;
 	const ty = c;
 
-	const pin = `<g transform="rotate(${headingDeg},${c},${c})"><circle cx="${c}" cy="${c}" r="${r}" fill="${v.bg}" stroke="#fff" stroke-width="2"/><path d="M${x1},${y1} L${tx},${ty} L${x2},${y2}" fill="${v.bg}" stroke="#fff" stroke-width="2" stroke-linejoin="round"/><circle cx="${c}" cy="${c}" r="${r * 0.72}" fill="#fff"/></g>`;
+	const pin = `<g transform="rotate(${headingDeg},${c},${c})"><path d="M${x1},${y1} A${r},${r} 0 1,0 ${x2},${y2} L${tx},${ty}Z" fill="${v.bg}" stroke="#fff" stroke-width="2"/><circle cx="${c}" cy="${c}" r="${r * 0.7}" fill="#fff"/></g>`;
 
-	const gs = s / 30;
+	const gs = s / 28;
 	const go = c - 12 * gs;
 	const innerGlyph = `<g transform="translate(${go},${go}) scale(${gs})">${glyph}</g>`;
 
