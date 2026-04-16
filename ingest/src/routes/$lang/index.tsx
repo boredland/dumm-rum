@@ -93,6 +93,7 @@ function Index() {
 	const other: Lang = l === "de" ? "en" : "de";
 	const [query, setQuery] = useState("");
 	const q = query.toLowerCase().trim();
+	const [catFilter, setCatFilter] = useState<string>("all");
 	const searchRef = useRef<HTMLInputElement>(null);
 	useEffect(() => {
 		const handler = (e: KeyboardEvent) => {
@@ -114,17 +115,27 @@ function Index() {
 		});
 	};
 
+	const matchesCat = (categories: string | string[]) => {
+		if (catFilter === "all") return true;
+		const cats = Array.isArray(categories) ? categories : [categories];
+		if (catFilter === "RE,RB")
+			return cats.some((c) => c === "RE" || c === "RB");
+		if (catFilter === "S") return cats.some((c) => c === "S" || c === "S-Bahn");
+		return cats.includes(catFilter);
+	};
+
 	const filteredLines = [...lines]
 		.filter(
 			(line) =>
-				!q ||
-				matchesQuery(
-					q,
-					line.line,
-					line.category,
-					line.operators.join(" "),
-					line.destinations.join(" "),
-				),
+				matchesCat(line.category) &&
+				(!q ||
+					matchesQuery(
+						q,
+						line.line,
+						line.category,
+						line.operators.join(" "),
+						line.destinations.join(" "),
+					)),
 		)
 		.sort((a, b) => {
 			const sa = onTimeRate(a.cancelled, a.delayed, a.total);
@@ -136,17 +147,22 @@ function Index() {
 
 	const filteredStops = stops.filter(
 		(stop) =>
-			!q ||
-			matchesQuery(
-				q,
-				shortStationName(stop.stopName),
-				stop.stopName,
-				stop.lines.join(" "),
-			),
+			matchesCat(stop.categories) &&
+			(!q ||
+				matchesQuery(
+					q,
+					shortStationName(stop.stopName),
+					stop.stopName,
+					stop.lines.join(" "),
+				)),
 	);
 
 	const filteredOps = [...operators]
-		.filter((op) => !q || matchesQuery(q, op.operator, op.lines.join(" ")))
+		.filter(
+			(op) =>
+				matchesCat(op.categories) &&
+				(!q || matchesQuery(q, op.operator, op.lines.join(" "))),
+		)
 		.sort((a, b) => {
 			const sa = onTimeRate(a.cancelled, a.delayed, a.total);
 			const sb = onTimeRate(b.cancelled, b.delayed, b.total);
@@ -197,6 +213,30 @@ function Index() {
 						</Link>
 					);
 				})}
+			</div>
+
+			<div className="flex flex-wrap gap-2">
+				{[
+					{ key: "all", label: t(l, "filter.all") },
+					{ key: "U-Bahn", label: "U-Bahn" },
+					{ key: "S", label: "S-Bahn" },
+					{ key: "Tram", label: "Tram" },
+					{ key: "Bus", label: "Bus" },
+					{ key: "RE,RB", label: "RE/RB" },
+				].map((f) => (
+					<button
+						key={f.key}
+						type="button"
+						onClick={() => setCatFilter(f.key)}
+						className={`px-2.5 py-1 text-xs font-medium rounded-full border border-border cursor-pointer transition-colors ${
+							catFilter === f.key
+								? "bg-surface-hover text-fg"
+								: "bg-transparent text-muted hover:text-fg"
+						}`}
+					>
+						{f.label}
+					</button>
+				))}
 			</div>
 
 			<OverviewCards
