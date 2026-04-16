@@ -1,5 +1,9 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { createServerFn } from "@tanstack/react-start";
+import {
+	DaysToggleBar,
+	useDaysFilter,
+} from "../../../../components/DaysToggle.tsx";
 import { type Lang, t } from "../../../../lib/i18n.ts";
 import {
 	getOperatorStats,
@@ -46,6 +50,7 @@ function OperatorIndex() {
 	const { operator, stats } = Route.useLoaderData();
 	const { lang } = Route.useParams();
 	const l = lang as Lang;
+	const daysFilter = useDaysFilter(stats.days);
 
 	const total = stats.days.reduce((a, d) => a + d.total, 0);
 	const canc = stats.days.reduce((a, d) => a + d.cancelled, 0);
@@ -102,9 +107,14 @@ function OperatorIndex() {
 
 			<section>
 				<h2 className="text-xs uppercase tracking-wide text-muted font-semibold mb-3">
-					{t(l, "section.daily_breakdown")} ({stats.days.length})
+					{t(l, "section.daily_breakdown")} ({daysFilter.filtered.length})
 				</h2>
-				{stats.days.length === 0 ? (
+				<DaysToggleBar
+					lang={l}
+					active={daysFilter.active}
+					setActive={daysFilter.setActive}
+				/>
+				{daysFilter.filtered.length === 0 ? (
 					<p className="text-sm text-dimmed">{t(l, "table.no_data")}</p>
 				) : (
 					<div className="overflow-x-auto">
@@ -129,7 +139,7 @@ function OperatorIndex() {
 								</tr>
 							</thead>
 							<tbody>
-								{stats.days.map((d) => {
+								{daysFilter.filtered.map((d) => {
 									const rate = d.total > 0 ? d.cancelled / d.total : 0;
 									const border = borderForCancRate(rate);
 									const dayScore = onTimeRate(d.cancelled, d.delayed, d.total);

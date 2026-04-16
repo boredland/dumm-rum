@@ -1,5 +1,9 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { createServerFn } from "@tanstack/react-start";
+import {
+	DaysToggleBar,
+	useDaysFilter,
+} from "../../../components/DaysToggle.tsx";
 import { type Lang, t } from "../../../lib/i18n.ts";
 import {
 	type DayStats,
@@ -83,6 +87,7 @@ function StationIndex() {
 		Route.useLoaderData();
 	const { lang, station } = Route.useParams();
 	const l = lang as Lang;
+	const daysFilter = useDaysFilter(days);
 
 	const today = days[0];
 	const total7 = days.slice(0, 7).reduce((a, d) => a + d.total, 0);
@@ -200,9 +205,14 @@ function StationIndex() {
 
 			<section>
 				<h2 className="text-xs uppercase tracking-wide text-muted font-semibold mb-3">
-					{t(l, "section.daily_breakdown")} ({days.length})
+					{t(l, "section.daily_breakdown")} ({daysFilter.filtered.length})
 				</h2>
-				{days.length === 0 ? (
+				<DaysToggleBar
+					lang={l}
+					active={daysFilter.active}
+					setActive={daysFilter.setActive}
+				/>
+				{daysFilter.filtered.length === 0 ? (
 					<p className="text-sm text-dimmed">{t(l, "table.no_data")}</p>
 				) : (
 					<div className="overflow-x-auto">
@@ -227,7 +237,7 @@ function StationIndex() {
 								</tr>
 							</thead>
 							<tbody>
-								{days.map((d) => {
+								{daysFilter.filtered.map((d) => {
 									const rate = d.total > 0 ? d.cancelled / d.total : 0;
 									const border = borderForCancRate(rate);
 									const score = onTimeRate(d.cancelled, d.delayed, d.total);
