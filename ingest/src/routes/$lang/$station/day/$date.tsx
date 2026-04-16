@@ -116,11 +116,11 @@ function StationDay() {
 								</tr>
 							</thead>
 							<tbody>
-								{filters.filtered.map((d) => {
+								{filters.filtered.map((d, i) => {
 									const delay = delayMin(d.date, d.time, d.rtTime);
 									return (
 										<tr
-											key={`${d.time}-${d.line}-${d.direction}`}
+											key={`${i}-${d.time}-${d.line}-${d.direction}`}
 											className="border-b border-border-dim"
 										>
 											<td className="py-2 pr-3 whitespace-nowrap tabular-nums">

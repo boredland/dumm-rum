@@ -151,7 +151,7 @@ function StationIndex() {
 								</tr>
 							</thead>
 							<tbody>
-								{nextDepartures.map((d) => {
+								{nextDepartures.map((d, i) => {
 									const delay =
 										d.rtTime && d.time
 											? Math.round(
@@ -162,7 +162,7 @@ function StationIndex() {
 											: null;
 									return (
 										<tr
-											key={`${d.time}-${d.line}-${d.direction}`}
+											key={`${i}-${d.time}-${d.line}`}
 											className="border-b border-border-dim"
 										>
 											<td className="py-2 pr-3 whitespace-nowrap tabular-nums">
