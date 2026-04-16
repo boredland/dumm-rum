@@ -634,7 +634,7 @@ function MapPage() {
 			L.tileLayer("https://tileserver.memomaps.de/tilegen/{z}/{x}/{y}.png", {
 				maxZoom: 18,
 				attribution:
-					'Map © <a href="https://memomaps.de/">MeMoMaps</a> · Data © <a href="https://www.openstreetmap.org/copyright">OSM</a>',
+					'Map © <a href="https://memomaps.de/">MeMoMaps</a> · Data © <a href="https://www.openstreetmap.org/copyright">OSM</a> · Vehicles © <a href="https://www.rmv.de">RMV</a>',
 			}).addTo(map);
 
 			leafletMap.current = map;
