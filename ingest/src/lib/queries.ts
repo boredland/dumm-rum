@@ -314,6 +314,7 @@ export interface LineStats {
 	days: LineDayStats[];
 	operators: string[];
 	categories: string[];
+	destinations: string[];
 }
 
 /** Per-day stats for one line, ad-hoc from journey_runs. */
@@ -335,7 +336,7 @@ export async function getLineStats(line: string): Promise<LineStats> {
 		.groupBy(journeyRuns.dayOfOperation)
 		.orderBy(desc(journeyRuns.dayOfOperation));
 
-	const [opRows, catRows] = await Promise.all([
+	const [opRows, catRows, destRows] = await Promise.all([
 		db
 			.selectDistinct({ operator: journeyRuns.operator })
 			.from(journeyRuns)
@@ -344,6 +345,10 @@ export async function getLineStats(line: string): Promise<LineStats> {
 			.selectDistinct({ category: journeyRuns.category })
 			.from(journeyRuns)
 			.where(and(eq(journeyRuns.line, line), isNotNull(journeyRuns.category))),
+		db
+			.selectDistinct({ dest: journeyRuns.destName })
+			.from(journeyRuns)
+			.where(eq(journeyRuns.line, line)),
 	]);
 
 	return {
@@ -357,6 +362,7 @@ export async function getLineStats(line: string): Promise<LineStats> {
 		})),
 		operators: opRows.map((r) => r.operator).filter((o): o is string => !!o),
 		categories: catRows.map((r) => r.category).filter((c): c is string => !!c),
+		destinations: destRows.map((r) => r.dest).filter(Boolean),
 	};
 }
 

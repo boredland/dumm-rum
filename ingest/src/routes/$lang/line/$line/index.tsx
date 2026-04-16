@@ -57,10 +57,11 @@ function LineIndex() {
 				<h1 className="text-3xl font-bold flex items-center gap-2 mt-2">
 					{categoryIcons(stats.categories)} {line}
 				</h1>
+				{stats.destinations.length > 0 && (
+					<p className="text-sm text-muted">{stats.destinations.join(" ↔ ")}</p>
+				)}
 				{stats.operators.length > 0 && (
-					<p className="text-sm text-muted">
-						{t(l, "operator.lines")}: {stats.operators.join(", ")}
-					</p>
+					<p className="text-xs text-dimmed">{stats.operators.join(", ")}</p>
 				)}
 			</header>
 

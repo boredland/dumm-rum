@@ -62,7 +62,19 @@ function OperatorIndex() {
 				</h1>
 				{stats.lines.length > 0 && (
 					<p className="text-sm text-muted">
-						{t(l, "operator.lines")}: {stats.lines.join(", ")}
+						{t(l, "operator.lines")}:{" "}
+						{stats.lines.map((ln, i) => (
+							<span key={ln}>
+								{i > 0 && ", "}
+								<Link
+									to="/$lang/line/$line"
+									params={{ lang: l, line: ln }}
+									className="text-accent"
+								>
+									{ln}
+								</Link>
+							</span>
+						))}
 					</p>
 				)}
 			</header>
