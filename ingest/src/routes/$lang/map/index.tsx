@@ -89,38 +89,6 @@ function decodePolyline(encoded: string): [number, number][] {
 	return points;
 }
 
-function interpolateAlongPolyline(
-	polyPoints: [number, number][],
-	fraction: number,
-): [number, number] {
-	if (polyPoints.length === 0) return [0, 0];
-	if (polyPoints.length === 1 || fraction <= 0) return polyPoints[0];
-	if (fraction >= 1) return polyPoints[polyPoints.length - 1];
-
-	let totalDist = 0;
-	const segDists: number[] = [];
-	for (let i = 1; i < polyPoints.length; i++) {
-		const dlat = polyPoints[i][0] - polyPoints[i - 1][0];
-		const dlng = polyPoints[i][1] - polyPoints[i - 1][1];
-		const d = Math.sqrt(dlat * dlat + dlng * dlng);
-		segDists.push(d);
-		totalDist += d;
-	}
-	if (totalDist === 0) return polyPoints[0];
-
-	let target = fraction * totalDist;
-	for (let i = 0; i < segDists.length; i++) {
-		if (target <= segDists[i]) {
-			const r = target / segDists[i];
-			return [
-				polyPoints[i][0] + r * (polyPoints[i + 1][0] - polyPoints[i][0]),
-				polyPoints[i][1] + r * (polyPoints[i + 1][1] - polyPoints[i][1]),
-			];
-		}
-		target -= segDists[i];
-	}
-	return polyPoints[polyPoints.length - 1];
-}
 
 const fetchVehicles = createServerFn({ method: "GET" })
 	.inputValidator(
@@ -295,26 +263,35 @@ const fetchVehicles = createServerFn({ method: "GET" })
 				const ani = j.ani;
 				const waypoints: Waypoint[] = [];
 
-				if (ani?.mSec && ani.proc && ani.dirGeo) {
+				if (ani?.mSec && ani.dirGeo) {
 					const polyIdx = ani.polyG?.polyXL?.[0];
 					let polyPoints: [number, number][] | undefined;
 					if (polyIdx != null) {
 						if (!decodedPolys.has(polyIdx)) {
 							const encoded = polyL[polyIdx]?.crdEncYX;
-							if (encoded) decodedPolys.set(polyIdx, decodePolyline(encoded));
+							if (encoded)
+								decodedPolys.set(polyIdx, decodePolyline(encoded));
 						}
 						polyPoints = decodedPolys.get(polyIdx);
 					}
 
-					for (let k = 0; k < ani.mSec.length; k++) {
-						const proc = ani.proc[k];
+					const numFrames = Math.min(
+						ani.mSec.length,
+						ani.dirGeo.length,
+						polyPoints?.length ?? ani.mSec.length,
+					);
+
+					for (let k = 0; k < numFrames; k++) {
 						const heading = ani.dirGeo[k];
 						const t = serverTime + ani.mSec[k];
 
-						if (polyPoints && polyPoints.length > 1) {
-							const frac = proc / 100;
-							const [lat, lon] = interpolateAlongPolyline(polyPoints, frac);
-							waypoints.push({ lat, lon, t, heading });
+						if (polyPoints && k < polyPoints.length) {
+							waypoints.push({
+								lat: polyPoints[k][0],
+								lon: polyPoints[k][1],
+								t,
+								heading,
+							});
 						} else {
 							waypoints.push({
 								lat: j.pos.y / 1_000_000,
@@ -324,12 +301,6 @@ const fetchVehicles = createServerFn({ method: "GET" })
 							});
 						}
 
-						if (hasRT && k > 0) {
-							const prevProc = ani.proc[k - 1];
-							const curProc = ani.proc[k];
-							const started = prevProc !== ani.proc[0] || curProc !== ani.proc[0];
-							if (started && curProc === prevProc) break;
-						}
 					}
 				}
 
