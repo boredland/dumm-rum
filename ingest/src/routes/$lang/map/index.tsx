@@ -290,6 +290,8 @@ const fetchVehicles = createServerFn({ method: "GET" })
 				const bg = CATEGORY_BG[category] ?? "#666";
 				const fg = "#ffffff";
 
+				const hasRT = (j.stopL ?? []).some((s) => s.dTimeR != null);
+
 				const ani = j.ani;
 				const waypoints: Waypoint[] = [];
 
@@ -321,6 +323,13 @@ const fetchVehicles = createServerFn({ method: "GET" })
 								heading,
 							});
 						}
+
+						if (hasRT && k > 0) {
+							const prevProc = ani.proc[k - 1];
+							const curProc = ani.proc[k];
+							const started = prevProc !== ani.proc[0] || curProc !== ani.proc[0];
+							if (started && curProc === prevProc) break;
+						}
 					}
 				}
 
@@ -342,8 +351,6 @@ const fetchVehicles = createServerFn({ method: "GET" })
 					const s = tcocL[tcocIdx].s;
 					if (s === "L" || s === "M" || s === "H") occupancy = s;
 				}
-
-				const hasRT = (j.stopL ?? []).some((s) => s.dTimeR != null);
 
 				return {
 					id: j.jid,
