@@ -434,19 +434,29 @@ function buildVehicleIcon(
 ): string {
 	const s = size;
 	const c = s / 2;
-	const tailLen = s * 0.38;
-	const svgH = s + tailLen;
+	const r = c * 0.82;
 	const iconType = resolveIconType(v.category);
 	const glyph = buildIconGlyph(iconType, v.fg);
 	const headingDeg = v.heading * 11.25;
 
-	const teardrop = `<g transform="rotate(${headingDeg},${c},${c})">
-<path d="M${c},${c - c * 0.88} A${c * 0.88},${c * 0.88} 0 1,0 ${c},${c + c * 0.88} L${c + tailLen},${c} L${c},${c - c * 0.88}Z" fill="${v.bg}" stroke="#fff" stroke-width="1.8"/>
-</g>`;
+	const tipLen = r * 0.7;
+	const halfSpread = 25;
+	const a1 = 90 - halfSpread;
+	const a2 = 90 + halfSpread;
+	const rad1 = (a1 * Math.PI) / 180;
+	const rad2 = (a2 * Math.PI) / 180;
+	const x1 = c + r * Math.cos(rad1);
+	const y1 = c + r * Math.sin(rad1);
+	const x2 = c + r * Math.cos(rad2);
+	const y2 = c + r * Math.sin(rad2);
+	const tx = c + r + tipLen;
+	const ty = c;
 
-	const glyphScale = s / 30;
-	const glyphOff = c - 12 * glyphScale;
-	const innerGlyph = `<g transform="translate(${glyphOff},${glyphOff}) scale(${glyphScale})">${glyph}</g>`;
+	const pin = `<g transform="rotate(${headingDeg},${c},${c})"><circle cx="${c}" cy="${c}" r="${r}" fill="${v.bg}" stroke="#fff" stroke-width="2"/><path d="M${x1},${y1} L${tx},${ty} L${x2},${y2}" fill="${v.bg}" stroke="#fff" stroke-width="2" stroke-linejoin="round"/><circle cx="${c}" cy="${c}" r="${r * 0.72}" fill="#fff"/></g>`;
+
+	const gs = s / 30;
+	const go = c - 12 * gs;
+	const innerGlyph = `<g transform="translate(${go},${go}) scale(${gs})">${glyph}</g>`;
 
 	let label = "";
 	if (showLabel) {
@@ -467,7 +477,7 @@ function buildVehicleIcon(
 		label = `<div style="position:absolute;top:${s + 2}px;left:50%;transform:translateX(-50%);white-space:nowrap;display:inline-flex;align-items:center;gap:0;background:#fff;border:1px solid rgba(0,0,0,.15);padding:1px 4px;border-radius:4px;line-height:1.4;font-family:system-ui,sans-serif;font-size:10px;box-shadow:0 1px 3px rgba(0,0,0,.1)"><span style="background:${v.bg};color:${v.fg};padding:0 3px;border-radius:2px;font-weight:700">${v.name}</span>${delayText}${occupHtml}</div>`;
 	}
 
-	return `<div style="position:relative;width:${s}px;height:${s}px"><svg width="${s}" height="${s}" viewBox="0 0 ${s} ${s}" overflow="visible">${teardrop}<circle cx="${c}" cy="${c}" r="${c * 0.62}" fill="#fff"/>${innerGlyph}</svg>${label}</div>`;
+	return `<div style="position:relative;width:${s}px;height:${s}px"><svg width="${s}" height="${s}" viewBox="0 0 ${s} ${s}" overflow="visible">${pin}${innerGlyph}</svg>${label}</div>`;
 }
 
 const CATEGORY_FILTERS = [
