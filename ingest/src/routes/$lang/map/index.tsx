@@ -548,6 +548,7 @@ function MapPage() {
 	const [vehicleCount, setVehicleCount] = useState(0);
 	const [loading, setLoading] = useState(true);
 	const [filter, setFilter] = useState(1023);
+	const [rtFilter, setRtFilter] = useState<"all" | "rt" | "sched">("all");
 	const [lastUpdate, setLastUpdate] = useState<Date | null>(null);
 	const [countdown, setCountdown] = useState(POLL_INTERVAL / 1000);
 	const lastFetchRef = useRef(Date.now());
@@ -595,6 +596,8 @@ function MapPage() {
 			const showLabel = zoom >= 15;
 
 			for (const v of vehicles) {
+				if (rtFilter === "rt" && !v.hasRT) continue;
+				if (rtFilter === "sched" && v.hasRT) continue;
 				seen.add(v.id);
 				const pos = interpolateVehicle(v, Date.now() + timeDeltaRef.current);
 
@@ -635,7 +638,7 @@ function MapPage() {
 			/* network error, keep stale data */
 		}
 		setLoading(false);
-	}, [filter]);
+	}, [filter, rtFilter]);
 
 	useEffect(() => {
 		if (!mapRef.current || leafletMap.current) return;
@@ -770,6 +773,27 @@ function MapPage() {
 								}}
 							/>
 						)}
+						{f.label}
+					</button>
+				))}
+				<span className="text-border">|</span>
+				{(
+					[
+						{ key: "all", label: "All" },
+						{ key: "rt", label: "RT" },
+						{ key: "sched", label: "Sched" },
+					] as const
+				).map((f) => (
+					<button
+						key={f.key}
+						type="button"
+						onClick={() => setRtFilter(f.key)}
+						className={`px-2 py-0.5 text-xs font-medium rounded-full border cursor-pointer transition-colors shrink-0 ${
+							rtFilter === f.key
+								? "bg-surface-hover text-fg border-border"
+								: "bg-transparent text-muted border-transparent hover:text-fg"
+						}`}
+					>
 						{f.label}
 					</button>
 				))}
