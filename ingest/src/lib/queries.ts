@@ -72,20 +72,6 @@ function daysCondition(filter: DaysFilter = "today") {
 	return undefined;
 }
 
-const VALID_DAYS = new Set<DaysFilter>([
-	"all",
-	"today",
-	"weekdays",
-	"weekends",
-]);
-
-export function parseFilter(url: URL): QueryFilter {
-	const days = url.searchParams.get("days") ?? "today";
-	return {
-		days: VALID_DAYS.has(days as DaysFilter) ? (days as DaysFilter) : "today",
-	};
-}
-
 // ─── Operator summaries ────────────────────────────────────────────────
 
 export interface OperatorSummary {

@@ -39,6 +39,23 @@ export function onTimeRate(
 	return Math.round(((total - cancelled - delayed) / total) * 100);
 }
 
+export function formatTime(time: string | null): string {
+	if (!time) return "—";
+	return time.slice(0, 5);
+}
+
+export function delayMin(
+	date: string,
+	sched: string,
+	rt: string | null,
+): number | null {
+	if (!rt) return null;
+	const planned = new Date(`${date}T${sched}`).getTime();
+	const actual = new Date(`${date}T${rt}`).getTime();
+	if (!Number.isFinite(planned) || !Number.isFinite(actual)) return null;
+	return Math.round((actual - planned) / 60_000);
+}
+
 export function shortStationName(name: string): string {
 	return name
 		.replace(/^Frankfurt \(Main\)\s*/i, "FFM ")

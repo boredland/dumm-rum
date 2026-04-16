@@ -9,6 +9,7 @@ import {
 	getLineDayJourneys,
 	type LineDayJourney,
 } from "../../../../../lib/queries.ts";
+import { delayMin, formatTime } from "../../../../../lib/utils.ts";
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -43,23 +44,6 @@ export const Route = createFileRoute("/$lang/line/$line/day/$date")({
 		await loadDay({ data: { line: params.line, date: params.date } }),
 	component: LineDay,
 });
-
-function formatTime(time: string | null): string {
-	if (!time) return "—";
-	return time.slice(0, 5);
-}
-
-function delayMin(
-	date: string,
-	sched: string,
-	rt: string | null,
-): number | null {
-	if (!rt) return null;
-	const planned = new Date(`${date}T${sched}`).getTime();
-	const actual = new Date(`${date}T${rt}`).getTime();
-	if (!Number.isFinite(planned) || !Number.isFinite(actual)) return null;
-	return Math.round((actual - planned) / 60_000);
-}
 
 function LineDay() {
 	const { line, date, journeys } = Route.useLoaderData();
