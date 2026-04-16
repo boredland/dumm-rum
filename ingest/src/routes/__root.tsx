@@ -15,6 +15,20 @@ export const Route = createRootRoute({
 			{ charSet: "utf-8" },
 			{ name: "viewport", content: "width=device-width, initial-scale=1" },
 			{ title: "DummRum" },
+			{
+				name: "description",
+				content:
+					"Frankfurt public transport reliability tracker — cancellations, delays, ghost departures.",
+			},
+			{ property: "og:type", content: "website" },
+			{ property: "og:site_name", content: "DummRum" },
+			{ property: "og:title", content: "DummRum" },
+			{
+				property: "og:description",
+				content:
+					"Frankfurt public transport reliability tracker — cancellations, delays, ghost departures.",
+			},
+			{ name: "twitter:card", content: "summary" },
 		],
 		links: [
 			{

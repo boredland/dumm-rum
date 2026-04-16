@@ -37,9 +37,15 @@ const loadStation = createServerFn({ method: "GET" })
 
 export const Route = createFileRoute("/$lang/$station/")({
 	loader: async ({ params }) => await loadStation({ data: params.station }),
-	head: ({ loaderData }) => ({
-		meta: [{ title: `${loaderData?.stopName ?? "Station"} — DummRum` }],
-	}),
+	head: ({ loaderData }) => {
+		const name = loaderData?.stopName ?? "Station";
+		return {
+			meta: [
+				{ title: `${name} — DummRum` },
+				{ property: "og:title", content: `${name} — DummRum` },
+			],
+		};
+	},
 	component: StationIndex,
 });
 

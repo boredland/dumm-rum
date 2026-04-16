@@ -21,9 +21,15 @@ const loadLine = createServerFn({ method: "GET" })
 
 export const Route = createFileRoute("/$lang/line/$line/")({
 	loader: async ({ params }) => await loadLine({ data: params.line }),
-	head: ({ loaderData }) => ({
-		meta: [{ title: `${loaderData?.line ?? "Line"} — DummRum` }],
-	}),
+	head: ({ loaderData }) => {
+		const name = loaderData?.line ?? "Line";
+		return {
+			meta: [
+				{ title: `${name} — DummRum` },
+				{ property: "og:title", content: `${name} — DummRum` },
+			],
+		};
+	},
 	component: LineIndex,
 });
 
