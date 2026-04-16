@@ -282,15 +282,12 @@ const fetchVehicles = createServerFn({ method: "GET" })
 					"RE/RB": "#000000",
 					"S-Bahn": "#009757",
 					"U-Bahn": "#0065ae",
-					Tram: "#d87f3f",
+					Tram: "#ef7d00",
 					Bus: "#a71680",
 					AST: "#d5a601",
 				};
-				const bg =
-					ico?.bg && (ico.bg.r || ico.bg.g || ico.bg.b)
-						? rgbToHex(ico.bg.r, ico.bg.g, ico.bg.b)
-						: (CATEGORY_BG[category] ?? "#666");
-				const fg = ico?.fg ? rgbToHex(ico.fg.r, ico.fg.g, ico.fg.b) : "#fff";
+				const bg = CATEGORY_BG[category] ?? "#666";
+				const fg = "#ffffff";
 
 				const ani = j.ani;
 				const waypoints: Waypoint[] = [];
@@ -490,12 +487,12 @@ const CATEGORY_FILTERS = [
 ] as const;
 
 const CATEGORY_COLORS: Record<string, string> = {
-	ICE: "#1a1a1a",
-	IC: "#1a1a1a",
-	"RE/RB": "#e00",
-	"S-Bahn": "#009750",
+	ICE: "#000000",
+	IC: "#000000",
+	"RE/RB": "#000000",
+	"S-Bahn": "#009757",
 	"U-Bahn": "#0065ae",
-	Tram: "#d87f3f",
+	Tram: "#ef7d00",
 	Bus: "#a71680",
 	AST: "#d5a601",
 	Other: "#666",
