@@ -1,5 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { createServerFn } from "@tanstack/react-start";
+import { useMemo, useState } from "react";
 import { type Lang, t } from "../../../../lib/i18n.ts";
 import {
 	findStopBySlug,
@@ -7,7 +8,10 @@ import {
 	type StopDayDeparture,
 } from "../../../../lib/queries.ts";
 import { categoryIcons } from "../../../../lib/stations.ts";
-import { shortStationName } from "../../../../lib/utils.ts";
+import {
+	DELAY_THRESHOLD_MIN,
+	shortStationName,
+} from "../../../../lib/utils.ts";
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -53,6 +57,14 @@ export const Route = createFileRoute("/$lang/$station/day/$date")({
 	component: StationDay,
 });
 
+type StatusFilter = "all" | "issues" | "on_time";
+type HoursFilter = "all" | "core";
+
+const CORE_HOURS = [
+	[6, 9],
+	[16, 19],
+] as const;
+
 function formatTime(time: string | null): string {
 	if (!time) return "—";
 	return time.slice(0, 5);
@@ -70,10 +82,41 @@ function delayMin(
 	return Math.round((actual - planned) / 60_000);
 }
 
+function isIssue(d: StopDayDeparture): boolean {
+	if (d.cancelled || d.ghost) return true;
+	const delay = delayMin(d.date, d.time, d.rtTime);
+	return delay !== null && delay >= DELAY_THRESHOLD_MIN;
+}
+
+function isCoreHour(time: string): boolean {
+	const h = Number.parseInt(time.slice(0, 2), 10);
+	return CORE_HOURS.some(([from, to]) => h >= from && h < to);
+}
+
 function StationDay() {
 	const { stopName, categories, date, departures } = Route.useLoaderData();
 	const { lang, station } = Route.useParams();
 	const l = lang as Lang;
+	const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
+	const [hoursFilter, setHoursFilter] = useState<HoursFilter>("all");
+	const [dirFilter, setDirFilter] = useState<string>("all");
+
+	const directions = useMemo(
+		() => [...new Set(departures.map((d) => d.direction))].sort(),
+		[departures],
+	);
+
+	const filtered = useMemo(
+		() =>
+			departures.filter((d) => {
+				if (statusFilter === "issues" && !isIssue(d)) return false;
+				if (statusFilter === "on_time" && isIssue(d)) return false;
+				if (hoursFilter === "core" && !isCoreHour(d.time)) return false;
+				if (dirFilter !== "all" && d.direction !== dirFilter) return false;
+				return true;
+			}),
+		[departures, statusFilter, hoursFilter, dirFilter],
+	);
 
 	const pretty = new Date(`${date}T00:00:00`).toLocaleDateString(l, {
 		weekday: "long",
@@ -81,6 +124,11 @@ function StationDay() {
 		month: "long",
 		day: "numeric",
 	});
+
+	const pill =
+		"px-3 py-1 text-xs font-medium rounded-full border border-border cursor-pointer transition-colors";
+	const active = "bg-surface-hover text-fg";
+	const inactive = "bg-transparent text-muted hover:text-fg";
 
 	return (
 		<main className="mx-auto max-w-4xl p-6 space-y-6">
@@ -100,9 +148,65 @@ function StationDay() {
 
 			<section>
 				<h2 className="text-xs uppercase tracking-wide text-muted font-semibold mb-3">
-					{t(l, "section.all_departures")} ({departures.length})
+					{t(l, "section.all_departures")} ({filtered.length}/
+					{departures.length})
 				</h2>
-				{departures.length === 0 ? (
+
+				<div className="flex flex-wrap gap-x-4 gap-y-2 mb-4">
+					<div className="flex gap-2">
+						{(
+							[
+								["issues", t(l, "filter.issues")],
+								["all", t(l, "filter.all")],
+								["on_time", t(l, "filter.on_time")],
+							] as const
+						).map(([key, label]) => (
+							<button
+								key={key}
+								type="button"
+								onClick={() => setStatusFilter(key)}
+								className={`${pill} ${statusFilter === key ? active : inactive}`}
+							>
+								{label}
+							</button>
+						))}
+					</div>
+					<div className="flex gap-2">
+						{(
+							[
+								["all", t(l, "hours.all")],
+								["core", t(l, "hours.core")],
+							] as const
+						).map(([key, label]) => (
+							<button
+								key={key}
+								type="button"
+								onClick={() => setHoursFilter(key)}
+								className={`${pill} ${hoursFilter === key ? active : inactive}`}
+							>
+								{label}
+							</button>
+						))}
+					</div>
+					{directions.length > 1 && (
+						<div className="flex gap-2">
+							<select
+								value={dirFilter}
+								onChange={(e) => setDirFilter(e.target.value)}
+								className="bg-surface border border-border rounded-full px-3 py-1 text-xs text-muted cursor-pointer"
+							>
+								<option value="all">{t(l, "filter.all_directions")}</option>
+								{directions.map((dir) => (
+									<option key={dir} value={dir}>
+										{dir}
+									</option>
+								))}
+							</select>
+						</div>
+					)}
+				</div>
+
+				{filtered.length === 0 ? (
 					<p className="text-sm text-dimmed">{t(l, "table.no_departures")}</p>
 				) : (
 					<div className="overflow-x-auto">
@@ -116,9 +220,8 @@ function StationDay() {
 								</tr>
 							</thead>
 							<tbody>
-								{departures.map((d) => {
+								{filtered.map((d) => {
 									const delay = delayMin(d.date, d.time, d.rtTime);
-									const bad = d.cancelled || (delay !== null && delay >= 8);
 									return (
 										<tr
 											key={`${d.time}-${d.line}-${d.direction}`}
@@ -146,9 +249,7 @@ function StationDay() {
 														⏳ +{delay} min
 													</span>
 												) : (
-													<span className={bad ? "" : "text-emerald-500"}>
-														✅
-													</span>
+													<span className="text-emerald-500">✅</span>
 												)}
 											</td>
 										</tr>
