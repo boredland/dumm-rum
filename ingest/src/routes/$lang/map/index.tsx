@@ -543,6 +543,9 @@ function MapPage() {
 	const vehiclesRef = useRef<Vehicle[]>([]);
 	const timeDeltaRef = useRef(0);
 	const animRef = useRef<number | null>(null);
+	const followIdRef = useRef<string | null>(null);
+	const [followName, setFollowName] = useState<string | null>(null);
+	const userPanRef = useRef(false);
 	const [vehicleCount, setVehicleCount] = useState(0);
 	const [loading, setLoading] = useState(true);
 	const [filter, setFilter] = useState(1023);
@@ -616,6 +619,11 @@ function MapPage() {
 					marker.setIcon(icon);
 				} else {
 					marker = L.marker([pos.lat, pos.lon], { icon }).addTo(map);
+					marker.on("click", () => {
+						followIdRef.current = v.id;
+						setFollowName(v.name);
+						userPanRef.current = false;
+					});
 					existing.set(v.id, marker);
 				}
 
@@ -671,6 +679,12 @@ function MapPage() {
 			leafletMap.current = map;
 			zoomRef.current = map.getZoom();
 
+			map.on("dragstart", () => {
+				userPanRef.current = true;
+				followIdRef.current = null;
+				setFollowName(null);
+			});
+
 			map.on("moveend", () => {
 				load();
 				const c = map.getCenter();
@@ -715,6 +729,13 @@ function MapPage() {
 				if (!marker || v.waypoints.length < 2) continue;
 				const pos = interpolateVehicle(v, now);
 				marker.setLatLng([pos.lat, pos.lon]);
+				if (
+					v.id === followIdRef.current &&
+					leafletMap.current &&
+					!userPanRef.current
+				) {
+					leafletMap.current.panTo([pos.lat, pos.lon], { animate: false });
+				}
 			}
 			animRef.current = requestAnimationFrame(animate);
 		};
@@ -795,6 +816,24 @@ function MapPage() {
 						{f.label}
 					</button>
 				))}
+				{followName && (
+					<>
+						<span className="text-border">|</span>
+						<span className="text-xs text-fg font-medium shrink-0 flex items-center gap-1">
+							Following {followName}
+							<button
+								type="button"
+								onClick={() => {
+									followIdRef.current = null;
+									setFollowName(null);
+								}}
+								className="text-muted hover:text-fg cursor-pointer"
+							>
+								✕
+							</button>
+						</span>
+					</>
+				)}
 				<span className="ml-auto text-xs text-dimmed tabular-nums shrink-0 flex items-center gap-1.5">
 					{loading ? "…" : `${vehicleCount} vehicles`}
 					{lastUpdate && (
