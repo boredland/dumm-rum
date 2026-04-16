@@ -640,8 +640,7 @@ function MapPage() {
 			leafletMap.current = map;
 
 			const layers = new Map<string, L.LayerGroup>();
-			const overlays: Record<string, L.LayerGroup> = {};
-			const categories = [
+			const CATS = [
 				"ICE",
 				"IC",
 				"RE/RB",
@@ -652,19 +651,105 @@ function MapPage() {
 				"AST",
 				"Other",
 			];
-			for (const cat of categories) {
-				const rtGroup = L.layerGroup().addTo(map);
-				const schedGroup = L.layerGroup().addTo(map);
-				layers.set(cat, rtGroup);
-				layers.set(`${cat} (sched)`, schedGroup);
-				overlays[cat] = rtGroup;
-				overlays[`${cat} (sched)`] = schedGroup;
+			for (const cat of CATS) {
+				layers.set(cat, L.layerGroup().addTo(map));
+				layers.set(`${cat} (sched)`, L.layerGroup().addTo(map));
 			}
 			categoryLayersRef.current = layers;
 
-			L.control
-				.layers({}, overlays, { position: "topright", collapsed: true })
-				.addTo(map);
+			const allRt = CATS.map((c) => layers.get(c)!);
+			const allSched = CATS.map((c) => layers.get(`${c} (sched)`)!);
+
+			const FilterControl = L.Control.extend({
+				onAdd() {
+					const el = L.DomUtil.create("div", "leaflet-bar leaflet-control");
+					Object.assign(el.style, {
+						background: "var(--surface, #fff)",
+						color: "var(--fg, #333)",
+						padding: "6px 8px",
+						fontSize: "11px",
+						lineHeight: "1.8",
+						maxHeight: "70vh",
+						overflowY: "auto",
+					});
+					L.DomEvent.disableClickPropagation(el);
+					L.DomEvent.disableScrollPropagation(el);
+
+					const addHeading = (text: string) => {
+						const h = document.createElement("div");
+						h.textContent = text;
+						Object.assign(h.style, {
+							fontWeight: "700",
+							fontSize: "9px",
+							textTransform: "uppercase",
+							letterSpacing: "0.05em",
+							opacity: "0.5",
+							marginTop: "6px",
+							marginBottom: "1px",
+						});
+						el.appendChild(h);
+					};
+
+					const addToggle = (
+						icon: string,
+						label: string,
+						groups: L.LayerGroup[],
+						checked: boolean,
+					) => {
+						const row = document.createElement("label");
+						Object.assign(row.style, {
+							display: "flex",
+							alignItems: "center",
+							gap: "3px",
+							cursor: "pointer",
+							whiteSpace: "nowrap",
+						});
+						const cb = document.createElement("input");
+						cb.type = "checkbox";
+						cb.checked = checked;
+						cb.style.margin = "0";
+						row.appendChild(cb);
+						row.insertAdjacentHTML("beforeend", icon + label);
+						cb.addEventListener("change", () => {
+							for (const g of groups)
+								cb.checked ? map.addLayer(g) : map.removeLayer(g);
+						});
+						el.appendChild(row);
+					};
+
+					const catIcon = (cat: string) => {
+						const color = CATEGORY_COLORS[cat] ?? "#666";
+						const glyph = buildIconGlyph(resolveIconType(cat), "#fff");
+						return `<svg width="16" height="16" viewBox="0 0 100 100" style="vertical-align:middle"><circle cx="50" cy="50" r="46" fill="${color}"/>${glyph}</svg>`;
+					};
+
+					addHeading("Data");
+					addToggle(
+						'<svg width="16" height="16" viewBox="0 0 16 16" style="vertical-align:middle"><circle cx="8" cy="8" r="7" fill="#27ae60"/><text x="8" y="11.5" text-anchor="middle" font-size="9" font-weight="bold" fill="#fff">RT</text></svg>',
+						" Realtime",
+						allRt,
+						true,
+					);
+					addToggle(
+						'<svg width="16" height="16" viewBox="0 0 16 16" style="vertical-align:middle"><circle cx="8" cy="8" r="7" fill="#999" opacity=".45"/><text x="8" y="11" text-anchor="middle" font-size="7" font-weight="bold" fill="#fff">SCH</text></svg>',
+						" Schedule",
+						allSched,
+						true,
+					);
+
+					addHeading("Vehicles");
+					for (const cat of CATS) {
+						if (cat === "Other") continue;
+						addToggle(catIcon(cat), ` ${cat}`, [
+							layers.get(cat)!,
+							layers.get(`${cat} (sched)`)!,
+						], true);
+					}
+
+					return el;
+				},
+			});
+			new FilterControl({ position: "topright" }).addTo(map);
 
 			map.on("dragstart", () => {
 				userPanRef.current = true;
