@@ -55,8 +55,8 @@ function RootComponent() {
 			</head>
 			<body>
 				<Outlet />
-				<ShareButton lang={lang} />
-				<ScrollToTop />
+				{!pathname.includes("/map") && <ShareButton lang={lang} />}
+				{!pathname.includes("/map") && <ScrollToTop />}
 				<Scripts />
 			</body>
 		</html>
