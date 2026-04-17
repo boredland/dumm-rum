@@ -1,4 +1,7 @@
 node_modules/
 .env
 .mcp.json
-ingest/.tanstack/
+.tanstack/
+dist/
+.vinxi/
+.output/
