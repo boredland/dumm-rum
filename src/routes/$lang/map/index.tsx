@@ -208,7 +208,11 @@ const fetchVehicles = createServerFn({ method: "GET" })
 								cls?: number;
 								icoX?: number;
 								oprX?: number;
-								prodCtx?: { catOutL?: string; matchId?: string };
+								prodCtx?: {
+								catOut?: string;
+								catOutL?: string;
+								matchId?: string;
+							};
 							}[];
 							opL?: { name: string }[];
 							polyL?: { crdEncYX?: string }[];
@@ -347,7 +351,9 @@ const fetchVehicles = createServerFn({ method: "GET" })
 
 				const name = cleanLineName(
 					prod?.name?.trim() ?? "?",
-					prod?.prodCtx?.catOutL?.trim() ?? "",
+					prod?.prodCtx?.catOutL?.trim() ??
+						prod?.prodCtx?.catOut?.trim() ??
+						"",
 				);
 
 				return {

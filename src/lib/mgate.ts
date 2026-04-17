@@ -2,17 +2,28 @@ export const MGATE_URL = "https://www.rmv.de/auskunft/bin/jp/mgate.exe";
 export const AUTH = { type: "AID", aid: "uAWgheC24jhp6GdY" };
 export const CLIENT = { id: "RMV", type: "WEB", name: "webapp", l: "vs_rmv" };
 
+const KNOWN_LINE_PREFIXES = ["Bus", "BUS", "Tram", "STR", "Str"];
+
 /** Strip the redundant category prefix HAFAS prepends to bus/tram line
  * names ("Bus M34" → "M34", "Tram 12" → "12", "STR 18" → "18"). Leaves
  * rail codes like "S6"/"U4"/"RE30" untouched because their category
  * letters aren't separated by a space. Called from every place we
  * persist or display a line code so that subscribe-modal lookups,
  * `/line/$line` deep-links, and line-scoped pickers all match the same
- * canonical string. */
+ * canonical string.
+ *
+ * HAFAS isn't consistent about which `prodCtx` field holds the category
+ * — for some buses it's only in `catOut` or missing entirely — so we
+ * accept the caller's best guess *and* fall back to a short known-prefix
+ * list to cover the cases the caller didn't have data for. */
 export function cleanLineName(raw: string, category: string): string {
 	const r = raw.trim();
 	const c = category.trim();
-	return c && r.startsWith(`${c} `) ? r.slice(c.length + 1).trim() : r;
+	if (c && r.startsWith(`${c} `)) return r.slice(c.length + 1).trim();
+	for (const p of KNOWN_LINE_PREFIXES) {
+		if (r.startsWith(`${p} `)) return r.slice(p.length + 1).trim();
+	}
+	return r;
 }
 
 interface MgateStop {
