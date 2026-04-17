@@ -116,7 +116,7 @@ function haversine(
 	return 2 * R * Math.asin(Math.sqrt(x));
 }
 
-function bearingDeg(
+export function bearingDeg(
 	a: { lat: number; lon: number },
 	b: { lat: number; lon: number },
 ): number {
@@ -134,7 +134,7 @@ function bearingDeg(
 
 /** Convert compass bearing (0°–360°) into RMV-style dirGeo units (0–31,
  * 11.25° per step). Matches the icon rotation at map/index.tsx:414. */
-function toDirGeo(bearing: number): number {
+export function toDirGeo(bearing: number): number {
 	return Math.round(bearing / 11.25) % 32;
 }
 

@@ -90,12 +90,10 @@ export interface SubscribeModalProps {
 		direction?: string;
 		stopName?: string;
 	};
-	/** Optional picklist of directions for the <select>. If omitted the
-	 * user types in freeform. */
+	/** Host-provided direction picklist — used by the line-detail page
+	 * where the directions are a static subset of the line's destinations.
+	 * Skips the `/api/picker/directions` fetch. */
 	availableDirections?: string[];
-	/** Optional picklist of stops. If omitted we fall back to the
-	 * pre-filled stopName (or an "any stop" placeholder). */
-	availableStops?: { id: string; name: string }[];
 	onClose: () => void;
 }
 
@@ -103,7 +101,6 @@ export function SubscribeModal({
 	lang,
 	initial,
 	availableDirections,
-	availableStops,
 	onClose,
 }: SubscribeModalProps) {
 	const [line, setLine] = useState(initial.line ?? "");
@@ -126,7 +123,6 @@ export function SubscribeModal({
 		initial.line ? (lineScopedCache.get(initial.line) ?? null) : null,
 	);
 
-	// Close on Escape.
 	useEffect(() => {
 		const handler = (e: KeyboardEvent) => {
 			if (e.key === "Escape") onClose();
@@ -135,10 +131,6 @@ export function SubscribeModal({
 		return () => window.removeEventListener("keydown", handler);
 	}, [onClose]);
 
-	// Fetch picker lists once per session; the endpoints are heavily
-	// cached so this is cheap on repeat opens. Directions is skipped when
-	// the host page already passed a contextual list — the global list
-	// would dilute line-specific directions with unrelated destinations.
 	useEffect(() => {
 		let alive = true;
 		if (linesList.length === 0)
@@ -166,20 +158,10 @@ export function SubscribeModal({
 		availableDirections,
 	]);
 
-	// When the user commits a line that actually exists, fetch its
-	// stop/direction list and swap the pickers to that narrower set so the
-	// Haltestelle field only offers stops the line visits. Keeps the
-	// previous line's list until the new one resolves to avoid empty
-	// dropdown flashes.
+	// Wait until the full line list is loaded before fetching scoped data —
+	// otherwise every keystroke during search would hit the API.
 	useEffect(() => {
-		if (!line) {
-			setLineScoped(null);
-			return;
-		}
-		// Don't trigger a fetch until we know the full line list and can
-		// confirm the typed value is a real line — otherwise every keystroke
-		// during search would hit the API.
-		if (linesList.length > 0 && !linesList.includes(line)) {
+		if (!line || (linesList.length > 0 && !linesList.includes(line))) {
 			setLineScoped(null);
 			return;
 		}
@@ -192,9 +174,6 @@ export function SubscribeModal({
 		};
 	}, [line, linesList]);
 
-	// Clear a previously-picked stop or direction the moment it stops
-	// belonging to the new line — otherwise the field silently holds a
-	// value the strict Combobox now treats as invalid.
 	useEffect(() => {
 		if (!lineScoped) return;
 		if (stopName && !lineScoped.stops.includes(stopName)) setStopName("");
@@ -304,13 +283,7 @@ export function SubscribeModal({
 						<Combobox
 							value={stopName}
 							onChange={setStopName}
-							options={
-								availableStops && availableStops.length > 0
-									? availableStops.map((s) => s.name)
-									: lineScoped
-										? lineScoped.stops
-										: stopsList
-							}
+							options={lineScoped ? lineScoped.stops : stopsList}
 							placeholder={t(lang, "subscribe.stop.any")}
 							ariaLabel={t(lang, "subscribe.stop")}
 							strict

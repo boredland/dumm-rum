@@ -345,10 +345,6 @@ const fetchVehicles = createServerFn({ method: "GET" })
 					}
 				}
 
-				// Drop the HAFAS category prefix ("Bus M34" → "M34") via the
-				// shared helper so the subscribe modal, `/line/$line`
-				// deep-link, and journey_runs.line all key off the same
-				// canonical string.
 				const name = cleanLineName(
 					prod?.name?.trim() ?? "?",
 					prod?.prodCtx?.catOutL?.trim() ?? "",
@@ -949,11 +945,10 @@ function MapPage() {
 			// for a source (e.g. both Flix categories toggled off) drops the
 			// credit until something from that source is re-added.
 			const FLIX_CATS = new Set(["Flixtrain", "Flixbus"]);
-			const FERRY_CATS = new Set(["Ferry"]);
 			const attrFor = (cat: string) => {
 				if (FLIX_CATS.has(cat))
 					return 'Vehicles © <a href="https://www.flixbus.com">FlixBus</a>';
-				if (FERRY_CATS.has(cat))
+				if (cat === "Ferry")
 					return 'Ferry © <a href="https://www.primus-linie.de/">Primus-Linie</a>';
 				return 'Vehicles © <a href="https://www.rmv.de">RMV</a>';
 			};
@@ -1059,9 +1054,6 @@ function MapPage() {
 						expanded = next;
 						body.style.display = next ? "block" : "none";
 						toggle.setAttribute("aria-expanded", next ? "true" : "false");
-						// When expanded, let the button shrink to a header row
-						// label so the toggle itself stays clickable without
-						// stretching the control too wide.
 						if (next) {
 							toggle.style.width = "auto";
 							toggle.style.height = "auto";

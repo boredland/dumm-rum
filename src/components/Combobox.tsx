@@ -146,14 +146,15 @@ export function Combobox({
 		return () => window.removeEventListener("mousedown", handler);
 	}, [open, revert, strict]);
 
-	// Reset highlight whenever the filter result set changes.
-	// biome-ignore lint/correctness/useExhaustiveDependencies: reset on new result set, not on every re-render
+	// biome-ignore lint/correctness/useExhaustiveDependencies: reset highlight on new result set, not on every re-render
 	useEffect(() => {
 		setActiveIdx(0);
 	}, [filtered.length, filtered[0]]);
 
-	const strictInvalid =
-		strict && query.trim().length > 0 && !options.some((o) => o === query);
+	const strictInvalid = useMemo(
+		() => !!strict && query.trim().length > 0 && !options.includes(query),
+		[strict, query, options],
+	);
 
 	return (
 		<div ref={rootRef} className={`relative ${className ?? ""}`}>
@@ -175,15 +176,6 @@ export function Combobox({
 					setOpen(true);
 				}}
 				onFocus={() => !disabled && setOpen(true)}
-				onBlur={() => {
-					if (strict) {
-						// Delay so a click on a list row gets a chance to
-						// commit before we revert.
-						setTimeout(() => {
-							if (!options.some((o) => o === query)) revert();
-						}, 0);
-					}
-				}}
 				onKeyDown={onKey}
 				placeholder={placeholder}
 				disabled={disabled}

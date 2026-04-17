@@ -26,10 +26,13 @@ export const Route = createFileRoute("/api/picker/line-stops")({
 				const body = await memoGet(
 					`picker:line-stops:${line}`,
 					300,
-					async () => ({
-						stops: await getStopsForLine(line),
-						directions: await getDirectionsForLine(line),
-					}),
+					async () => {
+						const [stops, directions] = await Promise.all([
+							getStopsForLine(line),
+							getDirectionsForLine(line),
+						]);
+						return { stops, directions };
+					},
 				);
 				return new Response(body, {
 					headers: {

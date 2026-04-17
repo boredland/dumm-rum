@@ -4,6 +4,14 @@
  * timetable along the real river track (OSM relation 19587338).
  */
 
+import dayjs from "dayjs";
+import timezone from "dayjs/plugin/timezone.js";
+import utc from "dayjs/plugin/utc.js";
+import { bearingDeg, toDirGeo } from "./flix-proxy.ts";
+
+dayjs.extend(utc);
+dayjs.extend(timezone);
+
 interface Waypoint {
 	lat: number;
 	lon: number;
@@ -428,57 +436,14 @@ const FERRY_COLOR = "#0088BB";
 const TRACKING_URL =
 	"https://www.primus-linie.de/de/fahrten/aschaffenburg-ueber-seligenstadt-60";
 
-/** Convert a bearing-in-radians to RMV's 0-31 heading bucket (11.25° each,
- * 0 = north, 8 = east). `interpolateVehicle` multiplies by 11.25 so we
- * have to use the same quantization or the arrow points wrong. */
-function bearingToRmv(deg: number): number {
-	const norm = ((deg % 360) + 360) % 360;
-	return Math.round(norm / 11.25) % 32;
-}
-
-function bearingDeg(a: [number, number], b: [number, number]): number {
-	const lat1 = (a[0] * Math.PI) / 180;
-	const lat2 = (b[0] * Math.PI) / 180;
-	const dLon = ((b[1] - a[1]) * Math.PI) / 180;
-	const y = Math.sin(dLon) * Math.cos(lat2);
-	const x =
-		Math.cos(lat1) * Math.sin(lat2) -
-		Math.sin(lat1) * Math.cos(lat2) * Math.cos(dLon);
-	return (Math.atan2(y, x) * 180) / Math.PI;
-}
-
 /** Euclidean-on-degrees; fine for adjacent polyline vertices on the Main. */
 function segLen(a: [number, number], b: [number, number]): number {
 	return Math.hypot(a[0] - b[0], a[1] - b[1]);
 }
 
-/** Returns the current calendar date in Europe/Berlin as YYYY-MM-DD, plus
- * the UTC epoch ms of that day's 00:00 local time. The epoch anchor is
- * what converts stop "minutes-from-midnight" into absolute timestamps
- * without DST bugs. */
 function berlinDayAnchor(now: Date): { date: string; midnight: number } {
-	const parts = new Intl.DateTimeFormat("en-CA", {
-		timeZone: "Europe/Berlin",
-		year: "numeric",
-		month: "2-digit",
-		day: "2-digit",
-		hour: "2-digit",
-		minute: "2-digit",
-		second: "2-digit",
-		hour12: false,
-	}).formatToParts(now);
-	const get = (k: string) => parts.find((p) => p.type === k)?.value ?? "0";
-	const y = Number(get("year"));
-	const m = Number(get("month"));
-	const d = Number(get("day"));
-	const hh = Number(get("hour"));
-	const mm = Number(get("minute"));
-	const ss = Number(get("second"));
-	const dayMs = (hh * 3600 + mm * 60 + ss) * 1000;
-	return {
-		date: `${y}-${String(m).padStart(2, "0")}-${String(d).padStart(2, "0")}`,
-		midnight: now.getTime() - dayMs,
-	};
+	const start = dayjs(now).tz("Europe/Berlin").startOf("day");
+	return { date: start.format("YYYY-MM-DD"), midnight: start.valueOf() };
 }
 
 /** Build waypoints for one direction of a single day's run.
@@ -532,11 +497,11 @@ function buildRunWaypoints(
 			const nxt = segPoints[i + 1] ?? segPoints[i];
 			const prv = segPoints[i - 1] ?? segPoints[i];
 			const anchor = segPoints[i];
-			const headingDeg = bearingDeg(
-				i === 0 ? anchor : prv,
-				i === 0 ? nxt : anchor,
+			const from = i === 0 ? anchor : prv;
+			const to = i === 0 ? nxt : anchor;
+			const heading = toDirGeo(
+				bearingDeg({ lat: from[0], lon: from[1] }, { lat: to[0], lon: to[1] }),
 			);
-			const heading = bearingToRmv(headingDeg);
 			const [lat, lon] = segPoints[i];
 
 			// Skip the shared vertex between consecutive segments — the
