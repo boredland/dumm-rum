@@ -65,6 +65,10 @@ interface PrevPos {
 }
 
 const lastPositions = new Map<string, PrevPos>();
+/** Decoded route polyline per ride UUID. Populated lazily on first request
+ * by `/api/flix/route/:uuid`, or eagerly (fire-and-forget) during the
+ * aggregation pass so between-fix motion can follow the actual track. */
+const polyCache = new Map<string, [number, number][]>();
 
 interface MemoEntry {
 	body: string;
@@ -224,21 +228,33 @@ export async function getAggregatedVehicles(): Promise<{
 			});
 		}
 		waypoints.push({ lat, lon, t: curT, heading });
-		// Linear-extrapolate one fix ahead using the prev→cur velocity
-		// vector so the marker keeps gliding forward between 30 s position
-		// updates instead of jumping. Off-track drift on curves is bounded
-		// by the short projection window; the next real fix corrects it.
 		if (canProject) {
-			const dt = (curT - prev.t) / 1000;
-			if (dt > 0) {
-				const vLat = (lat - prev.lat) / dt;
-				const vLon = (lon - prev.lon) / dt;
-				waypoints.push({
-					lat: lat + vLat * PROJECT_SEC,
-					lon: lon + vLon * PROJECT_SEC,
-					t: curT + PROJECT_SEC * 1000,
-					heading,
-				});
+			const poly = polyCache.get(ride.id);
+			const polyPts = poly
+				? buildPolyWaypoints(poly, prev, { lat, lon }, curT)
+				: null;
+			if (polyPts && polyPts.length > 0) {
+				waypoints.push(...polyPts);
+			} else {
+				// Fallback: linear extrapolate one fix ahead using the
+				// prev→cur velocity vector. Used when the polyline isn't
+				// yet cached or the vehicle is off-route.
+				const dt = (curT - prev.t) / 1000;
+				if (dt > 0) {
+					const vLat = (lat - prev.lat) / dt;
+					const vLon = (lon - prev.lon) / dt;
+					waypoints.push({
+						lat: lat + vLat * PROJECT_SEC,
+						lon: lon + vLon * PROJECT_SEC,
+						t: curT + PROJECT_SEC * 1000,
+						heading,
+					});
+				}
+			}
+			// Kick off polyline fetch in background for next call when
+			// we don't have one cached yet.
+			if (!poly && !polyCache.has(ride.id)) {
+				fetchAndCachePolyline(ride.id).catch(() => {});
 			}
 		}
 
@@ -268,15 +284,20 @@ export async function getAggregatedVehicles(): Promise<{
 	}
 
 	for (const id of lastPositions.keys()) {
-		if (!seen.has(id)) lastPositions.delete(id);
+		if (!seen.has(id)) {
+			lastPositions.delete(id);
+			polyCache.delete(id);
+		}
 	}
 
 	return { vehicles, serverTime: now };
 }
 
-export async function getRoutePolyline(
+async function fetchAndCachePolyline(
 	rideUuid: string,
 ): Promise<[number, number][] | null> {
+	const cached = polyCache.get(rideUuid);
+	if (cached) return cached;
 	const r = await flixRideRoute(rideUuid);
 	const segs = [...(r.segments ?? [])].sort(
 		(a, b) => a.segment_sequence - b.segment_sequence,
@@ -296,5 +317,117 @@ export async function getRoutePolyline(
 			out.push(...pts);
 		}
 	}
-	return out.length > 0 ? out : null;
+	if (out.length === 0) return null;
+	polyCache.set(rideUuid, out);
+	return out;
+}
+
+export async function getRoutePolyline(
+	rideUuid: string,
+): Promise<[number, number][] | null> {
+	return fetchAndCachePolyline(rideUuid);
+}
+
+/** Walk forward along the cached polyline from the vehicle's current GPS
+ * fix, emitting one waypoint per traversed polyline vertex (timestamped
+ * by cumulative distance / speed) up to PROJECT_SEC. Heading is the
+ * bearing of each emitted segment so the marker rotates through curves.
+ * Returns null when projection isn't possible (no velocity, GPS too far
+ * from track, off-route vehicle). */
+function buildPolyWaypoints(
+	poly: [number, number][],
+	prev: PrevPos,
+	cur: { lat: number; lon: number },
+	curT: number,
+): Waypoint[] | null {
+	const dtSec = (curT - prev.t) / 1000;
+	if (dtSec <= 0) return null;
+	const dMeters = haversine(prev, cur);
+	const metersPerSec = dMeters / dtSec;
+	if (metersPerSec < 1) return null;
+
+	let bestIdx = 0;
+	let bestD = Number.POSITIVE_INFINITY;
+	for (let i = 0; i < poly.length; i++) {
+		const dLat = poly[i][0] - cur.lat;
+		const dLon = poly[i][1] - cur.lon;
+		const d = dLat * dLat + dLon * dLon;
+		if (d < bestD) {
+			bestD = d;
+			bestIdx = i;
+		}
+	}
+
+	// Sanity: if the nearest polyline vertex is >500 m away, the vehicle
+	// is off-route — fall back to linear projection instead of snapping
+	// it to the track.
+	const nearestMeters = haversine(
+		{ lat: poly[bestIdx][0], lon: poly[bestIdx][1] },
+		cur,
+	);
+	if (nearestMeters > 500) return null;
+
+	const rideLat = cur.lat - prev.lat;
+	const rideLon = cur.lon - prev.lon;
+	const dot = (fromIdx: number, toIdx: number) => {
+		const dLat = poly[toIdx][0] - poly[fromIdx][0];
+		const dLon = poly[toIdx][1] - poly[fromIdx][1];
+		return dLat * rideLat + dLon * rideLon;
+	};
+	const fwdIdx = bestIdx + 1 < poly.length ? bestIdx + 1 : null;
+	const bwdIdx = bestIdx - 1 >= 0 ? bestIdx - 1 : null;
+	const dotFwd =
+		fwdIdx !== null ? dot(bestIdx, fwdIdx) : Number.NEGATIVE_INFINITY;
+	const dotBwd =
+		bwdIdx !== null ? dot(bestIdx, bwdIdx) : Number.NEGATIVE_INFINITY;
+	const dir: 1 | -1 = dotFwd >= dotBwd ? 1 : -1;
+
+	const waypoints: Waypoint[] = [];
+	const horizonMeters = metersPerSec * PROJECT_SEC;
+	let consumed = 0;
+	let fromLat = cur.lat;
+	let fromLon = cur.lon;
+	let idx = bestIdx;
+
+	// Safety bound: at most 512 vertices of projection to cap CPU on
+	// pathological polylines.
+	for (let step = 0; step < 512; step++) {
+		const nextIdx = idx + dir;
+		if (nextIdx < 0 || nextIdx >= poly.length) break;
+		const nextLat = poly[nextIdx][0];
+		const nextLon = poly[nextIdx][1];
+		const seg = haversine(
+			{ lat: fromLat, lon: fromLon },
+			{ lat: nextLat, lon: nextLon },
+		);
+		const heading = toDirGeo(
+			bearingDeg(
+				{ lat: fromLat, lon: fromLon },
+				{ lat: nextLat, lon: nextLon },
+			),
+		);
+		const remaining = horizonMeters - consumed;
+		if (seg >= remaining) {
+			const ratio = seg > 0 ? remaining / seg : 0;
+			waypoints.push({
+				lat: fromLat + ratio * (nextLat - fromLat),
+				lon: fromLon + ratio * (nextLon - fromLon),
+				t: curT + PROJECT_SEC * 1000,
+				heading,
+			});
+			break;
+		}
+		consumed += seg;
+		waypoints.push({
+			lat: nextLat,
+			lon: nextLon,
+			t: curT + (consumed / metersPerSec) * 1000,
+			heading,
+		});
+		fromLat = nextLat;
+		fromLon = nextLon;
+		idx = nextIdx;
+	}
+
+	return waypoints.length > 0 ? waypoints : null;
 }
