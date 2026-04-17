@@ -645,6 +645,18 @@ function MapPage() {
 					clearFollowedPolyline();
 					if (current) drawFollowedPolyline(current);
 				});
+				// User-initiated close (Leaflet's ✕ button, ESC, or click
+				// elsewhere) must also clear follow state, otherwise the
+				// next syncMarkers tick reopens the popup. Guard against
+				// auto-close from clicking a different marker: by that
+				// time followIdRef has already been bumped to the new id.
+				marker.on("popupclose", () => {
+					if (followIdRef.current === v.id) {
+						followIdRef.current = null;
+						setFollowName(null);
+						clearFollowedPolyline();
+					}
+				});
 				existing.set(v.id, { marker, iconKey, layerKey, popupContent: "" });
 			}
 
