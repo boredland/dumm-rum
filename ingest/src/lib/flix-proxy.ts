@@ -63,25 +63,25 @@ interface PrevPos {
 const lastPositions = new Map<string, PrevPos>();
 
 interface MemoEntry {
-	body: Uint8Array;
+	body: string;
 	expires: number;
 }
 
 const memo = new Map<string, MemoEntry>();
 
-/** Generic TTL memo: returns cached JSON bytes when fresh; otherwise runs
+/** Generic TTL memo: returns cached JSON string when fresh; otherwise runs
  * `build`, JSON-encodes the result, stores, and returns. Errors from
  * `build` are not cached — they bubble up to the handler. */
 export async function memoGet(
 	key: string,
 	ttlSec: number,
 	build: () => Promise<unknown>,
-): Promise<Uint8Array> {
+): Promise<string> {
 	const now = Date.now();
 	const hit = memo.get(key);
 	if (hit && hit.expires > now) return hit.body;
 	const value = await build();
-	const body = new TextEncoder().encode(JSON.stringify(value));
+	const body = JSON.stringify(value);
 	memo.set(key, { body, expires: now + ttlSec * 1000 });
 	return body;
 }
