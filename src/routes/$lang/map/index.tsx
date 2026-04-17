@@ -546,6 +546,46 @@ function interpolateVehicle(
 	return { lat: last.lat, lon: last.lon, heading: fb };
 }
 
+interface RenderedPos {
+	lat: number;
+	lon: number;
+	heading: number;
+	t: number;
+}
+
+const MAX_HOLD_MS = 60_000;
+
+/** Monotone-forward clamp: when the raw interp would place the vehicle
+ * behind the last rendered position along the current heading vector,
+ * hold the last position instead — so HAFAS's occasional downward
+ * re-prediction doesn't visibly pop the marker backwards. Gives up after
+ * MAX_HOLD_MS so a genuinely-correct revision can't freeze the marker
+ * forever. Keyed by vehicle id in an external store (typically a ref). */
+function clampForward(
+	id: string,
+	raw: { lat: number; lon: number; heading: number },
+	now: number,
+	store: Map<string, RenderedPos>,
+): { lat: number; lon: number; heading: number } {
+	const last = store.get(id);
+	if (last) {
+		// dirGeo units → compass radians. Forward unit vector in
+		// (east, north) = (sin θ, cos θ). Project the raw displacement
+		// onto it; negative = backward.
+		const headingRad = ((raw.heading * 11.25) * Math.PI) / 180;
+		const fwdE = Math.sin(headingRad);
+		const fwdN = Math.cos(headingRad);
+		const dE = raw.lon - last.lon;
+		const dN = raw.lat - last.lat;
+		const proj = dE * fwdE + dN * fwdN;
+		if (proj < 0 && now - last.t < MAX_HOLD_MS) {
+			return { lat: last.lat, lon: last.lon, heading: last.heading };
+		}
+	}
+	store.set(id, { lat: raw.lat, lon: raw.lon, heading: raw.heading, t: now });
+	return raw;
+}
+
 function MapPage() {
 	const { lang } = Route.useParams();
 	const l = lang as Lang;
@@ -565,6 +605,7 @@ function MapPage() {
 		>
 	>(new Map());
 	const vehiclesRef = useRef<Vehicle[]>([]);
+	const renderedPosRef = useRef<Map<string, RenderedPos>>(new Map());
 	const timeDeltaRef = useRef(0);
 	const animRef = useRef<number | null>(null);
 	const followIdRef = useRef<string | null>(null);
@@ -637,7 +678,9 @@ function MapPage() {
 
 		for (const v of vehiclesRef.current) {
 			seen.add(v.id);
-			const pos = interpolateVehicle(v, Date.now() + timeDeltaRef.current);
+			const nowAdj = Date.now() + timeDeltaRef.current;
+			const rawPos = interpolateVehicle(v, nowAdj);
+			const pos = clampForward(v.id, rawPos, nowAdj, renderedPosRef.current);
 			const layerKey = `${v.category}${v.hasRT ? "" : " (sched)"}`;
 			const layer = layers.get(layerKey);
 			if (!layer) continue;
@@ -740,6 +783,7 @@ function MapPage() {
 			if (!seen.has(id)) {
 				entry.marker.remove();
 				existing.delete(id);
+				renderedPosRef.current.delete(id);
 			}
 		}
 	}, []);
@@ -1086,7 +1130,13 @@ function MapPage() {
 			for (const v of vehiclesRef.current) {
 				const entry = existing.get(v.id);
 				if (!entry || v.waypoints.length < 2) continue;
-				const pos = interpolateVehicle(v, now);
+				const rawPos = interpolateVehicle(v, now);
+				const pos = clampForward(
+					v.id,
+					rawPos,
+					now,
+					renderedPosRef.current,
+				);
 				entry.marker.setLatLng([pos.lat, pos.lon]);
 				if (v.id === followIdRef.current) followPos = pos;
 			}
