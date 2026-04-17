@@ -7,10 +7,13 @@ export const Route = createFileRoute("/api/flix/vehicles")({
 			GET: async () => {
 				try {
 					const body = await memoGet("vehicles", 25, getAggregatedVehicles);
+					// No Cache-Control: clients request fresh every poll.
+					// Server-side memo still coalesces concurrent fan-outs
+					// so Flix's upstream is protected.
 					return new Response(body, {
 						headers: {
 							"Content-Type": "application/json",
-							"Cache-Control": "public, max-age=25, stale-while-revalidate=30",
+							"Cache-Control": "no-store",
 						},
 					});
 				} catch (e) {
