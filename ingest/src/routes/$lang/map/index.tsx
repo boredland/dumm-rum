@@ -563,20 +563,13 @@ function MapPage() {
 					? `<br/><a href="${v.bahnExpertUrl}" target="_blank" rel="noopener" style="font-size:11px;color:var(--accent,#0969da)">Delay info →</a>`
 					: "";
 			const content = `<strong>${escapeHtml(v.name)}</strong><br/>→ ${escapeHtml(v.direction)}${v.operator ? `<br/><span style="opacity:.7">${escapeHtml(v.operator)}</span>` : ""}${bahnLink}`;
-			const off: [number, number] = [0, -(size / 2 + 4)];
 
-			m.unbindTooltip();
 			m.unbindPopup();
-			if (bahnLink) {
-				m.bindPopup(content, { offset: off, className: "vehicle-popup" });
-			}
-			m.bindTooltip(content, {
-				direction: "top",
-				offset: off,
-				permanent: isFollowed,
-				className: isFollowed ? "followed-tooltip" : "",
+			m.bindPopup(content, {
+				offset: [0, -(size / 2 + 4)],
+				autoPan: false,
 			});
-			if (isFollowed) m.openTooltip();
+			if (isFollowed) m.openPopup();
 		}
 
 		for (const [id, entry] of existing) {
