@@ -551,6 +551,13 @@ function MapPage() {
 	const timeDeltaRef = useRef(0);
 	const animRef = useRef<number | null>(null);
 	const followIdRef = useRef<string | null>(null);
+	// Set true while we programmatically panTo() the followed vehicle so
+	// our own "moveend" handler can skip its load/navigate work — otherwise
+	// 60fps panning triggers a 60fps fetch storm and freezes the map.
+	const programmaticPanRef = useRef(false);
+	// Throttle follow-pan to ~10 Hz instead of 60 Hz. panTo is cheap per
+	// call but recomputing every marker's container point at 60 Hz isn't.
+	const lastFollowPanAtRef = useRef(0);
 	const [followName, setFollowName] = useState<string | null>(null);
 	const userPanRef = useRef(false);
 	const followedPolylineRef = useRef<L.Polyline | null>(null);
@@ -974,6 +981,11 @@ function MapPage() {
 			});
 
 			map.on("moveend", () => {
+				// Skip the refetch / URL-update churn when the move was
+				// triggered by our own follow-pan. Otherwise the animation
+				// loop's 60 fps panTo fires moveend 60×/s, each of which
+				// kicks off a refetch + navigate — which freezes the map.
+				if (programmaticPanRef.current) return;
 				loadRef.current?.();
 				const c = map.getCenter();
 				const z = map.getZoom();
@@ -1016,18 +1028,30 @@ function MapPage() {
 		const animate = () => {
 			const now = Date.now() + timeDeltaRef.current;
 			const existing = markersRef.current;
+			const nowPerf = performance.now();
+			let followPos: { lat: number; lon: number } | null = null;
 			for (const v of vehiclesRef.current) {
 				const entry = existing.get(v.id);
 				if (!entry || v.waypoints.length < 2) continue;
 				const pos = interpolateVehicle(v, now);
 				entry.marker.setLatLng([pos.lat, pos.lon]);
-				if (
-					v.id === followIdRef.current &&
-					leafletMap.current &&
-					!userPanRef.current
-				) {
-					leafletMap.current.panTo([pos.lat, pos.lon], { animate: false });
-				}
+				if (v.id === followIdRef.current) followPos = pos;
+			}
+			// Throttle follow-pan to ~10 Hz (vs 60 Hz) — smooth enough
+			// perceptually, 6× less work per second in Leaflet's transform
+			// recalc, and fewer moveend events to absorb.
+			if (
+				followPos &&
+				leafletMap.current &&
+				!userPanRef.current &&
+				nowPerf - lastFollowPanAtRef.current > 100
+			) {
+				programmaticPanRef.current = true;
+				leafletMap.current.panTo([followPos.lat, followPos.lon], {
+					animate: false,
+				});
+				programmaticPanRef.current = false;
+				lastFollowPanAtRef.current = nowPerf;
 			}
 			animRef.current = requestAnimationFrame(animate);
 		};
