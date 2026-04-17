@@ -32,6 +32,7 @@ export interface FlixVehicle {
 	hasRT: true;
 	stationary: boolean;
 	externalTrackingUrl: string;
+	serviceDate: null;
 	waypoints: Waypoint[];
 	fetchedAt: number;
 }
@@ -293,6 +294,7 @@ export async function getAggregatedVehicles(): Promise<{
 			hasRT: true,
 			stationary: trulyStationary,
 			externalTrackingUrl: FLIX_TRACKING_URL_BASE + ride.id,
+			serviceDate: null,
 			waypoints,
 			fetchedAt: now,
 		});

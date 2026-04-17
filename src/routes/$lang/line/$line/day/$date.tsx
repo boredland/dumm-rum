@@ -1,5 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { createServerFn } from "@tanstack/react-start";
+import { useEffect, useRef } from "react";
 import {
 	DepartureFilterBar,
 	useDepartureFilters,
@@ -42,14 +43,27 @@ const loadDay = createServerFn({ method: "GET" })
 export const Route = createFileRoute("/$lang/line/$line/day/$date")({
 	loader: async ({ params }) =>
 		await loadDay({ data: { line: params.line, date: params.date } }),
+	validateSearch: (search: Record<string, unknown>): { jid?: string } => ({
+		jid: typeof search.jid === "string" ? search.jid : undefined,
+	}),
 	component: LineDay,
 });
 
 function LineDay() {
 	const { line, date, journeys } = Route.useLoaderData();
 	const { lang } = Route.useParams();
+	const { jid } = Route.useSearch();
 	const l = lang as Lang;
 	const filters = useDepartureFilters(journeys);
+	const highlightedRowRef = useRef<HTMLTableRowElement | null>(null);
+
+	useEffect(() => {
+		if (!jid || !highlightedRowRef.current) return;
+		highlightedRowRef.current.scrollIntoView({
+			behavior: "smooth",
+			block: "center",
+		});
+	}, [jid]);
 
 	const pretty = new Date(`${date}T00:00:00`).toLocaleDateString(l, {
 		weekday: "long",
@@ -96,10 +110,16 @@ function LineDay() {
 							<tbody>
 								{filters.filtered.map((j) => {
 									const delay = delayMin(j.date, j.time, j.rtTime);
+									const isHighlighted = jid != null && j.journeyRef === jid;
 									return (
 										<tr
-											key={`${j.time}-${j.direction}-${j.stop}`}
-											className="border-b border-border-dim"
+											key={j.journeyRef}
+											ref={isHighlighted ? highlightedRowRef : null}
+											className={`border-b border-border-dim ${
+												isHighlighted
+													? "bg-accent/10 outline outline-2 outline-accent/60"
+													: ""
+											}`}
 										>
 											<td className="py-2 pr-3 whitespace-nowrap tabular-nums">
 												{formatTime(j.time)}

@@ -41,6 +41,10 @@ interface Vehicle {
 	hasRT: boolean;
 	stationary?: boolean;
 	externalTrackingUrl: string | null;
+	/** HAFAS service date (`YYYY-MM-DD`). Used to deep-link the popup into
+	 * this app's `/$lang/line/:line/day/:date?jid=…` page. Only set for
+	 * RMV-sourced vehicles since Flix doesn't live in `journey_runs`. */
+	serviceDate: string | null;
 	waypoints: Waypoint[];
 	fetchedAt: number;
 }
@@ -329,6 +333,9 @@ const fetchVehicles = createServerFn({ method: "GET" })
 					occupancy,
 					hasRT,
 					externalTrackingUrl,
+					serviceDate: j.date
+						? `${j.date.slice(0, 4)}-${j.date.slice(4, 6)}-${j.date.slice(6, 8)}`
+						: null,
 					waypoints,
 					fetchedAt: serverTime,
 				};
@@ -681,7 +688,15 @@ function MapPage() {
 			const trackingLink = showTracking
 				? `<br/><a href="${v.externalTrackingUrl}" target="_blank" rel="noopener" style="font-size:11px;color:var(--accent,#0969da)">Tracking info →</a>`
 				: "";
-			const content = `<strong>${escapeHtml(v.name)}</strong><br/>→ ${escapeHtml(v.direction)}${v.operator ? `<br/><span style="opacity:.7">${escapeHtml(v.operator)}</span>` : ""}${trackingLink}`;
+			// Deep-link into our own /line/$line/day/$date?jid=… page so
+			// clicking the popup jumps to the journey's per-day detail with
+			// the correct row highlighted. Only emit for RMV-sourced vehicles
+			// (Flix isn't in journey_runs).
+			const lineDetailsLink =
+				!isFlix && v.serviceDate
+					? `<br/><a href="/${l}/line/${encodeURIComponent(v.name.trim())}/day/${v.serviceDate}?jid=${encodeURIComponent(v.id)}" style="font-size:11px;color:var(--accent,#0969da)">Line details →</a>`
+					: "";
+			const content = `<strong>${escapeHtml(v.name)}</strong><br/>→ ${escapeHtml(v.direction)}${v.operator ? `<br/><span style="opacity:.7">${escapeHtml(v.operator)}</span>` : ""}${lineDetailsLink}${trackingLink}`;
 
 			// Only rebind when the rendered popup content actually changes —
 			// unbind/bind closes any open popup, which causes a visible

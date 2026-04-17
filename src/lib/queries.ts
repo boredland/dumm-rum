@@ -355,6 +355,7 @@ export async function getLineStats(line: string): Promise<LineStats> {
 }
 
 export interface LineDayJourney {
+	journeyRef: string;
 	date: string;
 	time: string;
 	rtTime: string | null;
@@ -372,6 +373,7 @@ export async function getLineDayJourneys(
 ): Promise<LineDayJourney[]> {
 	const rows = await db
 		.select({
+			journeyRef: journeyRuns.journeyRef,
 			date: journeyRuns.dayOfOperation,
 			time: journeyRuns.originDepTime,
 			rtTime: sql<string | null>`(
