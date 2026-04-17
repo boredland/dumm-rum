@@ -52,6 +52,10 @@ const EXCLUDED_BRANDS = new Set([
 const MAX_ACTIVE = 200;
 const DROP_AFTER_LAST_STOP_MS = 15 * 60 * 1000;
 const HEADING_MIN_METERS = 20;
+/** Forward-projection horizon in seconds. One fix ahead (~30 s) matches
+ * the upstream position cadence so the marker is always gliding toward a
+ * point the next real fix will either confirm or correct. */
+const PROJECT_SEC = 30;
 
 interface PrevPos {
 	lat: number;
@@ -208,13 +212,35 @@ export async function getAggregatedVehicles(): Promise<{
 			}
 		}
 
-		const waypoints: Waypoint[] =
-			prev && prev.t < curT
-				? [
-						{ lat: prev.lat, lon: prev.lon, t: prev.t, heading },
-						{ lat, lon, t: curT, heading },
-					]
-				: [{ lat, lon, t: curT, heading }];
+		const waypoints: Waypoint[] = [];
+		const canProject =
+			prev && prev.t < curT && ride.location.speed_category !== "STATIONARY";
+		if (prev && prev.t < curT) {
+			waypoints.push({
+				lat: prev.lat,
+				lon: prev.lon,
+				t: prev.t,
+				heading,
+			});
+		}
+		waypoints.push({ lat, lon, t: curT, heading });
+		// Linear-extrapolate one fix ahead using the prev→cur velocity
+		// vector so the marker keeps gliding forward between 30 s position
+		// updates instead of jumping. Off-track drift on curves is bounded
+		// by the short projection window; the next real fix corrects it.
+		if (canProject) {
+			const dt = (curT - prev.t) / 1000;
+			if (dt > 0) {
+				const vLat = (lat - prev.lat) / dt;
+				const vLon = (lon - prev.lon) / dt;
+				waypoints.push({
+					lat: lat + vLat * PROJECT_SEC,
+					lon: lon + vLon * PROJECT_SEC,
+					t: curT + PROJECT_SEC * 1000,
+					heading,
+				});
+			}
+		}
 
 		lastPositions.set(ride.id, { lat, lon, t: curT, heading });
 		seen.add(ride.id);
