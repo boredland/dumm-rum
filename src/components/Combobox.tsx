@@ -18,10 +18,15 @@ export interface ComboboxProps {
 	/** Max rows shown at once — keeps the popover bounded when the picklist
 	 * is thousands of stops long. */
 	maxResults?: number;
-	/** Render nothing until mounted — avoids SSR hydration churn when the
-	 * parent lazy-loads the list. */
 	disabled?: boolean;
 	ariaLabel?: string;
+	/** Strict mode: only values from `options` are committed. Typed text
+	 * filters the popup but never lands in `onChange` directly — you have
+	 * to pick a row (Enter / click). On blur or Escape the query resets to
+	 * the last valid value. The input border goes red when the query
+	 * doesn't match anything so the user sees why pressing Enter or
+	 * tabbing away revert their text. */
+	strict?: boolean;
 }
 
 function normalize(s: string): string {
@@ -54,6 +59,7 @@ export function Combobox({
 	maxResults = 50,
 	disabled,
 	ariaLabel,
+	strict,
 }: ComboboxProps) {
 	const [open, setOpen] = useState(false);
 	const [query, setQuery] = useState(value);
@@ -86,6 +92,13 @@ export function Combobox({
 		[onChange],
 	);
 
+	/** Roll the query back to the last valid value — used by Escape, blur,
+	 * and clicks outside the component in strict mode. */
+	const revert = useCallback(() => {
+		setQuery(value);
+		setOpen(false);
+	}, [value]);
+
 	const onKey = useCallback(
 		(e: KeyboardEvent<HTMLInputElement>) => {
 			if (!open && (e.key === "ArrowDown" || e.key === "ArrowUp")) {
@@ -104,33 +117,43 @@ export function Combobox({
 			} else if (e.key === "Enter") {
 				const pick = filtered[activeIdx];
 				if (pick) commit(pick);
+				else if (strict) revert();
 				else commit(query);
 				e.preventDefault();
 			} else if (e.key === "Escape") {
-				setOpen(false);
+				if (strict) revert();
+				else setOpen(false);
 				e.preventDefault();
 			} else if (e.key === "Tab") {
-				setOpen(false);
+				if (strict) revert();
+				else setOpen(false);
 			}
 		},
-		[activeIdx, commit, filtered, open, query],
+		[activeIdx, commit, filtered, open, query, revert, strict],
 	);
 
-	// Click-outside to dismiss.
+	// Click-outside to dismiss. In strict mode this also rolls the query
+	// back to the last valid value so a user who typed garbage and clicked
+	// away doesn't leave the input showing that garbage.
 	useEffect(() => {
 		if (!open) return;
 		const handler = (e: MouseEvent) => {
-			if (!rootRef.current?.contains(e.target as Node)) setOpen(false);
+			if (rootRef.current?.contains(e.target as Node)) return;
+			if (strict) revert();
+			else setOpen(false);
 		};
 		window.addEventListener("mousedown", handler);
 		return () => window.removeEventListener("mousedown", handler);
-	}, [open]);
+	}, [open, revert, strict]);
 
 	// Reset highlight whenever the filter result set changes.
 	// biome-ignore lint/correctness/useExhaustiveDependencies: reset on new result set, not on every re-render
 	useEffect(() => {
 		setActiveIdx(0);
 	}, [filtered.length, filtered[0]]);
+
+	const strictInvalid =
+		strict && query.trim().length > 0 && !options.some((o) => o === query);
 
 	return (
 		<div ref={rootRef} className={`relative ${className ?? ""}`}>
@@ -141,14 +164,26 @@ export function Combobox({
 				aria-controls={listId}
 				aria-autocomplete="list"
 				aria-label={ariaLabel}
-				className="w-full bg-surface border border-border rounded px-2 py-1.5 text-sm text-fg"
+				aria-invalid={strictInvalid || undefined}
+				className={`w-full bg-surface border rounded px-2 py-1.5 text-sm text-fg ${
+					strictInvalid ? "border-red-500" : "border-border"
+				}`}
 				value={query}
 				onChange={(e) => {
 					setQuery(e.target.value);
-					onChange(e.target.value);
+					if (!strict) onChange(e.target.value);
 					setOpen(true);
 				}}
 				onFocus={() => !disabled && setOpen(true)}
+				onBlur={() => {
+					if (strict) {
+						// Delay so a click on a list row gets a chance to
+						// commit before we revert.
+						setTimeout(() => {
+							if (!options.some((o) => o === query)) revert();
+						}, 0);
+					}
+				}}
 				onKeyDown={onKey}
 				placeholder={placeholder}
 				disabled={disabled}
@@ -156,14 +191,12 @@ export function Combobox({
 			{open && filtered.length > 0 && (
 				<div
 					id={listId}
-					// biome-ignore lint/a11y/useSemanticElements: combobox popup follows WAI-ARIA pattern with div[listbox] + div[option]
 					role="listbox"
 					className="absolute z-10 mt-1 left-0 right-0 max-h-60 overflow-y-auto bg-surface border border-border rounded shadow-lg"
 				>
 					{filtered.map((opt, i) => (
 						<div
 							key={opt}
-							// biome-ignore lint/a11y/useSemanticElements: see above
 							role="option"
 							tabIndex={-1}
 							aria-selected={i === activeIdx}

@@ -7,11 +7,11 @@ import { Combobox } from "./Combobox.tsx";
  * session reuses the same picker fetches. Lists are stable for minutes —
  * `/api/picker/*` is cached upstream at 1h browser + 1d CDN, we just
  * dedupe concurrent modal mounts here. */
-const pickerCache: { stops?: string[]; lines?: string[] } = {};
-const pickerInflight: { stops?: Promise<string[]>; lines?: Promise<string[]> } =
-	{};
+type PickerKind = "stops" | "lines" | "directions";
+const pickerCache: Partial<Record<PickerKind, string[]>> = {};
+const pickerInflight: Partial<Record<PickerKind, Promise<string[]>>> = {};
 
-async function fetchPicker(kind: "stops" | "lines"): Promise<string[]> {
+async function fetchPicker(kind: PickerKind): Promise<string[]> {
 	if (pickerCache[kind]) return pickerCache[kind]!;
 	if (pickerInflight[kind]) return pickerInflight[kind]!;
 	const p = (async () => {
@@ -85,6 +85,9 @@ export function SubscribeModal({
 	const [stopsList, setStopsList] = useState<string[]>(
 		() => pickerCache.stops ?? [],
 	);
+	const [directionsList, setDirectionsList] = useState<string[]>(
+		() => pickerCache.directions ?? [],
+	);
 
 	// Close on Escape.
 	useEffect(() => {
@@ -96,7 +99,9 @@ export function SubscribeModal({
 	}, [onClose]);
 
 	// Fetch picker lists once per session; the endpoints are heavily
-	// cached so this is cheap on repeat opens.
+	// cached so this is cheap on repeat opens. Directions is skipped when
+	// the host page already passed a contextual list — the global list
+	// would dilute line-specific directions with unrelated destinations.
 	useEffect(() => {
 		let alive = true;
 		if (linesList.length === 0)
@@ -107,10 +112,22 @@ export function SubscribeModal({
 			fetchPicker("stops")
 				.then((l) => alive && setStopsList(l))
 				.catch(() => {});
+		if (
+			directionsList.length === 0 &&
+			(!availableDirections || availableDirections.length === 0)
+		)
+			fetchPicker("directions")
+				.then((l) => alive && setDirectionsList(l))
+				.catch(() => {});
 		return () => {
 			alive = false;
 		};
-	}, [linesList.length, stopsList.length]);
+	}, [
+		linesList.length,
+		stopsList.length,
+		directionsList.length,
+		availableDirections,
+	]);
 
 	const timeRanges = useMemo(
 		() =>
@@ -187,33 +204,24 @@ export function SubscribeModal({
 							options={linesList}
 							placeholder="e.g. S6"
 							ariaLabel={t(lang, "subscribe.line")}
+							strict
 						/>
 					</div>
 
 					<div>
 						<div className={label}>{t(lang, "subscribe.direction")}</div>
-						{availableDirections && availableDirections.length > 0 ? (
-							<select
-								className={field}
-								value={direction}
-								onChange={(e) => setDirection(e.target.value)}
-							>
-								<option value="">{t(lang, "subscribe.direction.any")}</option>
-								{availableDirections.map((d) => (
-									<option key={d} value={d}>
-										{d}
-									</option>
-								))}
-							</select>
-						) : (
-							<input
-								type="text"
-								className={field}
-								value={direction}
-								onChange={(e) => setDirection(e.target.value)}
-								placeholder={t(lang, "subscribe.direction.any")}
-							/>
-						)}
+						<Combobox
+							value={direction}
+							onChange={setDirection}
+							options={
+								availableDirections && availableDirections.length > 0
+									? availableDirections
+									: directionsList
+							}
+							placeholder={t(lang, "subscribe.direction.any")}
+							ariaLabel={t(lang, "subscribe.direction")}
+							strict
+						/>
 					</div>
 
 					<div>
@@ -228,6 +236,7 @@ export function SubscribeModal({
 							}
 							placeholder={t(lang, "subscribe.stop.any")}
 							ariaLabel={t(lang, "subscribe.stop")}
+							strict
 						/>
 					</div>
 
