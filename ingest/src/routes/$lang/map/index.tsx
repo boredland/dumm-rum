@@ -40,9 +40,9 @@ interface Vehicle {
 }
 
 const PRODUCT_CLASSES: Record<number, string> = {
-	1: "ICE",
-	2: "IC",
-	4: "RE/RB",
+	1: "Fernverkehr",
+	2: "Fernverkehr",
+	4: "Regionalverkehr",
 	8: "S-Bahn",
 	16: "U-Bahn",
 	32: "Tram",
@@ -59,9 +59,8 @@ function classifyProduct(cls: number): string {
 }
 
 const CATEGORY_COLORS: Record<string, string> = {
-	ICE: "#000000",
-	IC: "#000000",
-	"RE/RB": "#000000",
+	Fernverkehr: "#EC0016",
+	Regionalverkehr: "#EC0016",
 	"S-Bahn": "#009757",
 	"U-Bahn": "#0065ae",
 	Tram: "#ef7d00",
@@ -287,7 +286,11 @@ const fetchVehicles = createServerFn({ method: "GET" })
 					if (s === "L" || s === "M" || s === "H") occupancy = s;
 				}
 
-				const RAIL_CATEGORIES = new Set(["ICE", "IC", "RE/RB", "S-Bahn"]);
+				const RAIL_CATEGORIES = new Set([
+					"Fernverkehr",
+					"Regionalverkehr",
+					"S-Bahn",
+				]);
 				let bahnExpertUrl: string | null = null;
 				if (RAIL_CATEGORIES.has(category)) {
 					const depTime = (j.stopL ?? [])[0]?.dTimeS;
@@ -341,7 +344,7 @@ export const Route = createFileRoute("/$lang/map/")({
 	component: MapPage,
 });
 
-type IconType = "S" | "U" | "bus" | "tram" | "train" | null;
+type IconType = "S" | "U" | "R" | "bus" | "tram" | "train" | null;
 
 function resolveIconType(category: string): IconType {
 	switch (category) {
@@ -354,10 +357,10 @@ function resolveIconType(category: string): IconType {
 			return "bus";
 		case "Tram":
 			return "tram";
-		case "ICE":
-		case "IC":
-		case "RE/RB":
+		case "Fernverkehr":
 			return "train";
+		case "Regionalverkehr":
+			return "R";
 		default:
 			return null;
 	}
@@ -378,10 +381,12 @@ const RMV_GLYPHS: Record<string, string> = {
 		'<path d="M72.32,37.63a5.5,5.5,0,0,0-.09-.45c-.45-1.69-3.48-12.81-6.7-16.02-2.94-2.94-9.8-3.48-15.52-3.48s-12.59.54-15.52,3.48c-2.73,2.73-5.41,11.6-6.44,15.28a11.7,11.7,0,0,0-.44,3.32v24.48c0,5.41,4.01,8.58,8.57,8.58h27.64c4.55,0,8.57-3.16,8.57-8.58V38.45a5.3,5.3,0,0,0-.07-.82zM31.96,37.76a.82.82,0,0,1-.81-1.1l3.16-9.81a.82.82,0,0,1,.8-.59h12.02a.85.85,0,0,1,.85.85v9.8a.85.85,0,0,1-.85.85H31.96zM38.5,68.26a4.1,4.1,0,1,1,4.1-4.1A4.1,4.1,0,0,1,38.5,68.26zm1.76,7.41a.85.85,0,0,0-.85-.85h-2.39a.85.85,0,0,0-.85.85v5.8a.85.85,0,0,0,.85.85h2.39a.85.85,0,0,0,.85-.85V75.67zM50.02,48.88a4.1,4.1,0,1,1,4.1-4.1A4.1,4.1,0,0,1,50.02,48.88zm2.86-11.12a.85.85,0,0,1-.85-.85v-9.8a.85.85,0,0,1,.85-.85h12.03a.82.82,0,0,1,.8.59l3.16,9.8a.82.82,0,0,1-.81,1.1H52.88zM61.51,68.26a4.1,4.1,0,1,1,4.1-4.1A4.1,4.1,0,0,1,61.51,68.26zm2.32,7.41a.85.85,0,0,0-.85-.85h-2.39a.85.85,0,0,0-.85.85v5.8a.85.85,0,0,0,.85.85h2.39a.85.85,0,0,0,.85-.85V75.67z"/>',
 	S: '<path d="M69.15,37.62c-2.8-2.59-5.42-4.78-8.45-6.37-4.85-2.56-9.92-4.07-15.44-3.12-2.9.5-4.88,2.32-5.26,4.61-.48,2.92.64,5.32,3.34,6.89,3.42,2,7.3,2.6,11.05,3.55,2.68.68,5.33,1.42,7.94,2.37,11.33,4.12,12.56,16.1,6.69,23.98-5.11,6.86-12.22,9.47-20.47,9.01-7.09-.4-13.55-2.76-19.37-6.93-.86-.62-1.23-1.25-1.2-2.34.08-2.98.03-5.96.03-9.41,1.82,2.18,3.46,4.01,5.38,5.52,5.39,4.22,11.32,6.79,18.29,6.2,2.23-.19,4.24-.98,5.91-2.52,2.83-2.62,2.73-6.39-.26-8.84-1.96-1.61-4.35-2.33-6.72-3.05-4.5-1.36-9.14-2.27-13.44-4.26-4.6-2.13-8.05-5.26-9.23-10.54-1.44-6.48,1.21-13.25,6.71-16.83,8.13-5.29,16.66-4.98,25.39-1.91,2.9,1.02,5.6,2.49,8.09,4.32.47.35,1.03.6,1.03,1.34,0,2.66,0,5.32,0,8.34z"/>',
 	U: '<path d="M27.57,42.62V26.77c-.01-.97.21-1.28,1.25-1.26,4.18.06,8.37.07,12.55,0,1.09-.02,1.43.2,1.42,1.35-.05,9.72-.03,19.45-.03,29.17,0,.58-.01,1.16.08,1.73.64,4.04,3.22,6.04,7.47,5.8a8.5,8.5,0,0,0,2.01-.19c3.15-.55,4.89-2.72,5.01-6.3.06-1.78.01-3.55.01-5.33V27.87c-.01-1.02.23-1.34,1.31-1.32,4.23.07,8.46.06,12.69,0,.98-.01,1.17.28,1.17,1.19-.03,9.72-.02,19.45-.02,29.17,0,9.93-4.46,15.58-14.31,17.73-6.28,1.37-12.61,1.23-18.8-.64-7.51-2.27-11.68-7.94-11.75-15.82-.03-4.83,0-9.67,0-14.56z"/>',
+	R: '<text x="50" y="78" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="80" font-weight="900">R</text>',
 };
 
 function buildIconGlyph(type: IconType, fill: string): string {
-	const key = type === "S" || type === "U" ? type : (type ?? "");
+	const key =
+		type === "S" || type === "U" || type === "R" ? type : (type ?? "");
 	const path = RMV_GLYPHS[key];
 	if (path) return `<g fill="${fill}">${path}</g>`;
 	return `<circle cx="50" cy="50" r="20" fill="${fill}"/>`;
@@ -662,9 +667,8 @@ function MapPage() {
 
 			const layers = new Map<string, L.LayerGroup>();
 			const CATS = [
-				"ICE",
-				"IC",
-				"RE/RB",
+				"Fernverkehr",
+				"Regionalverkehr",
 				"S-Bahn",
 				"U-Bahn",
 				"Tram",
