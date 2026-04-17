@@ -558,19 +558,24 @@ function MapPage() {
 
 			const isFollowed = v.id === followIdRef.current;
 			const m = existing.get(v.id)!.marker;
+			const bahnLink =
+				v.bahnExpertUrl && v.delay && v.delay > 2
+					? `<br/><a href="${v.bahnExpertUrl}" target="_blank" rel="noopener" style="font-size:11px;color:var(--accent,#0969da)">Delay info →</a>`
+					: "";
+			const content = `<strong>${escapeHtml(v.name)}</strong><br/>→ ${escapeHtml(v.direction)}${v.operator ? `<br/><span style="opacity:.7">${escapeHtml(v.operator)}</span>` : ""}${bahnLink}`;
+			const off: [number, number] = [0, -(size / 2 + 4)];
+
 			m.unbindTooltip();
-			const bahnLink = v.bahnExpertUrl && v.delay && v.delay > 2
-				? `<br/><a href="${v.bahnExpertUrl}" target="_blank" rel="noopener" style="font-size:10px">Delay info →</a>`
-				: "";
-			m.bindTooltip(
-				`<strong>${escapeHtml(v.name)}</strong><br/>→ ${escapeHtml(v.direction)}${v.operator ? `<br/><span style="opacity:.7">${escapeHtml(v.operator)}</span>` : ""}${bahnLink}`,
-				{
-					direction: "top",
-					offset: [0, -(size / 2 + 4)],
-					permanent: isFollowed,
-					className: isFollowed ? "followed-tooltip" : "",
-				},
-			);
+			m.unbindPopup();
+			if (bahnLink) {
+				m.bindPopup(content, { offset: off, className: "vehicle-popup" });
+			}
+			m.bindTooltip(content, {
+				direction: "top",
+				offset: off,
+				permanent: isFollowed,
+				className: isFollowed ? "followed-tooltip" : "",
+			});
 			if (isFollowed) m.openTooltip();
 		}
 
