@@ -1,5 +1,8 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { createServerFn } from "@tanstack/react-start";
+import "leaflet/dist/leaflet.css";
+import "leaflet-fullscreen/dist/leaflet.fullscreen.css";
+import "leaflet.locatecontrol/dist/L.Control.Locate.min.css";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { SubscribeModal } from "../../../components/SubscribeModal.tsx";
 import { type Lang, t } from "../../../lib/i18n.ts";
@@ -1220,18 +1223,6 @@ function MapPage() {
 					onClose={() => setSubscribeInitial(null)}
 				/>
 			)}
-			<link
-				rel="stylesheet"
-				href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
-			/>
-			<link
-				rel="stylesheet"
-				href="https://unpkg.com/leaflet-fullscreen@1.0.2/dist/leaflet.fullscreen.css"
-			/>
-			<link
-				rel="stylesheet"
-				href="https://unpkg.com/leaflet.locatecontrol@0.89.0/dist/L.Control.Locate.min.css"
-			/>
 			<div className="flex items-center gap-2 px-3 py-2 bg-surface border-b border-border z-[1000] overflow-x-auto shrink-0">
 				<Link
 					to="/$lang"
