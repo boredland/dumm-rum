@@ -544,6 +544,14 @@ function MapPage() {
 		}
 	}, []);
 
+	const stopFollowing = useCallback(() => {
+		const id = followIdRef.current;
+		if (id) markersRef.current.get(id)?.marker.closePopup();
+		followIdRef.current = null;
+		setFollowName(null);
+		clearFollowedPolyline();
+	}, [clearFollowedPolyline]);
+
 	const drawFollowedPolyline = useCallback(async (v: Vehicle) => {
 		if (v.category !== "Flixtrain" && v.category !== "Flixbus") return;
 		const coords = await fetchFlixRoute(v.id);
@@ -879,9 +887,14 @@ function MapPage() {
 
 			map.on("dragstart", () => {
 				userPanRef.current = true;
-				followIdRef.current = null;
-				setFollowName(null);
-				clearFollowedPolyline();
+				stopFollowing();
+			});
+
+			// Empty-map click (not on a marker — Leaflet's marker click
+			// doesn't propagate to the map "click" event): unfollow and
+			// close the popup.
+			map.on("click", () => {
+				stopFollowing();
 			});
 
 			map.on("moveend", () => {
@@ -985,11 +998,7 @@ function MapPage() {
 							Following {followName}
 							<button
 								type="button"
-								onClick={() => {
-									followIdRef.current = null;
-									setFollowName(null);
-									clearFollowedPolyline();
-								}}
+								onClick={stopFollowing}
 								className="text-muted hover:text-fg cursor-pointer"
 							>
 								✕
