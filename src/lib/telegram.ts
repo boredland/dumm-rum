@@ -131,16 +131,36 @@ export async function handleTelegramWebhook(
 		const encoded = text.slice("/start s-".length);
 		try {
 			const decoded = atob(encoded.replace(/-/g, "+").replace(/_/g, "/"));
-			const [line, direction, timeRanges, weekdays] = decoded.split("|");
+			// Schema: line|direction|stopName|timeRanges|weekdays.
+			// Trailing empties may be absent (the client encoder drops
+			// them). The stopName field is newer — older links that
+			// encoded only 4 fields (line|direction|timeRanges|weekdays)
+			// are still accepted: we detect the old shape by a 3rd field
+			// that looks like a time range (contains ":") and shift.
+			const parts = decoded.split("|");
+			const line = parts[0] ?? "";
+			const direction = parts[1] ?? "";
+			let stopName = parts[2] ?? "";
+			let timeRanges = parts[3] ?? "";
+			let weekdays = parts[4] ?? "";
+			if (stopName.includes(":") && !timeRanges && !weekdays) {
+				// Legacy 4-field payload; shift stopName → timeRanges,
+				// timeRanges → weekdays, and treat stopName as absent.
+				weekdays = parts[3] ?? "";
+				timeRanges = stopName;
+				stopName = "";
+			}
 			let cmd = `/subscribe ${line}`;
 			if (direction) cmd += ` ${direction}`;
+			if (stopName) cmd += ` @${stopName}`;
 			if (timeRanges) cmd += ` ${timeRanges}`;
 			if (weekdays) cmd += ` ${weekdays}`;
 			const desc = direction
 				? `<b>${line}</b> → ${direction}`
 				: `<b>${line}</b>`;
+			const stopBit = stopName ? ` @ <b>${stopName}</b>` : "";
 			await reply(
-				`🚏 Subscribe to ${desc} alerts:\n\n<code>${cmd}</code>\n\nTap the command above to copy, then send it here.\n\nYou can add options before sending:\n⏰ Time: <code>${cmd} 06:00-09:00,16:00-19:00</code>\n📅 Days: <code>${cmd} Mo-Fr</code>\n⏰📅 Both: <code>${cmd} 06:00-09:00 Mo-Fr</code>`,
+				`🚏 Subscribe to ${desc}${stopBit} alerts:\n\n<code>${cmd}</code>\n\nTap the command above to copy, then send it here.\n\nYou can add options before sending:\n⏰ Time: <code>${cmd} 06:00-09:00,16:00-19:00</code>\n📅 Days: <code>${cmd} Mo-Fr</code>\n⏰📅 Both: <code>${cmd} 06:00-09:00 Mo-Fr</code>`,
 			);
 		} catch {
 			await reply("Invalid link. Try /help");
