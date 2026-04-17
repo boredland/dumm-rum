@@ -34,6 +34,7 @@ interface Vehicle {
 	delay: number | null;
 	occupancy: "L" | "M" | "H" | null;
 	hasRT: boolean;
+	stationary?: boolean;
 	externalTrackingUrl: string | null;
 	waypoints: Waypoint[];
 	fetchedAt: number;
@@ -436,14 +437,23 @@ function buildVehicleIcon(
 
 	const tipDist = r * 1.6;
 	const spread = r * 0.55;
-	const pointer = `<polygon points="${c + tipDist},${c} ${c + r * 0.6},${c - spread} ${c + r * 0.6},${c + spread}" fill="${v.bg}" stroke="#fff" stroke-width="2" stroke-linejoin="round"/>`;
+	const pointer = v.stationary
+		? ""
+		: `<g transform="rotate(${headingDeg},${c},${c})"><polygon points="${c + tipDist},${c} ${c + r * 0.6},${c - spread} ${c + r * 0.6},${c + spread}" fill="${v.bg}" stroke="#fff" stroke-width="2" stroke-linejoin="round"/></g>`;
 
 	const ir = r * 0.72;
 	const gs = (ir * 2) / 100;
 	const go = c - ir;
 	const innerGlyph = `<g transform="translate(${go},${go}) scale(${gs})">${glyph}</g>`;
 
-	const pin = `<g transform="rotate(${headingDeg},${c},${c})">${pointer}</g><circle cx="${c}" cy="${c}" r="${r}" fill="${v.bg}" stroke="#fff" stroke-width="2"/><circle cx="${c}" cy="${c}" r="${ir}" fill="#fff"/>${innerGlyph}`;
+	// Stationary markers: swap the directional arrow for a dashed halo so
+	// the user sees "parked" rather than thinking the marker is frozen
+	// mid-move.
+	const stationaryHalo = v.stationary
+		? `<circle cx="${c}" cy="${c}" r="${r + 4}" fill="none" stroke="${v.bg}" stroke-width="2" stroke-dasharray="3 3" opacity="0.6"/>`
+		: "";
+
+	const pin = `${pointer}${stationaryHalo}<circle cx="${c}" cy="${c}" r="${r}" fill="${v.bg}" stroke="#fff" stroke-width="2"/><circle cx="${c}" cy="${c}" r="${ir}" fill="#fff"/>${innerGlyph}`;
 
 	let label = "";
 	if (showLabel) {
@@ -576,7 +586,7 @@ function MapPage() {
 			const layerKey = `${v.category}${v.hasRT ? "" : " (sched)"}`;
 			const layer = layers.get(layerKey);
 			if (!layer) continue;
-			const iconKey = `${size}|${showLabel}|${v.heading}|${v.category}|${v.delay}|${v.occupancy}|${v.hasRT}`;
+			const iconKey = `${size}|${showLabel}|${v.heading}|${v.category}|${v.delay}|${v.occupancy}|${v.hasRT}|${v.stationary ? 1 : 0}`;
 
 			const entry = existing.get(v.id);
 			if (entry) {

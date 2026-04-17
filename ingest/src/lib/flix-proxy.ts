@@ -30,6 +30,7 @@ export interface FlixVehicle {
 	delay: number | null;
 	occupancy: null;
 	hasRT: true;
+	stationary: boolean;
 	externalTrackingUrl: string;
 	waypoints: Waypoint[];
 	fetchedAt: number;
@@ -277,6 +278,7 @@ export async function getAggregatedVehicles(): Promise<{
 			delay: rideDelayMinutes(ride),
 			occupancy: null,
 			hasRT: true,
+			stationary: ride.location.speed_category === "STATIONARY",
 			externalTrackingUrl: FLIX_TRACKING_URL_BASE + ride.id,
 			waypoints,
 			fetchedAt: now,
