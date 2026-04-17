@@ -827,7 +827,7 @@ function MapPage() {
 			L.tileLayer("https://tileserver.memomaps.de/tilegen/{z}/{x}/{y}.png", {
 				maxZoom: 18,
 				attribution:
-					'Map © <a href="https://memomaps.de/">MeMoMaps</a> · Data © <a href="https://www.openstreetmap.org/copyright">OSM</a> · Vehicles © <a href="https://www.rmv.de">RMV</a> & <a href="https://www.flixbus.com">FlixBus</a>',
+					'Map © <a href="https://memomaps.de/">MeMoMaps</a> · Data © <a href="https://www.openstreetmap.org/copyright">OSM</a>',
 			}).addTo(map);
 
 			leafletMap.current = map;
@@ -845,9 +845,26 @@ function MapPage() {
 				"AST",
 				"Other",
 			];
+			// Each LayerGroup declares the credit for its data source. The
+			// default attribution control dedupes identical strings, so the
+			// same string across 16 groups shows up once; removing all groups
+			// for a source (e.g. both Flix categories toggled off) drops the
+			// credit until something from that source is re-added.
+			const FLIX_CATS = new Set(["Flixtrain", "Flixbus"]);
+			const attrFor = (cat: string) =>
+				FLIX_CATS.has(cat)
+					? 'Vehicles © <a href="https://www.flixbus.com">FlixBus</a>'
+					: 'Vehicles © <a href="https://www.rmv.de">RMV</a>';
 			for (const cat of CATS) {
-				layers.set(cat, L.layerGroup().addTo(map));
-				layers.set(`${cat} (sched)`, L.layerGroup().addTo(map));
+				const attribution = attrFor(cat);
+				layers.set(
+					cat,
+					L.layerGroup([], { attribution }).addTo(map),
+				);
+				layers.set(
+					`${cat} (sched)`,
+					L.layerGroup([], { attribution }).addTo(map),
+				);
 			}
 			categoryLayersRef.current = layers;
 
