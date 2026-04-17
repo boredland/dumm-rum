@@ -34,7 +34,7 @@ interface Vehicle {
 	delay: number | null;
 	occupancy: "L" | "M" | "H" | null;
 	hasRT: boolean;
-	bahnExpertUrl: string | null;
+	externalTrackingUrl: string | null;
 	waypoints: Waypoint[];
 	fetchedAt: number;
 }
@@ -61,6 +61,8 @@ function classifyProduct(cls: number): string {
 const CATEGORY_COLORS: Record<string, string> = {
 	Fernverkehr: "#EC0016",
 	Regionalverkehr: "#EC0016",
+	Flixtrain: "#73D700",
+	Flixbus: "#44A12C",
 	"S-Bahn": "#009757",
 	"U-Bahn": "#0065ae",
 	Tram: "#ef7d00",
@@ -291,7 +293,7 @@ const fetchVehicles = createServerFn({ method: "GET" })
 					"Regionalverkehr",
 					"S-Bahn",
 				]);
-				let bahnExpertUrl: string | null = null;
+				let externalTrackingUrl: string | null = null;
 				if (RAIL_CATEGORIES.has(category)) {
 					const depTime = (j.stopL ?? [])[0]?.dTimeS;
 					if (depTime && j.date) {
@@ -302,7 +304,7 @@ const fetchVehicles = createServerFn({ method: "GET" })
 						const mm = depTime.slice(2, 4);
 						const trainName = prod?.name?.trim() ?? "";
 						if (trainName) {
-							bahnExpertUrl = `https://bahn.expert/details/${encodeURIComponent(trainName)}/${y}-${mo}-${dy}T${hh}:${mm}:00.000Z`;
+							externalTrackingUrl = `https://bahn.expert/details/${encodeURIComponent(trainName)}/${y}-${mo}-${dy}T${hh}:${mm}:00.000Z`;
 						}
 					}
 				}
@@ -320,7 +322,7 @@ const fetchVehicles = createServerFn({ method: "GET" })
 					delay,
 					occupancy,
 					hasRT,
-					bahnExpertUrl,
+					externalTrackingUrl,
 					waypoints,
 					fetchedAt: serverTime,
 				};
@@ -329,6 +331,23 @@ const fetchVehicles = createServerFn({ method: "GET" })
 			return { vehicles, serverTime };
 		},
 	);
+
+async function fetchFlixVehicles(): Promise<{
+	vehicles: Vehicle[];
+	serverTime: number;
+}> {
+	const resp = await fetch("/api/flix/vehicles");
+	if (!resp.ok) throw new Error(`flix vehicles HTTP ${resp.status}`);
+	return (await resp.json()) as { vehicles: Vehicle[]; serverTime: number };
+}
+
+async function fetchFlixRoute(
+	uuid: string,
+): Promise<[number, number][] | null> {
+	const resp = await fetch(`/api/flix/route/${encodeURIComponent(uuid)}`);
+	if (!resp.ok) return null;
+	return (await resp.json()) as [number, number][] | null;
+}
 
 type MapSearch = { z?: number; lat?: number; lon?: number };
 
@@ -361,6 +380,10 @@ function resolveIconType(category: string): IconType {
 			return "train";
 		case "Regionalverkehr":
 			return "R";
+		case "Flixtrain":
+			return "train";
+		case "Flixbus":
+			return "bus";
 		default:
 			return null;
 	}
@@ -446,7 +469,6 @@ function buildVehicleIcon(
 	return `<div style="position:relative;width:${s}px;height:${s}px;opacity:${opacity}"><svg width="${s}" height="${s}" viewBox="0 0 ${s} ${s}" overflow="visible">${pin}</svg>${label}</div>`;
 }
 
-
 function interpolateVehicle(
 	v: Vehicle,
 	now: number,
@@ -494,6 +516,31 @@ function MapPage() {
 	const followIdRef = useRef<string | null>(null);
 	const [followName, setFollowName] = useState<string | null>(null);
 	const userPanRef = useRef(false);
+	const followedPolylineRef = useRef<L.Polyline | null>(null);
+
+	const clearFollowedPolyline = useCallback(() => {
+		const poly = followedPolylineRef.current;
+		if (poly) {
+			poly.remove();
+			followedPolylineRef.current = null;
+		}
+	}, []);
+
+	const drawFollowedPolyline = useCallback(async (v: Vehicle) => {
+		if (v.category !== "Flixtrain" && v.category !== "Flixbus") return;
+		const coords = await fetchFlixRoute(v.id);
+		if (!coords || !leafletMap.current) return;
+		if (followIdRef.current !== v.id) return;
+		const L = await import("leaflet");
+		if (followIdRef.current !== v.id || !leafletMap.current) return;
+		if (followedPolylineRef.current) followedPolylineRef.current.remove();
+		followedPolylineRef.current = L.polyline(coords, {
+			color: v.bg,
+			weight: 4,
+			opacity: 0.55,
+			dashArray: "6 6",
+		}).addTo(leafletMap.current);
+	}, []);
 	const [vehicleCount, setVehicleCount] = useState(0);
 	const [loading, setLoading] = useState(true);
 	const [lastUpdate, setLastUpdate] = useState<Date | null>(null);
@@ -551,23 +598,25 @@ function MapPage() {
 				});
 				const marker = L.marker([pos.lat, pos.lon], { icon }).addTo(layer);
 				marker.on("click", () => {
-					const current = vehiclesRef.current.find(
-						(cv) => cv.id === v.id,
-					);
+					const current = vehiclesRef.current.find((cv) => cv.id === v.id);
 					followIdRef.current = v.id;
 					setFollowName(current?.name ?? v.name);
 					userPanRef.current = false;
+					clearFollowedPolyline();
+					if (current) drawFollowedPolyline(current);
 				});
 				existing.set(v.id, { marker, iconKey, layerKey });
 			}
 
 			const isFollowed = v.id === followIdRef.current;
 			const m = existing.get(v.id)!.marker;
-			const bahnLink =
-				v.bahnExpertUrl && v.delay && v.delay > 2
-					? `<br/><a href="${v.bahnExpertUrl}" target="_blank" rel="noopener" style="font-size:11px;color:var(--accent,#0969da)">Delay info →</a>`
-					: "";
-			const content = `<strong>${escapeHtml(v.name)}</strong><br/>→ ${escapeHtml(v.direction)}${v.operator ? `<br/><span style="opacity:.7">${escapeHtml(v.operator)}</span>` : ""}${bahnLink}`;
+			const isFlix = v.category === "Flixtrain" || v.category === "Flixbus";
+			const showTracking =
+				v.externalTrackingUrl && (isFlix || (v.delay != null && v.delay > 2));
+			const trackingLink = showTracking
+				? `<br/><a href="${v.externalTrackingUrl}" target="_blank" rel="noopener" style="font-size:11px;color:var(--accent,#0969da)">Tracking info →</a>`
+				: "";
+			const content = `<strong>${escapeHtml(v.name)}</strong><br/>→ ${escapeHtml(v.direction)}${v.operator ? `<br/><span style="opacity:.7">${escapeHtml(v.operator)}</span>` : ""}${trackingLink}`;
 
 			m.unbindPopup();
 			m.bindPopup(content, {
@@ -591,15 +640,31 @@ function MapPage() {
 		const sw = bounds.getSouthWest();
 		const ne = bounds.getNorthEast();
 		try {
-			const { vehicles, serverTime } = await fetchVehicles({
-				data: {
-					swLat: sw.lat,
-					swLon: sw.lng,
-					neLat: ne.lat,
-					neLon: ne.lng,
-					products: 1023,
-				},
-			});
+			const [rmvRes, flixRes] = await Promise.allSettled([
+				fetchVehicles({
+					data: {
+						swLat: sw.lat,
+						swLon: sw.lng,
+						neLat: ne.lat,
+						neLon: ne.lng,
+						products: 1023,
+					},
+				}),
+				fetchFlixVehicles(),
+			]);
+
+			const vehicles: Vehicle[] = [];
+			let serverTime = Date.now();
+			if (rmvRes.status === "fulfilled") {
+				vehicles.push(...rmvRes.value.vehicles);
+				serverTime = rmvRes.value.serverTime;
+			}
+			if (flixRes.status === "fulfilled") {
+				vehicles.push(...flixRes.value.vehicles);
+			} else {
+				console.warn("flix fetch failed:", flixRes.reason);
+			}
+
 			timeDeltaRef.current = serverTime - Date.now();
 			const now = Date.now() + timeDeltaRef.current;
 			const prev = new Map(vehiclesRef.current.map((v) => [v.id, v]));
@@ -649,7 +714,11 @@ function MapPage() {
 			L.control.zoom({ position: "topright" }).addTo(map);
 
 			const lc = await import("leaflet.locatecontrol");
-			const locateFactory = (lc as unknown as { locate: (opts: Record<string, unknown>) => L.Control }).locate;
+			const locateFactory = (
+				lc as unknown as {
+					locate: (opts: Record<string, unknown>) => L.Control;
+				}
+			).locate;
 			locateFactory({
 				position: "topright",
 				flyTo: true,
@@ -669,6 +738,8 @@ function MapPage() {
 			const CATS = [
 				"Fernverkehr",
 				"Regionalverkehr",
+				"Flixtrain",
+				"Flixbus",
 				"S-Bahn",
 				"U-Bahn",
 				"Tram",
@@ -765,10 +836,12 @@ function MapPage() {
 					addHeading("Vehicles");
 					for (const cat of CATS) {
 						if (cat === "Other") continue;
-						addToggle(catIcon(cat), ` ${cat}`, [
-							layers.get(cat)!,
-							layers.get(`${cat} (sched)`)!,
-						], true);
+						addToggle(
+							catIcon(cat),
+							` ${cat}`,
+							[layers.get(cat)!, layers.get(`${cat} (sched)`)!],
+							true,
+						);
 					}
 
 					return el;
@@ -780,6 +853,7 @@ function MapPage() {
 				userPanRef.current = true;
 				followIdRef.current = null;
 				setFollowName(null);
+				clearFollowedPolyline();
 			});
 
 			map.on("moveend", () => {
@@ -886,6 +960,7 @@ function MapPage() {
 								onClick={() => {
 									followIdRef.current = null;
 									setFollowName(null);
+									clearFollowedPolyline();
 								}}
 								className="text-muted hover:text-fg cursor-pointer"
 							>
