@@ -350,7 +350,18 @@ async function fetchFlixRoute(
 	return (await resp.json()) as [number, number][] | null;
 }
 
-type MapSearch = { z?: number; lat?: number; lon?: number };
+type MapSearch = {
+	z?: number;
+	lat?: number;
+	lon?: number;
+	/** Comma-separated categories whose markers are hidden. Absent/empty =
+	 * nothing hidden. Keeps the URL short when all layers are visible. */
+	hide?: string;
+	/** "0" hides the Realtime layer group; anything else = visible. */
+	rt?: string;
+	/** "0" hides the Schedule layer group. */
+	sched?: string;
+};
 
 export const Route = createFileRoute("/$lang/map/")({
 	head: () => ({
@@ -360,6 +371,9 @@ export const Route = createFileRoute("/$lang/map/")({
 		z: typeof search.z === "number" ? search.z : undefined,
 		lat: typeof search.lat === "number" ? search.lat : undefined,
 		lon: typeof search.lon === "number" ? search.lon : undefined,
+		hide: typeof search.hide === "string" ? search.hide : undefined,
+		rt: typeof search.rt === "string" ? search.rt : undefined,
+		sched: typeof search.sched === "string" ? search.sched : undefined,
 	}),
 	component: MapPage,
 });
@@ -792,6 +806,42 @@ function MapPage() {
 			const allRt = CATS.map((c) => layers.get(c)!);
 			const allSched = CATS.map((c) => layers.get(`${c} (sched)`)!);
 
+			// Initial visibility state is derived from the search params on
+			// mount; subsequent changes are driven by the control itself,
+			// which both toggles the layer and reflects the state back into
+			// the URL via `navigate`.
+			const hiddenCats = new Set<string>(
+				(search.hide ?? "").split(",").filter(Boolean),
+			);
+			let rtVisible = search.rt !== "0";
+			let schedVisible = search.sched !== "0";
+
+			const applyCatVisibility = (cat: string) => {
+				const rtG = layers.get(cat);
+				const schedG = layers.get(`${cat} (sched)`);
+				if (!rtG || !schedG) return;
+				const hidden = hiddenCats.has(cat);
+				if (hidden || !rtVisible) map.removeLayer(rtG);
+				else map.addLayer(rtG);
+				if (hidden || !schedVisible) map.removeLayer(schedG);
+				else map.addLayer(schedG);
+			};
+			for (const cat of CATS) applyCatVisibility(cat);
+
+			const syncSearch = () => {
+				navigate({
+					search: (s) => ({
+						...s,
+						hide: hiddenCats.size
+							? Array.from(hiddenCats).join(",")
+							: undefined,
+						rt: rtVisible ? undefined : "0",
+						sched: schedVisible ? undefined : "0",
+					}),
+					replace: true,
+				});
+			};
+
 			const FilterControl = L.Control.extend({
 				onAdd() {
 					const el = L.DomUtil.create("div", "leaflet-bar leaflet-control");
@@ -825,8 +875,8 @@ function MapPage() {
 					const addToggle = (
 						icon: string,
 						label: string,
-						groups: L.LayerGroup[],
 						checked: boolean,
+						onChange: (next: boolean) => void,
 					) => {
 						const row = document.createElement("label");
 						Object.assign(row.style, {
@@ -842,10 +892,7 @@ function MapPage() {
 						cb.style.margin = "0";
 						row.appendChild(cb);
 						row.insertAdjacentHTML("beforeend", icon + label);
-						cb.addEventListener("change", () => {
-							for (const g of groups)
-								cb.checked ? map.addLayer(g) : map.removeLayer(g);
-						});
+						cb.addEventListener("change", () => onChange(cb.checked));
 						el.appendChild(row);
 					};
 
@@ -859,25 +906,40 @@ function MapPage() {
 					addToggle(
 						'<svg width="16" height="16" viewBox="0 0 16 16" style="vertical-align:middle"><circle cx="8" cy="8" r="7" fill="#27ae60"/><text x="8" y="11.5" text-anchor="middle" font-size="9" font-weight="bold" fill="#fff">RT</text></svg>',
 						" Realtime",
-						allRt,
-						true,
+						rtVisible,
+						(next) => {
+							rtVisible = next;
+							for (const g of allRt)
+								(next ? map.addLayer : map.removeLayer).call(map, g);
+							// Re-apply hidden-category rule so a rt-toggle doesn't
+							// show hidden categories.
+							for (const cat of CATS) applyCatVisibility(cat);
+							syncSearch();
+						},
 					);
 					addToggle(
 						'<svg width="16" height="16" viewBox="0 0 16 16" style="vertical-align:middle"><circle cx="8" cy="8" r="7" fill="#999" opacity=".45"/><text x="8" y="11" text-anchor="middle" font-size="7" font-weight="bold" fill="#fff">SCH</text></svg>',
 						" Schedule",
-						allSched,
-						true,
+						schedVisible,
+						(next) => {
+							schedVisible = next;
+							for (const g of allSched)
+								(next ? map.addLayer : map.removeLayer).call(map, g);
+							for (const cat of CATS) applyCatVisibility(cat);
+							syncSearch();
+						},
 					);
 
 					addHeading("Vehicles");
 					for (const cat of CATS) {
 						if (cat === "Other") continue;
-						addToggle(
-							catIcon(cat),
-							` ${cat}`,
-							[layers.get(cat)!, layers.get(`${cat} (sched)`)!],
-							true,
-						);
+						const c = cat;
+						addToggle(catIcon(c), ` ${c}`, !hiddenCats.has(c), (next) => {
+							if (next) hiddenCats.delete(c);
+							else hiddenCats.add(c);
+							applyCatVisibility(c);
+							syncSearch();
+						});
 					}
 
 					return el;
