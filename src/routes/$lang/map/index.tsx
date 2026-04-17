@@ -991,14 +991,69 @@ function MapPage() {
 					Object.assign(el.style, {
 						background: "var(--surface, #fff)",
 						color: "var(--fg, #333)",
-						padding: "6px 8px",
 						fontSize: "11px",
 						lineHeight: "1.8",
-						maxHeight: "70vh",
-						overflowY: "auto",
+						overflow: "hidden",
 					});
 					L.DomEvent.disableClickPropagation(el);
 					L.DomEvent.disableScrollPropagation(el);
+
+					// Collapsed by default: the full layer panel is tall enough
+					// on mobile that it hides half the map. The toggle button
+					// always shows the same stacked-sheets glyph Google Maps
+					// and Leaflet's built-in Layers control both use.
+					const toggle = document.createElement("button");
+					toggle.type = "button";
+					toggle.setAttribute("aria-label", "Toggle layers");
+					toggle.setAttribute("aria-expanded", "false");
+					Object.assign(toggle.style, {
+						display: "flex",
+						alignItems: "center",
+						justifyContent: "center",
+						gap: "4px",
+						width: "30px",
+						height: "30px",
+						padding: "0",
+						background: "transparent",
+						border: "none",
+						color: "inherit",
+						cursor: "pointer",
+						font: "inherit",
+					});
+					toggle.innerHTML =
+						'<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg>';
+					el.appendChild(toggle);
+
+					const body = document.createElement("div");
+					Object.assign(body.style, {
+						padding: "0 8px 6px",
+						maxHeight: "70vh",
+						overflowY: "auto",
+						display: "none",
+					});
+					el.appendChild(body);
+
+					let expanded = false;
+					const setExpanded = (next: boolean) => {
+						expanded = next;
+						body.style.display = next ? "block" : "none";
+						toggle.setAttribute("aria-expanded", next ? "true" : "false");
+						// When expanded, let the button shrink to a header row
+						// label so the toggle itself stays clickable without
+						// stretching the control too wide.
+						if (next) {
+							toggle.style.width = "auto";
+							toggle.style.height = "auto";
+							toggle.style.padding = "6px 8px";
+							toggle.style.justifyContent = "flex-start";
+						} else {
+							toggle.style.width = "30px";
+							toggle.style.height = "30px";
+							toggle.style.padding = "0";
+							toggle.style.justifyContent = "center";
+						}
+					};
+					toggle.addEventListener("click", () => setExpanded(!expanded));
 
 					const addHeading = (text: string) => {
 						const h = document.createElement("div");
@@ -1012,7 +1067,7 @@ function MapPage() {
 							marginTop: "6px",
 							marginBottom: "1px",
 						});
-						el.appendChild(h);
+						body.appendChild(h);
 					};
 
 					const addToggle = (
@@ -1036,7 +1091,7 @@ function MapPage() {
 						row.appendChild(cb);
 						row.insertAdjacentHTML("beforeend", icon + label);
 						cb.addEventListener("change", () => onChange(cb.checked));
-						el.appendChild(row);
+						body.appendChild(row);
 					};
 
 					const catIcon = (cat: string) => {
