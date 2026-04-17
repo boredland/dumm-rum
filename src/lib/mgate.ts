@@ -2,6 +2,19 @@ export const MGATE_URL = "https://www.rmv.de/auskunft/bin/jp/mgate.exe";
 export const AUTH = { type: "AID", aid: "uAWgheC24jhp6GdY" };
 export const CLIENT = { id: "RMV", type: "WEB", name: "webapp", l: "vs_rmv" };
 
+/** Strip the redundant category prefix HAFAS prepends to bus/tram line
+ * names ("Bus M34" → "M34", "Tram 12" → "12", "STR 18" → "18"). Leaves
+ * rail codes like "S6"/"U4"/"RE30" untouched because their category
+ * letters aren't separated by a space. Called from every place we
+ * persist or display a line code so that subscribe-modal lookups,
+ * `/line/$line` deep-links, and line-scoped pickers all match the same
+ * canonical string. */
+export function cleanLineName(raw: string, category: string): string {
+	const r = raw.trim();
+	const c = category.trim();
+	return c && r.startsWith(`${c} `) ? r.slice(c.length + 1).trim() : r;
+}
+
 interface MgateStop {
 	name: string;
 	extId: string;
@@ -229,11 +242,13 @@ function parseJourneyDetailsRes(
 
 	const prod = prods[0];
 	const ctx = prod?.prodCtx;
+	const catOut =
+		ctx?.catOutL?.trim() ?? ctx?.catOut?.trim() ?? prod?.catOut?.trim() ?? "";
 	const product: MgateProduct | undefined = prod
 		? {
 				name: prod.name,
-				line: ctx?.line ?? prod.line ?? prod.name,
-				catOut: ctx?.catOutL?.trim() ?? ctx?.catOut?.trim() ?? prod.catOut,
+				line: cleanLineName(ctx?.line ?? prod.line ?? prod.name ?? "", catOut),
+				catOut,
 				operator: prod.oprX != null ? ops[prod.oprX]?.name : undefined,
 			}
 		: undefined;
@@ -440,7 +455,9 @@ function parseStationBoardRes(
 	for (const j of jnyL) {
 		const prod = prods[j.prodX];
 		const ctx = prod?.prodCtx;
-		const line = ctx?.line ?? prod?.name;
+		const catOut = ctx?.catOutL?.trim() ?? ctx?.catOut?.trim() ?? null;
+		const rawLine = ctx?.line ?? prod?.name ?? "";
+		const line = cleanLineName(rawLine, catOut ?? "");
 		if (!line || !j.jid || !j.date) continue;
 
 		// Prefer realtime dep time over scheduled when both are present.
@@ -456,7 +473,7 @@ function parseStationBoardRes(
 			journeyRef: j.jid,
 			dayOfOperation,
 			line,
-			category: ctx?.catOutL?.trim() ?? ctx?.catOut?.trim() ?? null,
+			category: catOut,
 			operator: prod?.oprX != null ? (ops[prod.oprX]?.name ?? null) : null,
 			depTime,
 			destName: j.dirTxt ?? "",

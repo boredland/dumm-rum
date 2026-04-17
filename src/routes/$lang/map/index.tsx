@@ -10,6 +10,7 @@ import { type Lang, t } from "../../../lib/i18n.ts";
 import {
 	AUTH,
 	CLIENT,
+	cleanLineName,
 	decodeEncodedPolyline,
 	MGATE_URL,
 } from "../../../lib/mgate.ts";
@@ -344,20 +345,14 @@ const fetchVehicles = createServerFn({ method: "GET" })
 					}
 				}
 
-				// HAFAS returns `prod.name` with the category prefixed for buses
-				// and trams ("Bus M34", "Tram 12", "STR 18"). The prefix is
-				// redundant with the marker glyph and — more importantly — the
-				// subscribe modal and `/line/$line` deep-link both key off the
-				// bare line code stored in `journey_runs.line`. Strip the
-				// prefix so both paths match. Rail codes like "S6", "U4",
-				// "RE30" don't have a trailing space after the category, so
-				// `startsWith(`${catPrefix} `)` leaves them untouched.
-				const catPrefix = prod?.prodCtx?.catOutL?.trim() ?? "";
-				const rawName = prod?.name?.trim() ?? "?";
-				const name =
-					catPrefix && rawName.startsWith(`${catPrefix} `)
-						? rawName.slice(catPrefix.length + 1).trim()
-						: rawName;
+				// Drop the HAFAS category prefix ("Bus M34" → "M34") via the
+				// shared helper so the subscribe modal, `/line/$line`
+				// deep-link, and journey_runs.line all key off the same
+				// canonical string.
+				const name = cleanLineName(
+					prod?.name?.trim() ?? "?",
+					prod?.prodCtx?.catOutL?.trim() ?? "",
+				);
 
 				return {
 					id: j.jid,
