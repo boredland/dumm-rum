@@ -22,6 +22,46 @@ const VALID_DAYS = new Set<DaysFilter>([
 	"weekends",
 ]);
 
+interface HomePayload {
+	lines: LineSummary[];
+	operators: OperatorSummary[];
+	stops: StopSummary[];
+	days: DaysFilter;
+	oldestDate: string | null;
+}
+
+/** Coalesce concurrent SSRs so N simultaneous landing requests run one DB
+ * batch instead of N. TTL is short enough that clients still see fresh
+ * data within the same poll window but long enough to absorb refresh
+ * bursts. Matches the route's `staleTime` on the client. */
+const HOME_TTL_MS = 30_000;
+const homeMemo = new Map<DaysFilter, { value: HomePayload; expires: number }>();
+const homeInflight = new Map<DaysFilter, Promise<HomePayload>>();
+
+async function loadHomeSummaries(days: DaysFilter): Promise<HomePayload> {
+	const now = Date.now();
+	const hit = homeMemo.get(days);
+	if (hit && hit.expires > now) return hit.value;
+	const inflight = homeInflight.get(days);
+	if (inflight) return inflight;
+
+	const p = (async () => {
+		const filter = { days };
+		const [lines, operators, stops, oldestDate] = await Promise.all([
+			getLineSummaries(filter),
+			getOperatorSummaries(filter),
+			getStopSummaries(),
+			getOldestDate(),
+		]);
+		const value: HomePayload = { lines, operators, stops, days, oldestDate };
+		homeMemo.set(days, { value, expires: Date.now() + HOME_TTL_MS });
+		homeInflight.delete(days);
+		return value;
+	})();
+	homeInflight.set(days, p);
+	return p;
+}
+
 const getHomeSummaries = createServerFn({ method: "GET" })
 	.inputValidator((days: unknown): DaysFilter => {
 		if (typeof days === "string" && VALID_DAYS.has(days as DaysFilter)) {
@@ -30,24 +70,7 @@ const getHomeSummaries = createServerFn({ method: "GET" })
 		return "today";
 	})
 	.handler(
-		async ({
-			data: days,
-		}): Promise<{
-			lines: LineSummary[];
-			operators: OperatorSummary[];
-			stops: StopSummary[];
-			days: DaysFilter;
-			oldestDate: string | null;
-		}> => {
-			const filter = { days };
-			const [lines, operators, stops, oldestDate] = await Promise.all([
-				getLineSummaries(filter),
-				getOperatorSummaries(filter),
-				getStopSummaries(),
-				getOldestDate(),
-			]);
-			return { lines, operators, stops, days, oldestDate };
-		},
+		async ({ data: days }): Promise<HomePayload> => loadHomeSummaries(days),
 	);
 
 type SearchParams = { days?: DaysFilter; cat?: string };
