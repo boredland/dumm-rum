@@ -16,8 +16,10 @@ import { Route as LangSplatRouteImport } from './routes/$lang/$'
 import { Route as LangStationRouteRouteImport } from './routes/$lang/$station/route'
 import { Route as LangMapIndexRouteImport } from './routes/$lang/map/index'
 import { Route as LangStationIndexRouteImport } from './routes/$lang/$station/index'
+import { Route as ApiFlixVehiclesRouteImport } from './routes/api/flix/vehicles'
 import { Route as LangOperatorOperatorIndexRouteImport } from './routes/$lang/operator/$operator/index'
 import { Route as LangLineLineIndexRouteImport } from './routes/$lang/line/$line/index'
+import { Route as ApiFlixRouteUuidRouteImport } from './routes/api/flix/route/$uuid'
 import { Route as LangStationDayDateRouteImport } from './routes/$lang/$station/day/$date'
 import { Route as LangOperatorOperatorDayDateRouteImport } from './routes/$lang/operator/$operator/day/$date'
 import { Route as LangLineLineDayDateRouteImport } from './routes/$lang/line/$line/day/$date'
@@ -57,6 +59,11 @@ const LangStationIndexRoute = LangStationIndexRouteImport.update({
   path: '/',
   getParentRoute: () => LangStationRouteRoute,
 } as any)
+const ApiFlixVehiclesRoute = ApiFlixVehiclesRouteImport.update({
+  id: '/api/flix/vehicles',
+  path: '/api/flix/vehicles',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const LangOperatorOperatorIndexRoute =
   LangOperatorOperatorIndexRouteImport.update({
     id: '/operator/$operator/',
@@ -67,6 +74,11 @@ const LangLineLineIndexRoute = LangLineLineIndexRouteImport.update({
   id: '/line/$line/',
   path: '/line/$line/',
   getParentRoute: () => LangRouteRoute,
+} as any)
+const ApiFlixRouteUuidRoute = ApiFlixRouteUuidRouteImport.update({
+  id: '/api/flix/route/$uuid',
+  path: '/api/flix/route/$uuid',
+  getParentRoute: () => rootRouteImport,
 } as any)
 const LangStationDayDateRoute = LangStationDayDateRouteImport.update({
   id: '/day/$date',
@@ -91,9 +103,11 @@ export interface FileRoutesByFullPath {
   '/$lang/$station': typeof LangStationRouteRouteWithChildren
   '/$lang/$': typeof LangSplatRoute
   '/$lang/': typeof LangIndexRoute
+  '/api/flix/vehicles': typeof ApiFlixVehiclesRoute
   '/$lang/$station/': typeof LangStationIndexRoute
   '/$lang/map/': typeof LangMapIndexRoute
   '/$lang/$station/day/$date': typeof LangStationDayDateRoute
+  '/api/flix/route/$uuid': typeof ApiFlixRouteUuidRoute
   '/$lang/line/$line/': typeof LangLineLineIndexRoute
   '/$lang/operator/$operator/': typeof LangOperatorOperatorIndexRoute
   '/$lang/line/$line/day/$date': typeof LangLineLineDayDateRoute
@@ -103,9 +117,11 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/$lang/$': typeof LangSplatRoute
   '/$lang': typeof LangIndexRoute
+  '/api/flix/vehicles': typeof ApiFlixVehiclesRoute
   '/$lang/$station': typeof LangStationIndexRoute
   '/$lang/map': typeof LangMapIndexRoute
   '/$lang/$station/day/$date': typeof LangStationDayDateRoute
+  '/api/flix/route/$uuid': typeof ApiFlixRouteUuidRoute
   '/$lang/line/$line': typeof LangLineLineIndexRoute
   '/$lang/operator/$operator': typeof LangOperatorOperatorIndexRoute
   '/$lang/line/$line/day/$date': typeof LangLineLineDayDateRoute
@@ -118,9 +134,11 @@ export interface FileRoutesById {
   '/$lang/$station': typeof LangStationRouteRouteWithChildren
   '/$lang/$': typeof LangSplatRoute
   '/$lang/': typeof LangIndexRoute
+  '/api/flix/vehicles': typeof ApiFlixVehiclesRoute
   '/$lang/$station/': typeof LangStationIndexRoute
   '/$lang/map/': typeof LangMapIndexRoute
   '/$lang/$station/day/$date': typeof LangStationDayDateRoute
+  '/api/flix/route/$uuid': typeof ApiFlixRouteUuidRoute
   '/$lang/line/$line/': typeof LangLineLineIndexRoute
   '/$lang/operator/$operator/': typeof LangOperatorOperatorIndexRoute
   '/$lang/line/$line/day/$date': typeof LangLineLineDayDateRoute
@@ -134,9 +152,11 @@ export interface FileRouteTypes {
     | '/$lang/$station'
     | '/$lang/$'
     | '/$lang/'
+    | '/api/flix/vehicles'
     | '/$lang/$station/'
     | '/$lang/map/'
     | '/$lang/$station/day/$date'
+    | '/api/flix/route/$uuid'
     | '/$lang/line/$line/'
     | '/$lang/operator/$operator/'
     | '/$lang/line/$line/day/$date'
@@ -146,9 +166,11 @@ export interface FileRouteTypes {
     | '/'
     | '/$lang/$'
     | '/$lang'
+    | '/api/flix/vehicles'
     | '/$lang/$station'
     | '/$lang/map'
     | '/$lang/$station/day/$date'
+    | '/api/flix/route/$uuid'
     | '/$lang/line/$line'
     | '/$lang/operator/$operator'
     | '/$lang/line/$line/day/$date'
@@ -160,9 +182,11 @@ export interface FileRouteTypes {
     | '/$lang/$station'
     | '/$lang/$'
     | '/$lang/'
+    | '/api/flix/vehicles'
     | '/$lang/$station/'
     | '/$lang/map/'
     | '/$lang/$station/day/$date'
+    | '/api/flix/route/$uuid'
     | '/$lang/line/$line/'
     | '/$lang/operator/$operator/'
     | '/$lang/line/$line/day/$date'
@@ -172,6 +196,8 @@ export interface FileRouteTypes {
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   LangRouteRoute: typeof LangRouteRouteWithChildren
+  ApiFlixVehiclesRoute: typeof ApiFlixVehiclesRoute
+  ApiFlixRouteUuidRoute: typeof ApiFlixRouteUuidRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -225,6 +251,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof LangStationIndexRouteImport
       parentRoute: typeof LangStationRouteRoute
     }
+    '/api/flix/vehicles': {
+      id: '/api/flix/vehicles'
+      path: '/api/flix/vehicles'
+      fullPath: '/api/flix/vehicles'
+      preLoaderRoute: typeof ApiFlixVehiclesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/$lang/operator/$operator/': {
       id: '/$lang/operator/$operator/'
       path: '/operator/$operator'
@@ -238,6 +271,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/$lang/line/$line/'
       preLoaderRoute: typeof LangLineLineIndexRouteImport
       parentRoute: typeof LangRouteRoute
+    }
+    '/api/flix/route/$uuid': {
+      id: '/api/flix/route/$uuid'
+      path: '/api/flix/route/$uuid'
+      fullPath: '/api/flix/route/$uuid'
+      preLoaderRoute: typeof ApiFlixRouteUuidRouteImport
+      parentRoute: typeof rootRouteImport
     }
     '/$lang/$station/day/$date': {
       id: '/$lang/$station/day/$date'
@@ -305,6 +345,8 @@ const LangRouteRouteWithChildren = LangRouteRoute._addFileChildren(
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   LangRouteRoute: LangRouteRouteWithChildren,
+  ApiFlixVehiclesRoute: ApiFlixVehiclesRoute,
+  ApiFlixRouteUuidRoute: ApiFlixRouteUuidRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
