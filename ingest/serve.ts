@@ -19,6 +19,10 @@ const port = Number(process.env.PORT ?? 3000);
 
 Bun.serve({
 	port,
+	// Flix proxy cold-start (connection pool + 12 timetable fans) can
+	// exceed the 10 s Bun default. Allow 30 s for the first request after
+	// a cache miss.
+	idleTimeout: 30,
 	async fetch(req) {
 		const url = new URL(req.url);
 
@@ -65,7 +69,10 @@ Bun.serve({
 		) {
 			const headers = new Headers(res.headers);
 			if (!headers.has("Cache-Control"))
-				headers.set("Cache-Control", "public, max-age=60, stale-while-revalidate=300");
+				headers.set(
+					"Cache-Control",
+					"public, max-age=60, stale-while-revalidate=300",
+				);
 			return new Response(res.body, { status: res.status, headers });
 		}
 
