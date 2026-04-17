@@ -1,10 +1,12 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { createServerFn } from "@tanstack/react-start";
+import { useState } from "react";
 import {
 	DaysToggleBar,
 	useDaysFilter,
 } from "../../../components/DaysToggle.tsx";
 import { borderForCancRate, StatCard } from "../../../components/StatCard.tsx";
+import { SubscribeModal } from "../../../components/SubscribeModal.tsx";
 import { type Lang, t } from "../../../lib/i18n.ts";
 import {
 	type DayStats,
@@ -84,6 +86,7 @@ function StationIndex() {
 	const { lang, station } = Route.useParams();
 	const l = lang as Lang;
 	const daysFilter = useDaysFilter(days);
+	const [subscribeOpen, setSubscribeOpen] = useState(false);
 
 	const today = days[0];
 	const total7 = days.slice(0, 7).reduce((a, d) => a + d.total, 0);
@@ -102,9 +105,18 @@ function StationIndex() {
 				>
 					← {t(l, "nav.back")}
 				</Link>
-				<h1 className="text-3xl font-bold flex items-center gap-2 mt-2">
-					{categoryIcons(categories)} {shortStationName(stopName)}
-				</h1>
+				<div className="flex items-center justify-between gap-3 mt-2 flex-wrap">
+					<h1 className="text-3xl font-bold flex items-center gap-2">
+						{categoryIcons(categories)} {shortStationName(stopName)}
+					</h1>
+					<button
+						type="button"
+						onClick={() => setSubscribeOpen(true)}
+						className="px-3 py-1.5 text-xs font-medium rounded-full border border-border text-accent hover:bg-surface-hover cursor-pointer transition-colors"
+					>
+						{t(l, "subscribe.cta.button")}
+					</button>
+				</div>
 				{lastChange && (
 					<p className="text-xs text-dimmed">
 						{t(l, "station.last_updated")}:{" "}
@@ -112,6 +124,14 @@ function StationIndex() {
 					</p>
 				)}
 			</header>
+
+			{subscribeOpen && (
+				<SubscribeModal
+					lang={l}
+					initial={{ stopName }}
+					onClose={() => setSubscribeOpen(false)}
+				/>
+			)}
 
 			{today && (
 				<section className="grid grid-cols-2 sm:grid-cols-4 gap-3">

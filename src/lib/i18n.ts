@@ -93,6 +93,21 @@ const translations = {
 		"share.copied": "Link kopiert!",
 		"telegram.subscribe":
 			"Über Verspätungen & Ausfälle per Telegram benachrichtigen",
+		"subscribe.cta.button": "🔔 Alarm einrichten",
+		"subscribe.modal.title": "Alarm per Telegram",
+		"subscribe.modal.subtitle":
+			"Wir öffnen den Telegram-Bot mit deinen Einstellungen. Tippe dort auf /subscribe, um den Alarm zu aktivieren.",
+		"subscribe.line": "Linie",
+		"subscribe.direction": "Richtung",
+		"subscribe.direction.any": "Beliebige Richtung",
+		"subscribe.stop": "Haltestelle",
+		"subscribe.stop.any": "Alle Haltestellen",
+		"subscribe.hours": "Zeitfenster",
+		"subscribe.hours.add_range": "Weiteres Zeitfenster",
+		"subscribe.hours.remove_range": "Entfernen",
+		"subscribe.weekdays": "Wochentage",
+		"subscribe.submit": "In Telegram öffnen",
+		"subscribe.cancel": "Abbrechen",
 
 		"filter.all": "Alle",
 		"filter.all_directions": "Alle Richtungen",
@@ -203,6 +218,21 @@ const translations = {
 		"share.copied": "Link copied!",
 		"telegram.subscribe":
 			"Get notified about delays & cancellations via Telegram",
+		"subscribe.cta.button": "🔔 Set up alert",
+		"subscribe.modal.title": "Telegram alert",
+		"subscribe.modal.subtitle":
+			"We'll open the Telegram bot with your settings. Tap /subscribe there to activate the alert.",
+		"subscribe.line": "Line",
+		"subscribe.direction": "Direction",
+		"subscribe.direction.any": "Any direction",
+		"subscribe.stop": "Stop",
+		"subscribe.stop.any": "All stops",
+		"subscribe.hours": "Time window",
+		"subscribe.hours.add_range": "Add range",
+		"subscribe.hours.remove_range": "Remove",
+		"subscribe.weekdays": "Weekdays",
+		"subscribe.submit": "Open in Telegram",
+		"subscribe.cancel": "Cancel",
 
 		"filter.all": "All",
 		"filter.all_directions": "All directions",

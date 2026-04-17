@@ -1,5 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { createServerFn } from "@tanstack/react-start";
+import { useState } from "react";
 import {
 	DaysToggleBar,
 	useDaysFilter,
@@ -8,6 +9,7 @@ import {
 	borderForCancRate,
 	StatCard,
 } from "../../../../components/StatCard.tsx";
+import { SubscribeModal } from "../../../../components/SubscribeModal.tsx";
 import { type Lang, t } from "../../../../lib/i18n.ts";
 import { getLineStats, type LineStats } from "../../../../lib/queries.ts";
 import { categoryIcons } from "../../../../lib/stations.ts";
@@ -47,6 +49,7 @@ function LineIndex() {
 	const { lang } = Route.useParams();
 	const l = lang as Lang;
 	const daysFilter = useDaysFilter(stats.days);
+	const [subscribeOpen, setSubscribeOpen] = useState(false);
 
 	const total = stats.days.reduce((a, d) => a + d.total, 0);
 	const canc = stats.days.reduce((a, d) => a + d.cancelled, 0);
@@ -64,9 +67,18 @@ function LineIndex() {
 				>
 					← {t(l, "nav.back")}
 				</Link>
-				<h1 className="text-3xl font-bold flex items-center gap-2 mt-2">
-					{categoryIcons(stats.categories)} {line}
-				</h1>
+				<div className="flex items-center justify-between gap-3 mt-2 flex-wrap">
+					<h1 className="text-3xl font-bold flex items-center gap-2">
+						{categoryIcons(stats.categories)} {line}
+					</h1>
+					<button
+						type="button"
+						onClick={() => setSubscribeOpen(true)}
+						className="px-3 py-1.5 text-xs font-medium rounded-full border border-border text-accent hover:bg-surface-hover cursor-pointer transition-colors"
+					>
+						{t(l, "subscribe.cta.button")}
+					</button>
+				</div>
 				{stats.destinations.length > 0 && (
 					<p className="text-sm text-muted">{stats.destinations.join(" ↔ ")}</p>
 				)}
@@ -74,6 +86,15 @@ function LineIndex() {
 					<p className="text-xs text-dimmed">{stats.operators.join(", ")}</p>
 				)}
 			</header>
+
+			{subscribeOpen && (
+				<SubscribeModal
+					lang={l}
+					initial={{ line }}
+					availableDirections={stats.destinations}
+					onClose={() => setSubscribeOpen(false)}
+				/>
+			)}
 
 			<section className="grid grid-cols-2 sm:grid-cols-4 gap-3">
 				<StatCard label={t(l, "stat.departures")} value={String(total)} />

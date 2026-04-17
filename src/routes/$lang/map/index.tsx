@@ -1,7 +1,8 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { createServerFn } from "@tanstack/react-start";
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { Lang } from "../../../lib/i18n.ts";
+import { SubscribeModal } from "../../../components/SubscribeModal.tsx";
+import { type Lang, t } from "../../../lib/i18n.ts";
 import {
 	AUTH,
 	CLIENT,
@@ -566,6 +567,10 @@ function MapPage() {
 	// call but recomputing every marker's container point at 60 Hz isn't.
 	const lastFollowPanAtRef = useRef(0);
 	const [followName, setFollowName] = useState<string | null>(null);
+	const [subscribeInitial, setSubscribeInitial] = useState<{
+		line: string;
+		direction?: string;
+	} | null>(null);
 	const userPanRef = useRef(false);
 	const followedPolylineRef = useRef<L.Polyline | null>(null);
 
@@ -696,7 +701,14 @@ function MapPage() {
 				!isFlix && v.serviceDate
 					? `<br/><a href="/${l}/line/${encodeURIComponent(v.name.trim())}/day/${v.serviceDate}?jid=${encodeURIComponent(v.id)}" style="font-size:11px;color:var(--accent,#0969da)">Line details →</a>`
 					: "";
-			const content = `<strong>${escapeHtml(v.name)}</strong><br/>→ ${escapeHtml(v.direction)}${v.operator ? `<br/><span style="opacity:.7">${escapeHtml(v.operator)}</span>` : ""}${lineDetailsLink}${trackingLink}`;
+			// Subscribe link (RMV only) — clicked via event delegation up
+			// to the MapPage's subscribeInitial state, which renders the
+			// SubscribeModal. Flix isn't in journey_runs so subscriptions
+			// for it wouldn't fire anything.
+			const subscribeLink = !isFlix
+				? `<br/><a href="#" data-subscribe-line="${escapeHtml(v.name.trim())}" data-subscribe-direction="${escapeHtml(v.direction)}" style="font-size:11px;color:var(--accent,#0969da)">${t(l, "subscribe.cta.button")}</a>`
+				: "";
+			const content = `<strong>${escapeHtml(v.name)}</strong><br/>→ ${escapeHtml(v.direction)}${v.operator ? `<br/><span style="opacity:.7">${escapeHtml(v.operator)}</span>` : ""}${lineDetailsLink}${subscribeLink}${trackingLink}`;
 
 			// Only rebind when the rendered popup content actually changes —
 			// unbind/bind closes any open popup, which causes a visible
@@ -1084,8 +1096,37 @@ function MapPage() {
 		return () => clearInterval(tick);
 	}, []);
 
+	// Delegate clicks on the popup's subscribe link up to React state —
+	// we can't pass a live callback through Leaflet's HTML-string popup,
+	// so the popup emits a `data-subscribe-line` anchor and the map div
+	// catches the click bubbling up from it.
+	useEffect(() => {
+		const el = mapRef.current;
+		if (!el) return;
+		const handler = (e: MouseEvent) => {
+			const target = (e.target as HTMLElement | null)?.closest?.(
+				"[data-subscribe-line]",
+			) as HTMLElement | null;
+			if (!target) return;
+			e.preventDefault();
+			setSubscribeInitial({
+				line: target.dataset.subscribeLine ?? "",
+				direction: target.dataset.subscribeDirection || undefined,
+			});
+		};
+		el.addEventListener("click", handler);
+		return () => el.removeEventListener("click", handler);
+	}, []);
+
 	return (
 		<div className="fixed inset-0 flex flex-col">
+			{subscribeInitial && (
+				<SubscribeModal
+					lang={l}
+					initial={subscribeInitial}
+					onClose={() => setSubscribeInitial(null)}
+				/>
+			)}
 			<link
 				rel="stylesheet"
 				href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
