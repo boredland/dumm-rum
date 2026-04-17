@@ -8,6 +8,7 @@ import {
 import { borderForCancRate, StatCard } from "../../../components/StatCard.tsx";
 import { SubscribeModal } from "../../../components/SubscribeModal.tsx";
 import { type Lang, t } from "../../../lib/i18n.ts";
+import { urlFilter } from "../../../lib/search-state.ts";
 import {
 	type DayStats,
 	findStopBySlug,
@@ -65,9 +66,14 @@ const loadStation = createServerFn({ method: "GET" })
 		};
 	});
 
+const DAYS_FILTER_OPTS = ["all", "today", "weekdays", "weekends"] as const;
+
 export const Route = createFileRoute("/$lang/$station/")({
 	staleTime: 5 * 60 * 1000,
 	loader: async ({ params }) => await loadStation({ data: params.station }),
+	validateSearch: (search: Record<string, unknown>): { days?: string } => ({
+		days: typeof search.days === "string" ? search.days : undefined,
+	}),
 	head: ({ loaderData }) => {
 		const name = loaderData?.stopName ?? "Station";
 		return {
@@ -84,8 +90,24 @@ function StationIndex() {
 	const { stopName, categories, days, lastChange, nextDepartures } =
 		Route.useLoaderData();
 	const { lang, station } = Route.useParams();
+	const search = Route.useSearch();
+	const navigate = Route.useNavigate();
 	const l = lang as Lang;
-	const daysFilter = useDaysFilter(days);
+	const [daysValue, setDaysValue] = urlFilter(
+		search.days,
+		"all",
+		DAYS_FILTER_OPTS,
+		(patch) =>
+			navigate({
+				search: (s) => ({ ...s, ...patch }),
+				replace: true,
+			}),
+		"days",
+	);
+	const daysFilter = useDaysFilter(days, {
+		value: daysValue,
+		onChange: setDaysValue,
+	});
 	const [subscribeOpen, setSubscribeOpen] = useState(false);
 
 	const today = days[0];

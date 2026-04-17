@@ -50,7 +50,7 @@ const getHomeSummaries = createServerFn({ method: "GET" })
 		},
 	);
 
-type SearchParams = { days?: DaysFilter };
+type SearchParams = { days?: DaysFilter; cat?: string };
 
 const STALE_TIME = 5 * 60 * 1000;
 
@@ -65,6 +65,7 @@ export const Route = createFileRoute("/$lang/")({
 			VALID_DAYS.has(search.days as DaysFilter)
 				? (search.days as DaysFilter)
 				: undefined,
+		cat: typeof search.cat === "string" ? search.cat : undefined,
 	}),
 	loaderDeps: ({ search }) => ({ days: search.days }),
 	loader: async ({ deps }) =>
@@ -112,9 +113,16 @@ function Index() {
 		return () => clearInterval(id);
 	}, [activeDays, router]);
 	const other: Lang = l === "de" ? "en" : "de";
+	const search = Route.useSearch();
+	const navigate = Route.useNavigate();
 	const [query, setQuery] = useState("");
 	const q = query.toLowerCase().trim();
-	const [catFilter, setCatFilter] = useState<string>("all");
+	const catFilter = search.cat ?? "all";
+	const setCatFilter = (v: string) =>
+		navigate({
+			search: (s) => ({ ...s, cat: v === "all" ? undefined : v }),
+			replace: true,
+		});
 	const searchRef = useRef<HTMLInputElement>(null);
 	useEffect(() => {
 		const handler = (e: KeyboardEvent) => {

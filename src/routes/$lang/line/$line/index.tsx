@@ -12,8 +12,11 @@ import {
 import { SubscribeModal } from "../../../../components/SubscribeModal.tsx";
 import { type Lang, t } from "../../../../lib/i18n.ts";
 import { getLineStats, type LineStats } from "../../../../lib/queries.ts";
+import { urlFilter } from "../../../../lib/search-state.ts";
 import { categoryIcons } from "../../../../lib/stations.ts";
 import { onTimeRate } from "../../../../lib/utils.ts";
+
+const DAYS_FILTER_OPTS = ["all", "today", "weekdays", "weekends"] as const;
 
 const loadLine = createServerFn({ method: "GET" })
 	.inputValidator((line: unknown): string => {
@@ -32,6 +35,9 @@ const loadLine = createServerFn({ method: "GET" })
 export const Route = createFileRoute("/$lang/line/$line/")({
 	staleTime: 5 * 60 * 1000,
 	loader: async ({ params }) => await loadLine({ data: params.line }),
+	validateSearch: (search: Record<string, unknown>): { days?: string } => ({
+		days: typeof search.days === "string" ? search.days : undefined,
+	}),
 	head: ({ loaderData }) => {
 		const name = loaderData?.line ?? "Line";
 		return {
@@ -47,8 +53,24 @@ export const Route = createFileRoute("/$lang/line/$line/")({
 function LineIndex() {
 	const { line, stats } = Route.useLoaderData();
 	const { lang } = Route.useParams();
+	const search = Route.useSearch();
+	const navigate = Route.useNavigate();
 	const l = lang as Lang;
-	const daysFilter = useDaysFilter(stats.days);
+	const [daysValue, setDaysValue] = urlFilter(
+		search.days,
+		"all",
+		DAYS_FILTER_OPTS,
+		(patch) =>
+			navigate({
+				search: (s) => ({ ...s, ...patch }),
+				replace: true,
+			}),
+		"days",
+	);
+	const daysFilter = useDaysFilter(stats.days, {
+		value: daysValue,
+		onChange: setDaysValue,
+	});
 	const [subscribeOpen, setSubscribeOpen] = useState(false);
 
 	const total = stats.days.reduce((a, d) => a + d.total, 0);

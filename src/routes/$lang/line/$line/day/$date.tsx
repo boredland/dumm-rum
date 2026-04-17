@@ -10,7 +10,14 @@ import {
 	getLineDayJourneys,
 	type LineDayJourney,
 } from "../../../../../lib/queries.ts";
+import {
+	urlFilter,
+	urlStringFilter,
+} from "../../../../../lib/search-state.ts";
 import { delayMin, formatTime } from "../../../../../lib/utils.ts";
+
+const STATUS_OPTS = ["all", "issues", "on_time"] as const;
+const HOURS_OPTS = ["all", "core"] as const;
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -43,8 +50,18 @@ const loadDay = createServerFn({ method: "GET" })
 export const Route = createFileRoute("/$lang/line/$line/day/$date")({
 	loader: async ({ params }) =>
 		await loadDay({ data: { line: params.line, date: params.date } }),
-	validateSearch: (search: Record<string, unknown>): { jid?: string } => ({
+	validateSearch: (
+		search: Record<string, unknown>,
+	): {
+		jid?: string;
+		status?: string;
+		hours?: string;
+		dir?: string;
+	} => ({
 		jid: typeof search.jid === "string" ? search.jid : undefined,
+		status: typeof search.status === "string" ? search.status : undefined,
+		hours: typeof search.hours === "string" ? search.hours : undefined,
+		dir: typeof search.dir === "string" ? search.dir : undefined,
 	}),
 	component: LineDay,
 });
@@ -52,9 +69,40 @@ export const Route = createFileRoute("/$lang/line/$line/day/$date")({
 function LineDay() {
 	const { line, date, journeys } = Route.useLoaderData();
 	const { lang } = Route.useParams();
-	const { jid } = Route.useSearch();
+	const search = Route.useSearch();
+	const navigate = Route.useNavigate();
+	const { jid } = search;
 	const l = lang as Lang;
-	const filters = useDepartureFilters(journeys);
+	const setSearch = (patch: Record<string, string | undefined>) =>
+		navigate({
+			search: (s) => ({ ...s, ...patch }),
+			replace: true,
+		});
+	const [status, setStatus] = urlFilter(
+		search.status,
+		"all",
+		STATUS_OPTS,
+		setSearch,
+		"status",
+	);
+	const [hours, setHours] = urlFilter(
+		search.hours,
+		"all",
+		HOURS_OPTS,
+		setSearch,
+		"hours",
+	);
+	const [dir, setDir] = urlStringFilter(
+		search.dir,
+		"all",
+		setSearch,
+		"dir",
+	);
+	const filters = useDepartureFilters(journeys, {
+		status: { value: status, onChange: setStatus },
+		hours: { value: hours, onChange: setHours },
+		dir: { value: dir, onChange: setDir },
+	});
 	const highlightedRowRef = useRef<HTMLTableRowElement | null>(null);
 
 	useEffect(() => {

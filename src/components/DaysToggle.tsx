@@ -29,12 +29,23 @@ function matchesFilter<T extends DayRow>(row: T, filter: DaysFilter): boolean {
 
 export function useDaysFilter<T extends DayRow>(
 	days: T[],
+	options?: {
+		/** Controlled value; if provided, local state is bypassed. */
+		value?: DaysFilter;
+		/** Controlled setter; called alongside any internal update. */
+		onChange?: (f: DaysFilter) => void;
+	},
 ): {
 	filtered: T[];
 	active: DaysFilter;
 	setActive: (f: DaysFilter) => void;
 } {
-	const [active, setActive] = useState<DaysFilter>("all");
+	const [localActive, setLocalActive] = useState<DaysFilter>("all");
+	const active = options?.value ?? localActive;
+	const setActive = (v: DaysFilter) => {
+		setLocalActive(v);
+		options?.onChange?.(v);
+	};
 	const filtered = useMemo(
 		() => days.filter((d) => matchesFilter(d, active)),
 		[days, active],

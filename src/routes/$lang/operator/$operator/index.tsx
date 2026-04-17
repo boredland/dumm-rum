@@ -13,8 +13,11 @@ import {
 	getOperatorStats,
 	type OperatorStats,
 } from "../../../../lib/queries.ts";
+import { urlFilter } from "../../../../lib/search-state.ts";
 import { categoryIcons } from "../../../../lib/stations.ts";
 import { onTimeRate } from "../../../../lib/utils.ts";
+
+const DAYS_FILTER_OPTS = ["all", "today", "weekdays", "weekends"] as const;
 
 const loadOperator = createServerFn({ method: "GET" })
 	.inputValidator((op: unknown): string => {
@@ -33,6 +36,9 @@ const loadOperator = createServerFn({ method: "GET" })
 export const Route = createFileRoute("/$lang/operator/$operator/")({
 	staleTime: 5 * 60 * 1000,
 	loader: async ({ params }) => await loadOperator({ data: params.operator }),
+	validateSearch: (search: Record<string, unknown>): { days?: string } => ({
+		days: typeof search.days === "string" ? search.days : undefined,
+	}),
 	head: ({ loaderData }) => {
 		const name = loaderData?.operator ?? "Operator";
 		return {
@@ -48,8 +54,24 @@ export const Route = createFileRoute("/$lang/operator/$operator/")({
 function OperatorIndex() {
 	const { operator, stats } = Route.useLoaderData();
 	const { lang } = Route.useParams();
+	const search = Route.useSearch();
+	const navigate = Route.useNavigate();
 	const l = lang as Lang;
-	const daysFilter = useDaysFilter(stats.days);
+	const [daysValue, setDaysValue] = urlFilter(
+		search.days,
+		"all",
+		DAYS_FILTER_OPTS,
+		(patch) =>
+			navigate({
+				search: (s) => ({ ...s, ...patch }),
+				replace: true,
+			}),
+		"days",
+	);
+	const daysFilter = useDaysFilter(stats.days, {
+		value: daysValue,
+		onChange: setDaysValue,
+	});
 
 	const total = stats.days.reduce((a, d) => a + d.total, 0);
 	const canc = stats.days.reduce((a, d) => a + d.cancelled, 0);

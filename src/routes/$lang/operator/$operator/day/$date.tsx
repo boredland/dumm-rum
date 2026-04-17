@@ -9,7 +9,14 @@ import {
 	getOperatorDayJourneys,
 	type OperatorDayJourney,
 } from "../../../../../lib/queries.ts";
+import {
+	urlFilter,
+	urlStringFilter,
+} from "../../../../../lib/search-state.ts";
 import { delayMin, formatTime } from "../../../../../lib/utils.ts";
+
+const STATUS_OPTS = ["all", "issues", "on_time"] as const;
+const HOURS_OPTS = ["all", "core"] as const;
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -46,14 +53,52 @@ const loadDay = createServerFn({ method: "GET" })
 export const Route = createFileRoute("/$lang/operator/$operator/day/$date")({
 	loader: async ({ params }) =>
 		await loadDay({ data: { operator: params.operator, date: params.date } }),
+	validateSearch: (
+		search: Record<string, unknown>,
+	): { status?: string; hours?: string; dir?: string } => ({
+		status: typeof search.status === "string" ? search.status : undefined,
+		hours: typeof search.hours === "string" ? search.hours : undefined,
+		dir: typeof search.dir === "string" ? search.dir : undefined,
+	}),
 	component: OperatorDay,
 });
 
 function OperatorDay() {
 	const { operator, date, journeys } = Route.useLoaderData();
 	const { lang } = Route.useParams();
+	const search = Route.useSearch();
+	const navigate = Route.useNavigate();
 	const l = lang as Lang;
-	const filters = useDepartureFilters(journeys);
+	const setSearch = (patch: Record<string, string | undefined>) =>
+		navigate({
+			search: (s) => ({ ...s, ...patch }),
+			replace: true,
+		});
+	const [status, setStatus] = urlFilter(
+		search.status,
+		"all",
+		STATUS_OPTS,
+		setSearch,
+		"status",
+	);
+	const [hours, setHours] = urlFilter(
+		search.hours,
+		"all",
+		HOURS_OPTS,
+		setSearch,
+		"hours",
+	);
+	const [dir, setDir] = urlStringFilter(
+		search.dir,
+		"all",
+		setSearch,
+		"dir",
+	);
+	const filters = useDepartureFilters(journeys, {
+		status: { value: status, onChange: setStatus },
+		hours: { value: hours, onChange: setHours },
+		dir: { value: dir, onChange: setDir },
+	});
 
 	const pretty = new Date(`${date}T00:00:00`).toLocaleDateString(l, {
 		weekday: "long",

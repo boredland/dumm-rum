@@ -46,6 +46,11 @@ function isCoreHour(time: string): boolean {
 
 export function useDepartureFilters<T extends Departure>(
 	departures: T[],
+	options?: {
+		status?: { value: StatusFilter; onChange: (v: StatusFilter) => void };
+		hours?: { value: HoursFilter; onChange: (v: HoursFilter) => void };
+		dir?: { value: string; onChange: (v: string) => void };
+	},
 ): {
 	filtered: T[];
 	statusFilter: StatusFilter;
@@ -56,9 +61,24 @@ export function useDepartureFilters<T extends Departure>(
 	setDirFilter: (f: string) => void;
 	directions: string[];
 } {
-	const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
-	const [hoursFilter, setHoursFilter] = useState<HoursFilter>("all");
-	const [dirFilter, setDirFilter] = useState("all");
+	const [localStatus, setLocalStatus] = useState<StatusFilter>("all");
+	const [localHours, setLocalHours] = useState<HoursFilter>("all");
+	const [localDir, setLocalDir] = useState("all");
+	const statusFilter = options?.status?.value ?? localStatus;
+	const hoursFilter = options?.hours?.value ?? localHours;
+	const dirFilter = options?.dir?.value ?? localDir;
+	const setStatusFilter = (v: StatusFilter) => {
+		setLocalStatus(v);
+		options?.status?.onChange(v);
+	};
+	const setHoursFilter = (v: HoursFilter) => {
+		setLocalHours(v);
+		options?.hours?.onChange(v);
+	};
+	const setDirFilter = (v: string) => {
+		setLocalDir(v);
+		options?.dir?.onChange(v);
+	};
 
 	const directions = useMemo(
 		() => [...new Set(departures.map((d) => d.direction))].sort(),
