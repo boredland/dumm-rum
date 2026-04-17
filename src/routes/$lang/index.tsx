@@ -516,10 +516,10 @@ function OperatorCard({ op, lang }: { op: OperatorSummary; lang: Lang }) {
 
 // ─── Overview cards (OTP + worst offenders) ────────────────────────────
 
-type Worst = { name: string; count: number; rate: number };
+type Worst = { name: string; slug: string; count: number; rate: number };
 
 function findWorst(
-	items: { name: string; count: number; total: number }[],
+	items: { name: string; slug: string; count: number; total: number }[],
 ): Worst | null {
 	let worst: Worst | null = null;
 	for (const item of items) {
@@ -530,7 +530,7 @@ function findWorst(
 			rate > worst.rate ||
 			(rate === worst.rate && item.count > worst.count)
 		) {
-			worst = { name: item.name, count: item.count, rate };
+			worst = { name: item.name, slug: item.slug, count: item.count, rate };
 		}
 	}
 	return worst;
@@ -573,15 +573,26 @@ function OverviewCards({
 				: "text-emerald-500";
 
 	const lineItems = (key: "cancelled" | "ghost" | "delayed") =>
-		lines.map((l) => ({ name: l.line, count: l[key], total: l.total }));
+		lines.map((l) => ({
+			name: l.line,
+			slug: l.line,
+			count: l[key],
+			total: l.total,
+		}));
 	const stopItems = (key: "cancelled" | "ghost" | "delayed") =>
 		stops.map((s) => ({
 			name: shortStationName(s.stopName),
+			slug: slugForStop(s.stopIds, s.stopName),
 			count: s[key],
 			total: s.journeyCount,
 		}));
 	const opItems = (key: "cancelled" | "ghost" | "delayed") =>
-		operators.map((o) => ({ name: o.operator, count: o[key], total: o.total }));
+		operators.map((o) => ({
+			name: o.operator,
+			slug: o.operator,
+			count: o[key],
+			total: o.total,
+		}));
 
 	return (
 		<div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
@@ -656,31 +667,45 @@ function WorstCard({
 			</div>
 			{!hasAny && <div className="text-2xl font-bold text-emerald-500">0</div>}
 			{line && line.count > 0 && (
-				<div className="text-sm mt-1">
+				<Link
+					to="/$lang/line/$line"
+					params={{ lang, line: line.slug }}
+					className="block text-sm mt-1 no-underline text-fg hover:text-accent"
+				>
 					<span className={`${color} font-semibold`}>
 						{(line.rate * 100).toFixed(1)}%
 					</span>{" "}
 					<span className="text-muted">{t(lang, "home.line")}</span>{" "}
 					<span className="font-semibold">{line.name}</span>
-				</div>
+				</Link>
 			)}
 			{station && station.count > 0 && (
-				<div className="text-sm mt-1 truncate" title={station.name}>
+				<Link
+					to="/$lang/$station"
+					params={{ lang, station: station.slug }}
+					className="block text-sm mt-1 truncate no-underline text-fg hover:text-accent"
+					title={station.name}
+				>
 					<span className={`${color} font-semibold`}>
 						{(station.rate * 100).toFixed(1)}%
 					</span>{" "}
 					<span className="text-muted">{t(lang, "home.station")}</span>{" "}
 					<span className="font-semibold">{station.name}</span>
-				</div>
+				</Link>
 			)}
 			{op && op.count > 0 && (
-				<div className="text-sm mt-1 truncate" title={op.name}>
+				<Link
+					to="/$lang/operator/$operator"
+					params={{ lang, operator: op.slug }}
+					className="block text-sm mt-1 truncate no-underline text-fg hover:text-accent"
+					title={op.name}
+				>
 					<span className={`${color} font-semibold`}>
 						{(op.rate * 100).toFixed(1)}%
 					</span>{" "}
 					<span className="text-muted">{t(lang, "home.operator")}</span>{" "}
 					<span className="font-semibold">{op.name}</span>
-				</div>
+				</Link>
 			)}
 		</div>
 	);
