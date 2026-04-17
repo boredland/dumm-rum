@@ -772,6 +772,52 @@ export async function getAllDirections(): Promise<string[]> {
 	return rows.map((r) => r.dest).filter(Boolean);
 }
 
+/** All distinct destinations a given line has run to in the last 30 days. */
+export async function getDirectionsForLine(line: string): Promise<string[]> {
+	const rows = await db
+		.selectDistinct({ dest: journeyRuns.destName })
+		.from(journeyRuns)
+		.where(
+			and(
+				eq(journeyRuns.line, line),
+				isNotNull(journeyRuns.destName),
+				gte(
+					journeyRuns.dayOfOperation,
+					sql`to_char(CURRENT_DATE - INTERVAL '30 days', 'YYYY-MM-DD')`,
+				),
+			),
+		)
+		.orderBy(journeyRuns.destName);
+	return rows.map((r) => r.dest).filter(Boolean);
+}
+
+/** All distinct stop names served by a line in the last 30 days. */
+export async function getStopsForLine(line: string): Promise<string[]> {
+	const rows = await db
+		.selectDistinct({
+			name: journeyStops.stopName,
+		})
+		.from(journeyStops)
+		.innerJoin(
+			journeyRuns,
+			and(
+				eq(journeyRuns.journeyRef, journeyStops.journeyRef),
+				eq(journeyRuns.dayOfOperation, journeyStops.dayOfOperation),
+			),
+		)
+		.where(
+			and(
+				eq(journeyRuns.line, line),
+				gte(
+					journeyStops.dayOfOperation,
+					sql`to_char(CURRENT_DATE - INTERVAL '30 days', 'YYYY-MM-DD')`,
+				),
+			),
+		)
+		.orderBy(journeyStops.stopName);
+	return rows.map((r) => r.name).filter(Boolean);
+}
+
 function dedupeCsv(s: string): string[] {
 	return [...new Set(s.split(","))].filter(Boolean);
 }

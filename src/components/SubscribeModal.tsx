@@ -29,6 +29,40 @@ async function fetchPicker(kind: PickerKind): Promise<string[]> {
 	return p;
 }
 
+interface LineScoped {
+	stops: string[];
+	directions: string[];
+}
+
+/** Per-line pick-list cache — keyed by the exact line name. Most users
+ * will subscribe to a single line in a session, so caching one line
+ * across modal re-opens costs almost nothing. */
+const lineScopedCache = new Map<string, LineScoped>();
+const lineScopedInflight = new Map<string, Promise<LineScoped>>();
+
+async function fetchLineScoped(line: string): Promise<LineScoped> {
+	const cached = lineScopedCache.get(line);
+	if (cached) return cached;
+	const inflight = lineScopedInflight.get(line);
+	if (inflight) return inflight;
+	const p = (async () => {
+		const resp = await fetch(
+			`/api/picker/line-stops?line=${encodeURIComponent(line)}`,
+		);
+		if (!resp.ok) throw new Error(`picker/line-stops HTTP ${resp.status}`);
+		const json = (await resp.json()) as LineScoped;
+		const result: LineScoped = {
+			stops: Array.isArray(json.stops) ? json.stops : [],
+			directions: Array.isArray(json.directions) ? json.directions : [],
+		};
+		lineScopedCache.set(line, result);
+		lineScopedInflight.delete(line);
+		return result;
+	})();
+	lineScopedInflight.set(line, p);
+	return p;
+}
+
 /** 7 weekday toggles; internal value is the bot's numeric format
  * (`0=Sun..6=Sat`, comma-separated) so we can hand it straight to
  * `buildSubscribeUrl` without a second translation step. */
@@ -88,6 +122,9 @@ export function SubscribeModal({
 	const [directionsList, setDirectionsList] = useState<string[]>(
 		() => pickerCache.directions ?? [],
 	);
+	const [lineScoped, setLineScoped] = useState<LineScoped | null>(() =>
+		initial.line ? (lineScopedCache.get(initial.line) ?? null) : null,
+	);
 
 	// Close on Escape.
 	useEffect(() => {
@@ -128,6 +165,42 @@ export function SubscribeModal({
 		directionsList.length,
 		availableDirections,
 	]);
+
+	// When the user commits a line that actually exists, fetch its
+	// stop/direction list and swap the pickers to that narrower set so the
+	// Haltestelle field only offers stops the line visits. Keeps the
+	// previous line's list until the new one resolves to avoid empty
+	// dropdown flashes.
+	useEffect(() => {
+		if (!line) {
+			setLineScoped(null);
+			return;
+		}
+		// Don't trigger a fetch until we know the full line list and can
+		// confirm the typed value is a real line — otherwise every keystroke
+		// during search would hit the API.
+		if (linesList.length > 0 && !linesList.includes(line)) {
+			setLineScoped(null);
+			return;
+		}
+		let alive = true;
+		fetchLineScoped(line)
+			.then((scoped) => alive && setLineScoped(scoped))
+			.catch(() => {});
+		return () => {
+			alive = false;
+		};
+	}, [line, linesList]);
+
+	// Clear a previously-picked stop or direction the moment it stops
+	// belonging to the new line — otherwise the field silently holds a
+	// value the strict Combobox now treats as invalid.
+	useEffect(() => {
+		if (!lineScoped) return;
+		if (stopName && !lineScoped.stops.includes(stopName)) setStopName("");
+		if (direction && !lineScoped.directions.includes(direction))
+			setDirection("");
+	}, [lineScoped, stopName, direction]);
 
 	const timeRanges = useMemo(
 		() =>
@@ -216,7 +289,9 @@ export function SubscribeModal({
 							options={
 								availableDirections && availableDirections.length > 0
 									? availableDirections
-									: directionsList
+									: lineScoped
+										? lineScoped.directions
+										: directionsList
 							}
 							placeholder={t(lang, "subscribe.direction.any")}
 							ariaLabel={t(lang, "subscribe.direction")}
@@ -232,7 +307,9 @@ export function SubscribeModal({
 							options={
 								availableStops && availableStops.length > 0
 									? availableStops.map((s) => s.name)
-									: stopsList
+									: lineScoped
+										? lineScoped.stops
+										: stopsList
 							}
 							placeholder={t(lang, "subscribe.stop.any")}
 							ariaLabel={t(lang, "subscribe.stop")}
