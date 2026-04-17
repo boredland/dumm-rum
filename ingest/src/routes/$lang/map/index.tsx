@@ -508,7 +508,15 @@ function MapPage() {
 	const mapRef = useRef<HTMLDivElement>(null);
 	const leafletMap = useRef<L.Map | null>(null);
 	const markersRef = useRef<
-		Map<string, { marker: L.Marker; iconKey: string; layerKey: string }>
+		Map<
+			string,
+			{
+				marker: L.Marker;
+				iconKey: string;
+				layerKey: string;
+				popupContent: string;
+			}
+		>
 	>(new Map());
 	const vehiclesRef = useRef<Vehicle[]>([]);
 	const timeDeltaRef = useRef(0);
@@ -605,11 +613,12 @@ function MapPage() {
 					clearFollowedPolyline();
 					if (current) drawFollowedPolyline(current);
 				});
-				existing.set(v.id, { marker, iconKey, layerKey });
+				existing.set(v.id, { marker, iconKey, layerKey, popupContent: "" });
 			}
 
 			const isFollowed = v.id === followIdRef.current;
-			const m = existing.get(v.id)!.marker;
+			const entryNow = existing.get(v.id)!;
+			const m = entryNow.marker;
 			const isFlix = v.category === "Flixtrain" || v.category === "Flixbus";
 			const showTracking =
 				v.externalTrackingUrl && (isFlix || (v.delay != null && v.delay > 2));
@@ -618,12 +627,21 @@ function MapPage() {
 				: "";
 			const content = `<strong>${escapeHtml(v.name)}</strong><br/>→ ${escapeHtml(v.direction)}${v.operator ? `<br/><span style="opacity:.7">${escapeHtml(v.operator)}</span>` : ""}${trackingLink}`;
 
-			m.unbindPopup();
-			m.bindPopup(content, {
-				offset: [0, -(size / 2 + 4)],
-				autoPan: false,
-			});
-			if (isFollowed) m.openPopup();
+			// Only rebind when the rendered popup content actually changes —
+			// unbind/bind closes any open popup, which causes a visible
+			// flicker on every poll otherwise.
+			if (entryNow.popupContent !== content) {
+				const wasOpen = m.isPopupOpen();
+				m.unbindPopup();
+				m.bindPopup(content, {
+					offset: [0, -(size / 2 + 4)],
+					autoPan: false,
+				});
+				entryNow.popupContent = content;
+				if (wasOpen || isFollowed) m.openPopup();
+			} else if (isFollowed && !m.isPopupOpen()) {
+				m.openPopup();
+			}
 		}
 
 		for (const [id, entry] of existing) {
