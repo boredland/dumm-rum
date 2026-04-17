@@ -20,6 +20,7 @@ import { Route as LangMapIndexRouteImport } from "./routes/$lang/map/index";
 import { Route as LangOperatorOperatorDayDateRouteImport } from "./routes/$lang/operator/$operator/day/$date";
 import { Route as LangOperatorOperatorIndexRouteImport } from "./routes/$lang/operator/$operator/index";
 import { Route as LangRouteRouteImport } from "./routes/$lang/route";
+import { Route as ApiFerryVehiclesRouteImport } from "./routes/api/ferry/vehicles";
 import { Route as ApiFlixRouteUuidRouteImport } from "./routes/api/flix/route/$uuid";
 import { Route as ApiFlixVehiclesRouteImport } from "./routes/api/flix/vehicles";
 import { Route as IndexRouteImport } from "./routes/index";
@@ -64,6 +65,11 @@ const ApiFlixVehiclesRoute = ApiFlixVehiclesRouteImport.update({
 	path: "/api/flix/vehicles",
 	getParentRoute: () => rootRouteImport,
 } as any);
+const ApiFerryVehiclesRoute = ApiFerryVehiclesRouteImport.update({
+	id: "/api/ferry/vehicles",
+	path: "/api/ferry/vehicles",
+	getParentRoute: () => rootRouteImport,
+} as any);
 const LangOperatorOperatorIndexRoute =
 	LangOperatorOperatorIndexRouteImport.update({
 		id: "/operator/$operator/",
@@ -103,6 +109,7 @@ export interface FileRoutesByFullPath {
 	"/$lang/$station": typeof LangStationRouteRouteWithChildren;
 	"/$lang/$": typeof LangSplatRoute;
 	"/$lang/": typeof LangIndexRoute;
+	"/api/ferry/vehicles": typeof ApiFerryVehiclesRoute;
 	"/api/flix/vehicles": typeof ApiFlixVehiclesRoute;
 	"/$lang/$station/": typeof LangStationIndexRoute;
 	"/$lang/map/": typeof LangMapIndexRoute;
@@ -117,6 +124,7 @@ export interface FileRoutesByTo {
 	"/": typeof IndexRoute;
 	"/$lang/$": typeof LangSplatRoute;
 	"/$lang": typeof LangIndexRoute;
+	"/api/ferry/vehicles": typeof ApiFerryVehiclesRoute;
 	"/api/flix/vehicles": typeof ApiFlixVehiclesRoute;
 	"/$lang/$station": typeof LangStationIndexRoute;
 	"/$lang/map": typeof LangMapIndexRoute;
@@ -134,6 +142,7 @@ export interface FileRoutesById {
 	"/$lang/$station": typeof LangStationRouteRouteWithChildren;
 	"/$lang/$": typeof LangSplatRoute;
 	"/$lang/": typeof LangIndexRoute;
+	"/api/ferry/vehicles": typeof ApiFerryVehiclesRoute;
 	"/api/flix/vehicles": typeof ApiFlixVehiclesRoute;
 	"/$lang/$station/": typeof LangStationIndexRoute;
 	"/$lang/map/": typeof LangMapIndexRoute;
@@ -152,6 +161,7 @@ export interface FileRouteTypes {
 		| "/$lang/$station"
 		| "/$lang/$"
 		| "/$lang/"
+		| "/api/ferry/vehicles"
 		| "/api/flix/vehicles"
 		| "/$lang/$station/"
 		| "/$lang/map/"
@@ -166,6 +176,7 @@ export interface FileRouteTypes {
 		| "/"
 		| "/$lang/$"
 		| "/$lang"
+		| "/api/ferry/vehicles"
 		| "/api/flix/vehicles"
 		| "/$lang/$station"
 		| "/$lang/map"
@@ -182,6 +193,7 @@ export interface FileRouteTypes {
 		| "/$lang/$station"
 		| "/$lang/$"
 		| "/$lang/"
+		| "/api/ferry/vehicles"
 		| "/api/flix/vehicles"
 		| "/$lang/$station/"
 		| "/$lang/map/"
@@ -196,6 +208,7 @@ export interface FileRouteTypes {
 export interface RootRouteChildren {
 	IndexRoute: typeof IndexRoute;
 	LangRouteRoute: typeof LangRouteRouteWithChildren;
+	ApiFerryVehiclesRoute: typeof ApiFerryVehiclesRoute;
 	ApiFlixVehiclesRoute: typeof ApiFlixVehiclesRoute;
 	ApiFlixRouteUuidRoute: typeof ApiFlixRouteUuidRoute;
 }
@@ -256,6 +269,13 @@ declare module "@tanstack/react-router" {
 			path: "/api/flix/vehicles";
 			fullPath: "/api/flix/vehicles";
 			preLoaderRoute: typeof ApiFlixVehiclesRouteImport;
+			parentRoute: typeof rootRouteImport;
+		};
+		"/api/ferry/vehicles": {
+			id: "/api/ferry/vehicles";
+			path: "/api/ferry/vehicles";
+			fullPath: "/api/ferry/vehicles";
+			preLoaderRoute: typeof ApiFerryVehiclesRouteImport;
 			parentRoute: typeof rootRouteImport;
 		};
 		"/$lang/operator/$operator/": {
@@ -345,6 +365,7 @@ const LangRouteRouteWithChildren = LangRouteRoute._addFileChildren(
 const rootRouteChildren: RootRouteChildren = {
 	IndexRoute: IndexRoute,
 	LangRouteRoute: LangRouteRouteWithChildren,
+	ApiFerryVehiclesRoute: ApiFerryVehiclesRoute,
 	ApiFlixVehiclesRoute: ApiFlixVehiclesRoute,
 	ApiFlixRouteUuidRoute: ApiFlixRouteUuidRoute,
 };

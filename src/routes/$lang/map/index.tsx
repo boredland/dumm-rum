@@ -79,6 +79,7 @@ const CATEGORY_COLORS: Record<string, string> = {
 	Tram: "#ef7d00",
 	Bus: "#a71680",
 	AST: "#d5a601",
+	Ferry: "#0088BB",
 	Other: "#666",
 };
 
@@ -364,6 +365,15 @@ async function fetchFlixVehicles(): Promise<{
 	return (await resp.json()) as { vehicles: Vehicle[]; serverTime: number };
 }
 
+async function fetchFerryVehicles(): Promise<{
+	vehicles: Vehicle[];
+	serverTime: number;
+}> {
+	const resp = await fetch("/api/ferry/vehicles");
+	if (!resp.ok) throw new Error(`ferry vehicles HTTP ${resp.status}`);
+	return (await resp.json()) as { vehicles: Vehicle[]; serverTime: number };
+}
+
 async function fetchFlixRoute(
 	uuid: string,
 ): Promise<[number, number][] | null> {
@@ -400,7 +410,7 @@ export const Route = createFileRoute("/$lang/map/")({
 	component: MapPage,
 });
 
-type IconType = "S" | "U" | "R" | "bus" | "tram" | "train" | null;
+type IconType = "S" | "U" | "R" | "bus" | "tram" | "train" | "ferry" | null;
 
 function resolveIconType(category: string): IconType {
 	switch (category) {
@@ -421,6 +431,8 @@ function resolveIconType(category: string): IconType {
 			return "train";
 		case "Flixbus":
 			return "bus";
+		case "Ferry":
+			return "ferry";
 		default:
 			return null;
 	}
@@ -442,6 +454,8 @@ const RMV_GLYPHS: Record<string, string> = {
 	S: '<path d="M69.15,37.62c-2.8-2.59-5.42-4.78-8.45-6.37-4.85-2.56-9.92-4.07-15.44-3.12-2.9.5-4.88,2.32-5.26,4.61-.48,2.92.64,5.32,3.34,6.89,3.42,2,7.3,2.6,11.05,3.55,2.68.68,5.33,1.42,7.94,2.37,11.33,4.12,12.56,16.1,6.69,23.98-5.11,6.86-12.22,9.47-20.47,9.01-7.09-.4-13.55-2.76-19.37-6.93-.86-.62-1.23-1.25-1.2-2.34.08-2.98.03-5.96.03-9.41,1.82,2.18,3.46,4.01,5.38,5.52,5.39,4.22,11.32,6.79,18.29,6.2,2.23-.19,4.24-.98,5.91-2.52,2.83-2.62,2.73-6.39-.26-8.84-1.96-1.61-4.35-2.33-6.72-3.05-4.5-1.36-9.14-2.27-13.44-4.26-4.6-2.13-8.05-5.26-9.23-10.54-1.44-6.48,1.21-13.25,6.71-16.83,8.13-5.29,16.66-4.98,25.39-1.91,2.9,1.02,5.6,2.49,8.09,4.32.47.35,1.03.6,1.03,1.34,0,2.66,0,5.32,0,8.34z"/>',
 	U: '<path d="M27.57,42.62V26.77c-.01-.97.21-1.28,1.25-1.26,4.18.06,8.37.07,12.55,0,1.09-.02,1.43.2,1.42,1.35-.05,9.72-.03,19.45-.03,29.17,0,.58-.01,1.16.08,1.73.64,4.04,3.22,6.04,7.47,5.8a8.5,8.5,0,0,0,2.01-.19c3.15-.55,4.89-2.72,5.01-6.3.06-1.78.01-3.55.01-5.33V27.87c-.01-1.02.23-1.34,1.31-1.32,4.23.07,8.46.06,12.69,0,.98-.01,1.17.28,1.17,1.19-.03,9.72-.02,19.45-.02,29.17,0,9.93-4.46,15.58-14.31,17.73-6.28,1.37-12.61,1.23-18.8-.64-7.51-2.27-11.68-7.94-11.75-15.82-.03-4.83,0-9.67,0-14.56z"/>',
 	R: '<text x="50" y="78" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="80" font-weight="900">R</text>',
+	ferry:
+		'<path d="M50,16c-3.1,0-5.6,2.5-5.6,5.6v4.8H28.1c-2.2,0-4,1.8-4,4v14.6l-7.3,1.5a3,3,0,0,0-2.3,3.6l3.8,17.5a6,6,0,0,0,5.7,4.7h1.5a7,7,0,0,1,6.5-4.4,7,7,0,0,1,6.5,4.4h13a7,7,0,0,1,6.5-4.4,7,7,0,0,1,6.5,4.4h1.5a6,6,0,0,0,5.7-4.7l3.8-17.5a3,3,0,0,0-2.3-3.6l-7.3-1.5V30.4c0-2.2-1.8-4-4-4H55.6V21.6C55.6,18.5,53.1,16,50,16zM33.5,33.5h33v8.5l-16.5-3.4-16.5,3.4V33.5zM32,74a4.5,4.5,0,1,1,4.5-4.5A4.5,4.5,0,0,1,32,74zM58,74a4.5,4.5,0,1,1,4.5-4.5A4.5,4.5,0,0,1,58,74zM45,22h10a1,1,0,0,1,1,1v3H44v-3A1,1,0,0,1,45,22z"/>',
 };
 
 function buildIconGlyph(type: IconType, fill: string): string {
@@ -572,7 +586,7 @@ function clampForward(
 		// dirGeo units → compass radians. Forward unit vector in
 		// (east, north) = (sin θ, cos θ). Project the raw displacement
 		// onto it; negative = backward.
-		const headingRad = ((raw.heading * 11.25) * Math.PI) / 180;
+		const headingRad = (raw.heading * 11.25 * Math.PI) / 180;
 		const fwdE = Math.sin(headingRad);
 		const fwdN = Math.cos(headingRad);
 		const dE = raw.lon - last.lon;
@@ -794,7 +808,7 @@ function MapPage() {
 		const sw = bounds.getSouthWest();
 		const ne = bounds.getNorthEast();
 		try {
-			const [rmvRes, flixRes] = await Promise.allSettled([
+			const [rmvRes, flixRes, ferryRes] = await Promise.allSettled([
 				fetchVehicles({
 					data: {
 						swLat: sw.lat,
@@ -805,6 +819,7 @@ function MapPage() {
 					},
 				}),
 				fetchFlixVehicles(),
+				fetchFerryVehicles(),
 			]);
 
 			const vehicles: Vehicle[] = [];
@@ -817,6 +832,11 @@ function MapPage() {
 				vehicles.push(...flixRes.value.vehicles);
 			} else {
 				console.warn("flix fetch failed:", flixRes.reason);
+			}
+			if (ferryRes.status === "fulfilled") {
+				vehicles.push(...ferryRes.value.vehicles);
+			} else {
+				console.warn("ferry fetch failed:", ferryRes.reason);
 			}
 
 			timeDeltaRef.current = serverTime - Date.now();
@@ -896,6 +916,7 @@ function MapPage() {
 				"Tram",
 				"Bus",
 				"AST",
+				"Ferry",
 				"Other",
 			];
 			// Each LayerGroup declares the credit for its data source. The
@@ -904,16 +925,17 @@ function MapPage() {
 			// for a source (e.g. both Flix categories toggled off) drops the
 			// credit until something from that source is re-added.
 			const FLIX_CATS = new Set(["Flixtrain", "Flixbus"]);
-			const attrFor = (cat: string) =>
-				FLIX_CATS.has(cat)
-					? 'Vehicles © <a href="https://www.flixbus.com">FlixBus</a>'
-					: 'Vehicles © <a href="https://www.rmv.de">RMV</a>';
+			const FERRY_CATS = new Set(["Ferry"]);
+			const attrFor = (cat: string) => {
+				if (FLIX_CATS.has(cat))
+					return 'Vehicles © <a href="https://www.flixbus.com">FlixBus</a>';
+				if (FERRY_CATS.has(cat))
+					return 'Ferry © <a href="https://www.primus-linie.de/">Primus-Linie</a>';
+				return 'Vehicles © <a href="https://www.rmv.de">RMV</a>';
+			};
 			for (const cat of CATS) {
 				const attribution = attrFor(cat);
-				layers.set(
-					cat,
-					L.layerGroup([], { attribution }).addTo(map),
-				);
+				layers.set(cat, L.layerGroup([], { attribution }).addTo(map));
 				layers.set(
 					`${cat} (sched)`,
 					L.layerGroup([], { attribution }).addTo(map),
@@ -1131,12 +1153,7 @@ function MapPage() {
 				const entry = existing.get(v.id);
 				if (!entry || v.waypoints.length < 2) continue;
 				const rawPos = interpolateVehicle(v, now);
-				const pos = clampForward(
-					v.id,
-					rawPos,
-					now,
-					renderedPosRef.current,
-				);
+				const pos = clampForward(v.id, rawPos, now, renderedPosRef.current);
 				entry.marker.setLatLng([pos.lat, pos.lon]);
 				if (v.id === followIdRef.current) followPos = pos;
 			}
