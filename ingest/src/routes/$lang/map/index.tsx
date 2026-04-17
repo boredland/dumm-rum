@@ -733,15 +733,12 @@ function MapPage() {
 			}
 
 			timeDeltaRef.current = serverTime - Date.now();
-			const now = Date.now() + timeDeltaRef.current;
-			const prev = new Map(vehiclesRef.current.map((v) => [v.id, v]));
-			for (const v of vehicles) {
-				const old = prev.get(v.id);
-				if (old && old.waypoints.length >= 2 && v.waypoints.length >= 2) {
-					const cur = interpolateVehicle(old, now);
-					v.waypoints[0] = { ...v.waypoints[0], lat: cur.lat, lon: cur.lon };
-				}
-			}
+			// No carryover: each fetch's waypoints are HAFAS's authoritative
+			// animation for the new horizon starting at serverTime. Mixing
+			// our last-extrapolated position into waypoints[0] creates a
+			// "gradual rewind" segment from our overshoot back to HAFAS's
+			// fresh prediction — worse than the tiny one-off pop the jump
+			// to waypoints[0] produces. This matches RMV's own map.
 			vehiclesRef.current = vehicles;
 			setVehicleCount(vehicles.length);
 			setLastUpdate(new Date());
