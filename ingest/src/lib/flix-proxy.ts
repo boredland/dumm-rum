@@ -214,16 +214,20 @@ export async function getAggregatedVehicles(): Promise<{
 
 		const prev = lastPositions.get(ride.id);
 		let heading = prev?.heading ?? 0;
-		if (prev) {
-			const meters = haversine(prev, { lat, lon });
-			if (meters > HEADING_MIN_METERS) {
-				heading = toDirGeo(bearingDeg(prev, { lat, lon }));
-			}
+		const movedMeters = prev ? haversine(prev, { lat, lon }) : 0;
+		if (prev && movedMeters > HEADING_MIN_METERS) {
+			heading = toDirGeo(bearingDeg(prev, { lat, lon }));
 		}
 
+		// Flix's `speed_category: STATIONARY` lags behind actual motion —
+		// an upstream-stale flag can persist for minutes while the bus
+		// races down the autobahn. Only treat as truly stationary when
+		// both Flix says so AND our own fix-to-fix haversine confirms it.
+		const flixSaysStationary = ride.location.speed_category === "STATIONARY";
+		const trulyStationary = flixSaysStationary && (!prev || movedMeters < 20);
+
 		const waypoints: Waypoint[] = [];
-		const canProject =
-			prev && prev.t < curT && ride.location.speed_category !== "STATIONARY";
+		const canProject = prev && prev.t < curT && !trulyStationary;
 		if (prev && prev.t < curT) {
 			waypoints.push({
 				lat: prev.lat,
@@ -287,7 +291,7 @@ export async function getAggregatedVehicles(): Promise<{
 			delay: rideDelayMinutes(ride),
 			occupancy: null,
 			hasRT: true,
-			stationary: ride.location.speed_category === "STATIONARY",
+			stationary: trulyStationary,
 			externalTrackingUrl: FLIX_TRACKING_URL_BASE + ride.id,
 			waypoints,
 			fetchedAt: now,
