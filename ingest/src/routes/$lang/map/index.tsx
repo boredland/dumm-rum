@@ -12,7 +12,12 @@ import {
 const FRANKFURT_CENTER = { lat: 50.1109, lon: 8.6821 };
 const POLL_INTERVAL = 15_000;
 const PER_SIZE = 35_000;
-const PER_STEP = 5_000;
+/** Animation step between mgate-returned ani frames, in milliseconds.
+ * RMV's own live map uses 2000 ms (18 frames over 34 s) — dropping this
+ * from 5000 ms (8 frames) to 2000 ms gives us 2.3× denser animation and
+ * makes marker motion smoother, matching what the official RMV app does.
+ */
+const PER_STEP = 2_000;
 
 interface Waypoint {
 	lat: number;
