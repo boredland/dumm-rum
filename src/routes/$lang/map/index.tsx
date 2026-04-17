@@ -1,5 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { createServerFn } from "@tanstack/react-start";
+import { setResponseHeader } from "@tanstack/react-start/server";
 import "leaflet/dist/leaflet.css";
 import "leaflet-fullscreen/dist/leaflet.fullscreen.css";
 import "leaflet.locatecontrol/dist/L.Control.Locate.min.css";
@@ -117,6 +118,16 @@ const fetchVehicles = createServerFn({ method: "GET" })
 	)
 	.handler(
 		async ({ data }): Promise<{ vehicles: Vehicle[]; serverTime: number }> => {
+			// Cloudflare keys on the full URL including the query, so the
+			// cache splits per bounding-box + products combo. Users in the
+			// same area at the same zoom share edge hits; panning into a new
+			// tile triggers a miss as expected. 5 s edge TTL is short enough
+			// that the animation stays in sync with HAFAS's 15 s poll but
+			// absorbs concurrent fan-outs during bursts.
+			setResponseHeader(
+				"Cache-Control",
+				"public, max-age=5, s-maxage=10, stale-while-revalidate=30",
+			);
 			const now = new Date();
 			const serverTime = now.getTime();
 			const date = now
