@@ -23,6 +23,8 @@ import { Route as LangRouteRouteImport } from "./routes/$lang/route";
 import { Route as ApiFerryVehiclesRouteImport } from "./routes/api/ferry/vehicles";
 import { Route as ApiFlixRouteUuidRouteImport } from "./routes/api/flix/route/$uuid";
 import { Route as ApiFlixVehiclesRouteImport } from "./routes/api/flix/vehicles";
+import { Route as ApiPickerLinesRouteImport } from "./routes/api/picker/lines";
+import { Route as ApiPickerStopsRouteImport } from "./routes/api/picker/stops";
 import { Route as IndexRouteImport } from "./routes/index";
 
 const LangRouteRoute = LangRouteRouteImport.update({
@@ -59,6 +61,16 @@ const LangStationIndexRoute = LangStationIndexRouteImport.update({
 	id: "/",
 	path: "/",
 	getParentRoute: () => LangStationRouteRoute,
+} as any);
+const ApiPickerStopsRoute = ApiPickerStopsRouteImport.update({
+	id: "/api/picker/stops",
+	path: "/api/picker/stops",
+	getParentRoute: () => rootRouteImport,
+} as any);
+const ApiPickerLinesRoute = ApiPickerLinesRouteImport.update({
+	id: "/api/picker/lines",
+	path: "/api/picker/lines",
+	getParentRoute: () => rootRouteImport,
 } as any);
 const ApiFlixVehiclesRoute = ApiFlixVehiclesRouteImport.update({
 	id: "/api/flix/vehicles",
@@ -111,6 +123,8 @@ export interface FileRoutesByFullPath {
 	"/$lang/": typeof LangIndexRoute;
 	"/api/ferry/vehicles": typeof ApiFerryVehiclesRoute;
 	"/api/flix/vehicles": typeof ApiFlixVehiclesRoute;
+	"/api/picker/lines": typeof ApiPickerLinesRoute;
+	"/api/picker/stops": typeof ApiPickerStopsRoute;
 	"/$lang/$station/": typeof LangStationIndexRoute;
 	"/$lang/map/": typeof LangMapIndexRoute;
 	"/$lang/$station/day/$date": typeof LangStationDayDateRoute;
@@ -126,6 +140,8 @@ export interface FileRoutesByTo {
 	"/$lang": typeof LangIndexRoute;
 	"/api/ferry/vehicles": typeof ApiFerryVehiclesRoute;
 	"/api/flix/vehicles": typeof ApiFlixVehiclesRoute;
+	"/api/picker/lines": typeof ApiPickerLinesRoute;
+	"/api/picker/stops": typeof ApiPickerStopsRoute;
 	"/$lang/$station": typeof LangStationIndexRoute;
 	"/$lang/map": typeof LangMapIndexRoute;
 	"/$lang/$station/day/$date": typeof LangStationDayDateRoute;
@@ -144,6 +160,8 @@ export interface FileRoutesById {
 	"/$lang/": typeof LangIndexRoute;
 	"/api/ferry/vehicles": typeof ApiFerryVehiclesRoute;
 	"/api/flix/vehicles": typeof ApiFlixVehiclesRoute;
+	"/api/picker/lines": typeof ApiPickerLinesRoute;
+	"/api/picker/stops": typeof ApiPickerStopsRoute;
 	"/$lang/$station/": typeof LangStationIndexRoute;
 	"/$lang/map/": typeof LangMapIndexRoute;
 	"/$lang/$station/day/$date": typeof LangStationDayDateRoute;
@@ -163,6 +181,8 @@ export interface FileRouteTypes {
 		| "/$lang/"
 		| "/api/ferry/vehicles"
 		| "/api/flix/vehicles"
+		| "/api/picker/lines"
+		| "/api/picker/stops"
 		| "/$lang/$station/"
 		| "/$lang/map/"
 		| "/$lang/$station/day/$date"
@@ -178,6 +198,8 @@ export interface FileRouteTypes {
 		| "/$lang"
 		| "/api/ferry/vehicles"
 		| "/api/flix/vehicles"
+		| "/api/picker/lines"
+		| "/api/picker/stops"
 		| "/$lang/$station"
 		| "/$lang/map"
 		| "/$lang/$station/day/$date"
@@ -195,6 +217,8 @@ export interface FileRouteTypes {
 		| "/$lang/"
 		| "/api/ferry/vehicles"
 		| "/api/flix/vehicles"
+		| "/api/picker/lines"
+		| "/api/picker/stops"
 		| "/$lang/$station/"
 		| "/$lang/map/"
 		| "/$lang/$station/day/$date"
@@ -210,6 +234,8 @@ export interface RootRouteChildren {
 	LangRouteRoute: typeof LangRouteRouteWithChildren;
 	ApiFerryVehiclesRoute: typeof ApiFerryVehiclesRoute;
 	ApiFlixVehiclesRoute: typeof ApiFlixVehiclesRoute;
+	ApiPickerLinesRoute: typeof ApiPickerLinesRoute;
+	ApiPickerStopsRoute: typeof ApiPickerStopsRoute;
 	ApiFlixRouteUuidRoute: typeof ApiFlixRouteUuidRoute;
 }
 
@@ -263,6 +289,20 @@ declare module "@tanstack/react-router" {
 			fullPath: "/$lang/$station/";
 			preLoaderRoute: typeof LangStationIndexRouteImport;
 			parentRoute: typeof LangStationRouteRoute;
+		};
+		"/api/picker/stops": {
+			id: "/api/picker/stops";
+			path: "/api/picker/stops";
+			fullPath: "/api/picker/stops";
+			preLoaderRoute: typeof ApiPickerStopsRouteImport;
+			parentRoute: typeof rootRouteImport;
+		};
+		"/api/picker/lines": {
+			id: "/api/picker/lines";
+			path: "/api/picker/lines";
+			fullPath: "/api/picker/lines";
+			preLoaderRoute: typeof ApiPickerLinesRouteImport;
+			parentRoute: typeof rootRouteImport;
 		};
 		"/api/flix/vehicles": {
 			id: "/api/flix/vehicles";
@@ -367,6 +407,8 @@ const rootRouteChildren: RootRouteChildren = {
 	LangRouteRoute: LangRouteRouteWithChildren,
 	ApiFerryVehiclesRoute: ApiFerryVehiclesRoute,
 	ApiFlixVehiclesRoute: ApiFlixVehiclesRoute,
+	ApiPickerLinesRoute: ApiPickerLinesRoute,
+	ApiPickerStopsRoute: ApiPickerStopsRoute,
 	ApiFlixRouteUuidRoute: ApiFlixRouteUuidRoute,
 };
 export const routeTree = rootRouteImport

@@ -1,6 +1,33 @@
 import { useEffect, useMemo, useState } from "react";
 import { type Lang, t } from "../lib/i18n.ts";
 import { buildSubscribeUrl } from "../lib/telegram-deeplink.ts";
+import { Combobox } from "./Combobox.tsx";
+
+/** In-memory process-wide cache so every SubscribeModal mount across a
+ * session reuses the same picker fetches. Lists are stable for minutes —
+ * `/api/picker/*` is cached upstream at 1h browser + 1d CDN, we just
+ * dedupe concurrent modal mounts here. */
+const pickerCache: { stops?: string[]; lines?: string[] } = {};
+const pickerInflight: { stops?: Promise<string[]>; lines?: Promise<string[]> } =
+	{};
+
+async function fetchPicker(kind: "stops" | "lines"): Promise<string[]> {
+	if (pickerCache[kind]) return pickerCache[kind]!;
+	if (pickerInflight[kind]) return pickerInflight[kind]!;
+	const p = (async () => {
+		const resp = await fetch(`/api/picker/${kind}`);
+		if (!resp.ok) throw new Error(`picker/${kind} HTTP ${resp.status}`);
+		const json = (await resp.json()) as string[] | { name: string }[];
+		const list = Array.isArray(json)
+			? json.map((x) => (typeof x === "string" ? x : x.name))
+			: [];
+		pickerCache[kind] = list;
+		delete pickerInflight[kind];
+		return list;
+	})();
+	pickerInflight[kind] = p;
+	return p;
+}
 
 /** 7 weekday toggles; internal value is the bot's numeric format
  * (`0=Sun..6=Sat`, comma-separated) so we can hand it straight to
@@ -52,6 +79,12 @@ export function SubscribeModal({
 	const [weekdays, setWeekdays] = useState<Set<number>>(
 		() => new Set(WEEKDAY_ORDER),
 	);
+	const [linesList, setLinesList] = useState<string[]>(
+		() => pickerCache.lines ?? [],
+	);
+	const [stopsList, setStopsList] = useState<string[]>(
+		() => pickerCache.stops ?? [],
+	);
 
 	// Close on Escape.
 	useEffect(() => {
@@ -61,6 +94,23 @@ export function SubscribeModal({
 		window.addEventListener("keydown", handler);
 		return () => window.removeEventListener("keydown", handler);
 	}, [onClose]);
+
+	// Fetch picker lists once per session; the endpoints are heavily
+	// cached so this is cheap on repeat opens.
+	useEffect(() => {
+		let alive = true;
+		if (linesList.length === 0)
+			fetchPicker("lines")
+				.then((l) => alive && setLinesList(l))
+				.catch(() => {});
+		if (stopsList.length === 0)
+			fetchPicker("stops")
+				.then((l) => alive && setStopsList(l))
+				.catch(() => {});
+		return () => {
+			alive = false;
+		};
+	}, [linesList.length, stopsList.length]);
 
 	const timeRanges = useMemo(
 		() =>
@@ -131,12 +181,12 @@ export function SubscribeModal({
 				<div className="space-y-3">
 					<div>
 						<div className={label}>{t(lang, "subscribe.line")}</div>
-						<input
-							type="text"
-							className={field}
+						<Combobox
 							value={line}
-							onChange={(e) => setLine(e.target.value)}
+							onChange={setLine}
+							options={linesList}
 							placeholder="e.g. S6"
+							ariaLabel={t(lang, "subscribe.line")}
 						/>
 					</div>
 
@@ -168,28 +218,17 @@ export function SubscribeModal({
 
 					<div>
 						<div className={label}>{t(lang, "subscribe.stop")}</div>
-						{availableStops && availableStops.length > 0 ? (
-							<select
-								className={field}
-								value={stopName}
-								onChange={(e) => setStopName(e.target.value)}
-							>
-								<option value="">{t(lang, "subscribe.stop.any")}</option>
-								{availableStops.map((s) => (
-									<option key={s.id} value={s.name}>
-										{s.name}
-									</option>
-								))}
-							</select>
-						) : (
-							<input
-								type="text"
-								className={field}
-								value={stopName}
-								onChange={(e) => setStopName(e.target.value)}
-								placeholder={t(lang, "subscribe.stop.any")}
-							/>
-						)}
+						<Combobox
+							value={stopName}
+							onChange={setStopName}
+							options={
+								availableStops && availableStops.length > 0
+									? availableStops.map((s) => s.name)
+									: stopsList
+							}
+							placeholder={t(lang, "subscribe.stop.any")}
+							ariaLabel={t(lang, "subscribe.stop")}
+						/>
 					</div>
 
 					<div>

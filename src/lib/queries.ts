@@ -714,6 +714,34 @@ export async function getOldestDate(): Promise<string | null> {
 	return rows[0]?.date ?? null;
 }
 
+export interface StopPickerEntry {
+	/** Canonical display name (Groups multi-platform stops by name). */
+	name: string;
+}
+
+/** All distinct stop names known to the system. Intended for client-side
+ * fuzzy search in the subscribe modal — heavy cache at the HTTP layer. */
+export async function getAllStopNames(): Promise<StopPickerEntry[]> {
+	const rows = await db
+		.select({
+			name: sql<string>`MIN(${knownStops.stopName})`.as("name"),
+		})
+		.from(knownStops)
+		.groupBy(sql`LOWER(${knownStops.stopName})`)
+		.orderBy(sql`MIN(${knownStops.stopName})`);
+	return rows.map((r) => ({ name: r.name })).filter((r) => r.name);
+}
+
+/** All distinct line codes seen in journey_runs. */
+export async function getAllLineNames(): Promise<string[]> {
+	const rows = await db
+		.selectDistinct({ line: journeyRuns.line })
+		.from(journeyRuns)
+		.where(isNotNull(journeyRuns.line))
+		.orderBy(journeyRuns.line);
+	return rows.map((r) => r.line).filter(Boolean);
+}
+
 function dedupeCsv(s: string): string[] {
 	return [...new Set(s.split(","))].filter(Boolean);
 }
