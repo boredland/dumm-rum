@@ -358,6 +358,14 @@ function Index() {
 				>
 					{t(l, "nav.github")}
 				</a>
+				<a
+					href="https://github.com/boredland/dumm-rum/issues/new"
+					target="_blank"
+					rel="noopener noreferrer"
+					className="text-dimmed hover:text-fg transition-colors"
+				>
+					{t(l, "nav.report_bug")}
+				</a>
 				<span className="ml-auto">
 					<Link to="/$lang" params={{ lang: other }}>
 						{other.toUpperCase()}

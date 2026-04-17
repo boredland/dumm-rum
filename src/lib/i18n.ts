@@ -48,6 +48,7 @@ const translations = {
 		"nav.back_to_line": "Zur\u00fcck zur Linie",
 		"nav.back_to_operator": "Zur\u00fcck zum Betreiber",
 		"nav.github": "Quellcode auf GitHub",
+		"nav.report_bug": "🐛 Bug melden",
 
 		"operator.lines": "Linien",
 		"station.last_updated": "zuletzt aktualisiert",
@@ -173,6 +174,7 @@ const translations = {
 		"nav.back_to_line": "Back to line",
 		"nav.back_to_operator": "Back to operator",
 		"nav.github": "View source on GitHub",
+		"nav.report_bug": "🐛 Report a bug",
 
 		"operator.lines": "Lines",
 		"station.last_updated": "last updated",
