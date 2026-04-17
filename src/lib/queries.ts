@@ -762,6 +762,16 @@ export async function getAllLineNames(): Promise<string[]> {
 	return rows.map((r) => r.line).filter(Boolean);
 }
 
+/** All distinct destinations (headsigns) seen in journey_runs. */
+export async function getAllDirections(): Promise<string[]> {
+	const rows = await db
+		.selectDistinct({ dest: journeyRuns.destName })
+		.from(journeyRuns)
+		.where(isNotNull(journeyRuns.destName))
+		.orderBy(journeyRuns.destName);
+	return rows.map((r) => r.dest).filter(Boolean);
+}
+
 function dedupeCsv(s: string): string[] {
 	return [...new Set(s.split(","))].filter(Boolean);
 }
