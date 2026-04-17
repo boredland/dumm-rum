@@ -57,6 +57,10 @@ const HEADING_MIN_METERS = 20;
  * the upstream position cadence so the marker is always gliding toward a
  * point the next real fix will either confirm or correct. */
 const PROJECT_SEC = 30;
+/** Number of forward frames to emit across PROJECT_SEC. Matches RMV's
+ * ~5 s cadence (8 frames / 35 s) so `interpolateVehicle` has short
+ * segments and the marker tracks curves without cutting corners. */
+const PROJECT_FRAMES = 6;
 
 interface PrevPos {
 	lat: number;
@@ -237,19 +241,24 @@ export async function getAggregatedVehicles(): Promise<{
 			if (polyPts && polyPts.length > 0) {
 				waypoints.push(...polyPts);
 			} else {
-				// Fallback: linear extrapolate one fix ahead using the
-				// prev→cur velocity vector. Used when the polyline isn't
-				// yet cached or the vehicle is off-route.
+				// Fallback: emit dense linear-extrapolated frames using
+				// the prev→cur velocity vector when the polyline isn't
+				// cached or the vehicle is off-route. Frame cadence
+				// matches the polyline-follow path so animation density
+				// is uniform across both modes.
 				const dt = (curT - prev.t) / 1000;
 				if (dt > 0) {
 					const vLat = (lat - prev.lat) / dt;
 					const vLon = (lon - prev.lon) / dt;
-					waypoints.push({
-						lat: lat + vLat * PROJECT_SEC,
-						lon: lon + vLon * PROJECT_SEC,
-						t: curT + PROJECT_SEC * 1000,
-						heading,
-					});
+					for (let f = 1; f <= PROJECT_FRAMES; f++) {
+						const sec = (f * PROJECT_SEC) / PROJECT_FRAMES;
+						waypoints.push({
+							lat: lat + vLat * sec,
+							lon: lon + vLon * sec,
+							t: curT + sec * 1000,
+							heading,
+						});
+					}
 				}
 			}
 			// Kick off polyline fetch in background for next call when
@@ -384,51 +393,74 @@ function buildPolyWaypoints(
 		bwdIdx !== null ? dot(bestIdx, bwdIdx) : Number.NEGATIVE_INFINITY;
 	const dir: 1 | -1 = dotFwd >= dotBwd ? 1 : -1;
 
+	// Emit frames at fixed time intervals so the client's linear
+	// interpolator follows the polyline tightly — matches RMV's ~5 s
+	// cadence (8 frames across 35 s). Sparse vertex-only emission
+	// produced noticeable cut-corners on highway-length segments.
 	const waypoints: Waypoint[] = [];
-	const horizonMeters = metersPerSec * PROJECT_SEC;
 	let consumed = 0;
 	let fromLat = cur.lat;
 	let fromLon = cur.lon;
+	let fromHeading = prev.heading;
 	let idx = bestIdx;
 
-	// Safety bound: at most 512 vertices of projection to cap CPU on
-	// pathological polylines.
-	for (let step = 0; step < 512; step++) {
-		const nextIdx = idx + dir;
-		if (nextIdx < 0 || nextIdx >= poly.length) break;
-		const nextLat = poly[nextIdx][0];
-		const nextLon = poly[nextIdx][1];
-		const seg = haversine(
-			{ lat: fromLat, lon: fromLon },
-			{ lat: nextLat, lon: nextLon },
-		);
-		const heading = toDirGeo(
-			bearingDeg(
+	for (let frame = 1; frame <= PROJECT_FRAMES; frame++) {
+		const targetSec = (frame * PROJECT_SEC) / PROJECT_FRAMES;
+		const targetMeters = metersPerSec * targetSec;
+		// Walk forward along polyline until cumulative distance reaches
+		// targetMeters, interpolating within the final segment.
+		let placed = false;
+		// Cap vertex steps per frame to bound worst-case CPU.
+		for (let step = 0; step < 128; step++) {
+			const nextIdx = idx + dir;
+			if (nextIdx < 0 || nextIdx >= poly.length) break;
+			const nextLat = poly[nextIdx][0];
+			const nextLon = poly[nextIdx][1];
+			const seg = haversine(
 				{ lat: fromLat, lon: fromLon },
 				{ lat: nextLat, lon: nextLon },
-			),
-		);
-		const remaining = horizonMeters - consumed;
-		if (seg >= remaining) {
-			const ratio = seg > 0 ? remaining / seg : 0;
-			waypoints.push({
-				lat: fromLat + ratio * (nextLat - fromLat),
-				lon: fromLon + ratio * (nextLon - fromLon),
-				t: curT + PROJECT_SEC * 1000,
-				heading,
-			});
-			break;
+			);
+			const heading = toDirGeo(
+				bearingDeg(
+					{ lat: fromLat, lon: fromLon },
+					{ lat: nextLat, lon: nextLon },
+				),
+			);
+			const remaining = targetMeters - consumed;
+			if (seg >= remaining) {
+				const ratio = seg > 0 ? remaining / seg : 0;
+				waypoints.push({
+					lat: fromLat + ratio * (nextLat - fromLat),
+					lon: fromLon + ratio * (nextLon - fromLon),
+					t: curT + targetSec * 1000,
+					heading,
+				});
+				// Advance `from` to the emitted point and keep same
+				// vertex idx so subsequent frames walk from here.
+				fromLat += ratio * (nextLat - fromLat);
+				fromLon += ratio * (nextLon - fromLon);
+				consumed += ratio * seg;
+				fromHeading = heading;
+				placed = true;
+				break;
+			}
+			consumed += seg;
+			fromLat = nextLat;
+			fromLon = nextLon;
+			fromHeading = heading;
+			idx = nextIdx;
 		}
-		consumed += seg;
-		waypoints.push({
-			lat: nextLat,
-			lon: nextLon,
-			t: curT + (consumed / metersPerSec) * 1000,
-			heading,
-		});
-		fromLat = nextLat;
-		fromLon = nextLon;
-		idx = nextIdx;
+		if (!placed) {
+			// Ran out of polyline before hitting target distance — pin
+			// the remaining frames at the last vertex so animation ends
+			// there rather than snapping back.
+			waypoints.push({
+				lat: fromLat,
+				lon: fromLon,
+				t: curT + targetSec * 1000,
+				heading: fromHeading,
+			});
+		}
 	}
 
 	return waypoints.length > 0 ? waypoints : null;
