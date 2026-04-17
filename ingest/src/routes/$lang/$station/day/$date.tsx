@@ -118,6 +118,10 @@ function StationDay() {
 							<tbody>
 								{filters.filtered.map((d, i) => {
 									const delay = delayMin(d.date, d.time, d.rtTime);
+									const isRail = /^(ICE|IC|EC|RE|RB|S)\s?\d/i.test(d.line);
+									const bahnUrl = isRail && delay !== null && delay >= 5
+										? `https://bahn.expert/details/${encodeURIComponent(d.line)}/${d.date}T${d.time.replace(/:/g, "%3A")}.000Z`
+										: null;
 									return (
 										<tr
 											key={`${i}-${d.time}-${d.line}-${d.direction}`}
@@ -143,6 +147,16 @@ function StationDay() {
 												) : delay !== null && delay >= 8 ? (
 													<span className="text-amber-500">
 														⏳ +{delay} min
+														{bahnUrl && (
+															<a
+																href={bahnUrl}
+																target="_blank"
+																rel="noopener noreferrer"
+																className="ml-1 text-accent text-xs"
+															>
+																why?
+															</a>
+														)}
 													</span>
 												) : (
 													<span className="text-emerald-500">✅</span>

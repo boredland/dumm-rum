@@ -34,6 +34,7 @@ interface Vehicle {
 	delay: number | null;
 	occupancy: "L" | "M" | "H" | null;
 	hasRT: boolean;
+	bahnExpertUrl: string | null;
 	waypoints: Waypoint[];
 	fetchedAt: number;
 }
@@ -186,6 +187,7 @@ const fetchVehicles = createServerFn({ method: "GET" })
 						};
 						jnyL?: {
 							jid: string;
+							date?: string;
 							pos: { x: number; y: number };
 							dirTxt?: string;
 							dirGeo?: number;
@@ -285,6 +287,23 @@ const fetchVehicles = createServerFn({ method: "GET" })
 					if (s === "L" || s === "M" || s === "H") occupancy = s;
 				}
 
+				const RAIL_CATEGORIES = new Set(["ICE", "IC", "RE/RB", "S-Bahn"]);
+				let bahnExpertUrl: string | null = null;
+				if (RAIL_CATEGORIES.has(category)) {
+					const depTime = (j.stopL ?? [])[0]?.dTimeS;
+					if (depTime && j.date) {
+						const y = j.date.slice(0, 4);
+						const mo = j.date.slice(4, 6);
+						const dy = j.date.slice(6, 8);
+						const hh = depTime.slice(0, 2);
+						const mm = depTime.slice(2, 4);
+						const trainName = prod?.name?.trim() ?? "";
+						if (trainName) {
+							bahnExpertUrl = `https://bahn.expert/details/${encodeURIComponent(trainName)}/${y}-${mo}-${dy}T${hh}:${mm}:00.000Z`;
+						}
+					}
+				}
+
 				return {
 					id: j.jid,
 					name: prod?.name?.trim() ?? "?",
@@ -298,6 +317,7 @@ const fetchVehicles = createServerFn({ method: "GET" })
 					delay,
 					occupancy,
 					hasRT,
+					bahnExpertUrl,
 					waypoints,
 					fetchedAt: serverTime,
 				};
@@ -539,8 +559,11 @@ function MapPage() {
 			const isFollowed = v.id === followIdRef.current;
 			const m = existing.get(v.id)!.marker;
 			m.unbindTooltip();
+			const bahnLink = v.bahnExpertUrl && v.delay && v.delay > 2
+				? `<br/><a href="${v.bahnExpertUrl}" target="_blank" rel="noopener" style="font-size:10px">Delay info →</a>`
+				: "";
 			m.bindTooltip(
-				`<strong>${escapeHtml(v.name)}</strong><br/>→ ${escapeHtml(v.direction)}${v.operator ? `<br/><span style="opacity:.7">${escapeHtml(v.operator)}</span>` : ""}`,
+				`<strong>${escapeHtml(v.name)}</strong><br/>→ ${escapeHtml(v.direction)}${v.operator ? `<br/><span style="opacity:.7">${escapeHtml(v.operator)}</span>` : ""}${bahnLink}`,
 				{
 					direction: "top",
 					offset: [0, -(size / 2 + 4)],
