@@ -192,6 +192,7 @@ const fetchVehicles = createServerFn({ method: "GET" })
 								cls?: number;
 								icoX?: number;
 								oprX?: number;
+								prodCtx?: { catOutL?: string; matchId?: string };
 							}[];
 							opL?: { name: string }[];
 							polyL?: { crdEncYX?: string }[];
@@ -313,7 +314,15 @@ const fetchVehicles = createServerFn({ method: "GET" })
 						const dy = j.date.slice(6, 8);
 						const hh = depTime.slice(0, 2);
 						const mm = depTime.slice(2, 4);
-						const trainName = prod?.name?.trim() ?? "";
+						// bahn.expert wants `<Category> <TrainNumber>` (e.g.
+						// "RE 25134"), not the line code (e.g. "RE30") —
+						// passing the line code makes its parser strip the
+						// prefix and find unrelated trains ("EC30" for
+						// "RE30"). HAFAS gives us both via prodCtx.
+						const cat = prod?.prodCtx?.catOutL?.trim() ?? "";
+						const tripNum = prod?.prodCtx?.matchId?.trim() ?? "";
+						const trainName =
+							cat && tripNum ? `${cat} ${tripNum}` : (prod?.name?.trim() ?? "");
 						if (trainName) {
 							externalTrackingUrl = `https://bahn.expert/details/${encodeURIComponent(trainName)}/${y}-${mo}-${dy}T${hh}:${mm}:00.000Z`;
 						}
