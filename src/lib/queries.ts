@@ -540,14 +540,34 @@ export async function findStopBySlug(slug: string): Promise<KnownStop | null> {
 		.from(knownStops)
 		.where(eq(knownStops.slug, slug));
 
-	if (rows.length === 0) return null;
+	if (rows.length > 0) return mergeStopRows(rows);
 
+	// Fallback: known_stops.slug may be NULL for rows the rollup hasn't
+	// backfilled yet (e.g. freshly-seen stops). The landing page derives
+	// slugs via `nameToSlug(stop_name)` on the fly, so a row pointed at
+	// from there can 404 here until the next rollup runs. Scan by computed
+	// slug so the symmetry holds regardless of rollup state.
+	const { nameToSlug } = await import("./stations.ts");
+	const candidates = await db
+		.select({
+			stopId: knownStops.stopId,
+			stopName: knownStops.stopName,
+			categories: knownStops.categories,
+		})
+		.from(knownStops);
+	const match = candidates.filter((r) => nameToSlug(r.stopName) === slug);
+	if (match.length === 0) return null;
+	return mergeStopRows(match);
+}
+
+function mergeStopRows(
+	rows: { stopId: string; stopName: string; categories: string | null }[],
+): KnownStop {
 	const categories = new Set<string>();
 	for (const r of rows) {
 		if (r.categories)
 			for (const c of r.categories.split(",")) categories.add(c);
 	}
-
 	return {
 		stopIds: rows.map((r) => r.stopId),
 		stopName: rows[0].stopName,
