@@ -706,16 +706,41 @@ function buildVehicleIcon(
 		? `<circle cx="${c}" cy="${c}" r="${r + 4}" fill="none" stroke="${v.bg}" stroke-width="2" stroke-dasharray="3 3" opacity="0.6"/>`
 		: "";
 
-	// Real-GPS badge: small pulsing green dot at the pin's top-right so
-	// users can tell at a glance which markers are ground-truth AVL
+	// Real-GPS badge: three ascending signal bars at the pin's top-right
+	// so users can tell at a glance which markers are ground-truth AVL
 	// fixes (Flix live feed, HEAG mobilo, bahn.expert for DB Fernverkehr)
 	// vs the polyline-calc interpolation we render for everything else.
+	// Bars light up sequentially via CSS keyframes, mirroring phone cell-
+	// reception animations so the intent reads as "live signal."
 	let gpsBadge = "";
 	if (v.hasGps) {
 		const bx = c + r * 0.7;
 		const by = c - r * 0.7;
-		const br = Math.max(3, r * 0.3);
-		gpsBadge = `<circle class="dummrum-gps-dot" cx="${bx}" cy="${by}" r="${br}" fill="#27ae60" stroke="#fff" stroke-width="1.5"/>`;
+		// Scale the whole badge with the pin; the base unit is the
+		// radius of the inner circle's top-right corner. br ≈ 3-5 px
+		// at the map's default zoom, ~6-8 px when zoomed in to label
+		// level. Bars share the same origin point as the old dot so the
+		// layout feels familiar.
+		const badgeW = Math.max(6, r * 0.65);
+		const badgeH = Math.max(5, r * 0.55);
+		const barW = badgeW / 5.4;
+		const barGap = barW * 0.4;
+		const left = bx - badgeW / 2;
+		const bottom = by + badgeH / 2;
+		const padX = barW * 0.6;
+		const padY = barW * 0.4;
+		// Rounded white backing rectangle behind the bars so they stay
+		// legible over any underlying category colour or map tile.
+		const bg = `<rect x="${left - padX}" y="${bottom - badgeH - padY}" width="${badgeW + padX * 2}" height="${badgeH + padY * 2}" rx="${padX}" fill="#fff" stroke="rgba(0,0,0,0.15)" stroke-width="0.5"/>`;
+		const bars = [0.35, 0.65, 1.0]
+			.map((frac, idx) => {
+				const h = badgeH * frac;
+				const x = left + idx * (barW + barGap);
+				const y = bottom - h;
+				return `<rect class="dummrum-gps-bar dummrum-gps-bar-${idx}" x="${x}" y="${y}" width="${barW}" height="${h}" rx="${barW * 0.2}" fill="#27ae60"/>`;
+			})
+			.join("");
+		gpsBadge = `<g class="dummrum-gps-signal">${bg}${bars}</g>`;
 	}
 
 	const pin = `${pointer}${stationaryHalo}<circle cx="${c}" cy="${c}" r="${r}" fill="${v.bg}" stroke="#fff" stroke-width="2"/><circle cx="${c}" cy="${c}" r="${ir}" fill="#fff"/>${innerGlyph}${gpsBadge}`;

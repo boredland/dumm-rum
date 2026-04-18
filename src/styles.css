@@ -56,21 +56,28 @@ a:hover {
 	transition: transform 800ms linear;
 }
 
-/* Slow pulse on the real-GPS indicator dot so a glance can pick out the
-   "this one is ground truth" markers from the "this one is calculated"
-   ones without reading the badge. */
-@keyframes dummrum-gps-pulse {
+/* Three-bar signal indicator for vehicles on a live AVL feed. Bars
+   fade in sequentially (short → medium → tall) the way phone cell-
+   reception animations work, so at a glance the badge reads as
+   "actively receiving" rather than a generic highlight. */
+@keyframes dummrum-gps-bar {
 	0%,
 	100% {
-		opacity: 1;
-		transform: scale(1);
+		opacity: 0.35;
 	}
 	50% {
-		opacity: 0.5;
-		transform: scale(1.25);
+		opacity: 1;
 	}
 }
-.dummrum-gps-dot {
-	transform-origin: center;
-	animation: dummrum-gps-pulse 1.6s ease-in-out infinite;
+.dummrum-gps-bar {
+	animation: dummrum-gps-bar 1.5s ease-in-out infinite;
+}
+.dummrum-gps-bar-0 {
+	animation-delay: 0s;
+}
+.dummrum-gps-bar-1 {
+	animation-delay: 0.2s;
+}
+.dummrum-gps-bar-2 {
+	animation-delay: 0.4s;
 }
