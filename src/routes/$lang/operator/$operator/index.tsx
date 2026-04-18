@@ -1,5 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { createServerFn } from "@tanstack/react-start";
+import { setResponseHeader } from "@tanstack/react-start/server";
 import {
 	DaysToggleBar,
 	useDaysFilter,
@@ -15,23 +16,28 @@ import {
 } from "../../../../lib/queries.ts";
 import { urlFilter } from "../../../../lib/search-state.ts";
 import { categoryIcons } from "../../../../lib/stations.ts";
+import { makeSwr } from "../../../../lib/swr.ts";
 import { onTimeRate } from "../../../../lib/utils.ts";
 
 const DAYS_FILTER_OPTS = ["all", "today", "weekdays", "weekends"] as const;
+
+const operatorSwr = makeSwr<{ operator: string; stats: OperatorStats }>(
+	async (operator) => ({ operator, stats: await getOperatorStats(operator) }),
+	{ freshMs: 60_000, staleMs: 15 * 60_000 },
+);
 
 const loadOperator = createServerFn({ method: "GET" })
 	.inputValidator((op: unknown): string => {
 		if (typeof op !== "string" || op.length === 0) throw new Error("invalid");
 		return op;
 	})
-	.handler(
-		async ({
-			data: operator,
-		}): Promise<{ operator: string; stats: OperatorStats }> => {
-			const stats = await getOperatorStats(operator);
-			return { operator, stats };
-		},
-	);
+	.handler(async ({ data: operator }) => {
+		setResponseHeader(
+			"Cache-Control",
+			"public, max-age=30, s-maxage=60, stale-while-revalidate=900",
+		);
+		return operatorSwr.get(operator);
+	});
 
 export const Route = createFileRoute("/$lang/operator/$operator/")({
 	staleTime: 5 * 60 * 1000,

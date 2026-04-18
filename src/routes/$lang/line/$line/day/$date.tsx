@@ -1,5 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { createServerFn } from "@tanstack/react-start";
+import { setResponseHeader } from "@tanstack/react-start/server";
 import { useEffect, useRef } from "react";
 import {
 	DepartureFilterBar,
@@ -14,12 +15,21 @@ import {
 	urlFilter,
 	urlStringFilter,
 } from "../../../../../lib/search-state.ts";
-import { delayMin, formatTime } from "../../../../../lib/utils.ts";
+import { makeSwr } from "../../../../../lib/swr.ts";
+import { delayMin, formatTime, todayBerlin } from "../../../../../lib/utils.ts";
 
 const STATUS_OPTS = ["all", "issues", "on_time"] as const;
 const HOURS_OPTS = ["all", "core"] as const;
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+
+const lineDaySwr = makeSwr<LineDayJourney[]>(
+	(key) => {
+		const [line, date] = key.split("|");
+		return getLineDayJourneys(line, date);
+	},
+	{ freshMs: 60_000, staleMs: 15 * 60_000 },
+);
 
 const loadDay = createServerFn({ method: "GET" })
 	.inputValidator((input: unknown): { line: string; date: string } => {
@@ -42,7 +52,16 @@ const loadDay = createServerFn({ method: "GET" })
 		async ({
 			data: { line, date },
 		}): Promise<{ line: string; date: string; journeys: LineDayJourney[] }> => {
-			const journeys = await getLineDayJourneys(line, date);
+			// Past days are immutable; today keeps accruing rows throughout
+			// the day so we keep its edge TTL short.
+			const isToday = date === todayBerlin();
+			setResponseHeader(
+				"Cache-Control",
+				isToday
+					? "public, max-age=30, s-maxage=60, stale-while-revalidate=900"
+					: "public, max-age=3600, s-maxage=86400, stale-while-revalidate=86400, immutable",
+			);
+			const journeys = await lineDaySwr.get(`${line}|${date}`);
 			return { line, date, journeys };
 		},
 	);

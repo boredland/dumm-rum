@@ -1,5 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { createServerFn } from "@tanstack/react-start";
+import { setResponseHeader } from "@tanstack/react-start/server";
 import {
 	DepartureFilterBar,
 	useDepartureFilters,
@@ -13,12 +14,21 @@ import {
 	urlFilter,
 	urlStringFilter,
 } from "../../../../../lib/search-state.ts";
-import { delayMin, formatTime } from "../../../../../lib/utils.ts";
+import { makeSwr } from "../../../../../lib/swr.ts";
+import { delayMin, formatTime, todayBerlin } from "../../../../../lib/utils.ts";
 
 const STATUS_OPTS = ["all", "issues", "on_time"] as const;
 const HOURS_OPTS = ["all", "core"] as const;
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+
+const operatorDaySwr = makeSwr<OperatorDayJourney[]>(
+	(key) => {
+		const [operator, date] = key.split("|");
+		return getOperatorDayJourneys(operator, date);
+	},
+	{ freshMs: 60_000, staleMs: 15 * 60_000 },
+);
 
 const loadDay = createServerFn({ method: "GET" })
 	.inputValidator((input: unknown): { operator: string; date: string } => {
@@ -45,7 +55,14 @@ const loadDay = createServerFn({ method: "GET" })
 			date: string;
 			journeys: OperatorDayJourney[];
 		}> => {
-			const journeys = await getOperatorDayJourneys(operator, date);
+			const isToday = date === todayBerlin();
+			setResponseHeader(
+				"Cache-Control",
+				isToday
+					? "public, max-age=30, s-maxage=60, stale-while-revalidate=900"
+					: "public, max-age=3600, s-maxage=86400, stale-while-revalidate=86400, immutable",
+			);
+			const journeys = await operatorDaySwr.get(`${operator}|${date}`);
 			return { operator, date, journeys };
 		},
 	);

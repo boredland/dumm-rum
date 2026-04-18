@@ -1,5 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { createServerFn } from "@tanstack/react-start";
+import { setResponseHeader } from "@tanstack/react-start/server";
 import {
 	DepartureFilterBar,
 	useDepartureFilters,
@@ -15,10 +16,12 @@ import {
 	urlStringFilter,
 } from "../../../../lib/search-state.ts";
 import { categoryIcons } from "../../../../lib/stations.ts";
+import { makeSwr } from "../../../../lib/swr.ts";
 import {
 	delayMin,
 	formatTime,
 	shortStationName,
+	todayBerlin,
 } from "../../../../lib/utils.ts";
 
 const STATUS_OPTS = ["all", "issues", "on_time"] as const;
@@ -32,6 +35,22 @@ interface DayData {
 	date: string;
 	departures: StopDayDeparture[];
 }
+
+const stationDaySwr = makeSwr<DayData | null>(
+	async (key) => {
+		const [slug, date] = key.split("|");
+		const stop = await findStopBySlug(slug);
+		if (!stop) return null;
+		const departures = await getStopDayDepartures(stop.stopIds, date);
+		return {
+			stopName: stop.stopName,
+			categories: stop.categories,
+			date,
+			departures,
+		};
+	},
+	{ freshMs: 60_000, staleMs: 15 * 60_000 },
+);
 
 const loadDay = createServerFn({ method: "GET" })
 	.inputValidator((input: unknown): { slug: string; date: string } => {
@@ -51,15 +70,16 @@ const loadDay = createServerFn({ method: "GET" })
 		return { slug, date };
 	})
 	.handler(async ({ data: { slug, date } }): Promise<DayData> => {
-		const stop = await findStopBySlug(slug);
-		if (!stop) throw new Error("not found");
-		const departures = await getStopDayDepartures(stop.stopIds, date);
-		return {
-			stopName: stop.stopName,
-			categories: stop.categories,
-			date,
-			departures,
-		};
+		const isToday = date === todayBerlin();
+		setResponseHeader(
+			"Cache-Control",
+			isToday
+				? "public, max-age=30, s-maxage=60, stale-while-revalidate=900"
+				: "public, max-age=3600, s-maxage=86400, stale-while-revalidate=86400, immutable",
+		);
+		const cached = await stationDaySwr.get(`${slug}|${date}`);
+		if (!cached) throw new Error("not found");
+		return cached;
 	});
 
 export const Route = createFileRoute("/$lang/$station/day/$date")({

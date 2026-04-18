@@ -1,5 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { createServerFn } from "@tanstack/react-start";
+import { setResponseHeader } from "@tanstack/react-start/server";
 import { useState } from "react";
 import {
 	DaysToggleBar,
@@ -14,9 +15,15 @@ import { type Lang, t } from "../../../../lib/i18n.ts";
 import { getLineStats, type LineStats } from "../../../../lib/queries.ts";
 import { urlFilter } from "../../../../lib/search-state.ts";
 import { categoryIcons } from "../../../../lib/stations.ts";
+import { makeSwr } from "../../../../lib/swr.ts";
 import { onTimeRate } from "../../../../lib/utils.ts";
 
 const DAYS_FILTER_OPTS = ["all", "today", "weekdays", "weekends"] as const;
+
+const lineSwr = makeSwr<{ line: string; stats: LineStats }>(
+	async (line) => ({ line, stats: await getLineStats(line) }),
+	{ freshMs: 60_000, staleMs: 15 * 60_000 },
+);
 
 const loadLine = createServerFn({ method: "GET" })
 	.inputValidator((line: unknown): string => {
@@ -25,12 +32,13 @@ const loadLine = createServerFn({ method: "GET" })
 		}
 		return line;
 	})
-	.handler(
-		async ({ data: line }): Promise<{ line: string; stats: LineStats }> => {
-			const stats = await getLineStats(line);
-			return { line, stats };
-		},
-	);
+	.handler(async ({ data: line }) => {
+		setResponseHeader(
+			"Cache-Control",
+			"public, max-age=30, s-maxage=60, stale-while-revalidate=900",
+		);
+		return lineSwr.get(line);
+	});
 
 export const Route = createFileRoute("/$lang/line/$line/")({
 	staleTime: 5 * 60 * 1000,

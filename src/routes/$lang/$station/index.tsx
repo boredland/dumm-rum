@@ -1,5 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { createServerFn } from "@tanstack/react-start";
+import { setResponseHeader } from "@tanstack/react-start/server";
 import { useState } from "react";
 import {
 	DaysToggleBar,
@@ -8,7 +9,6 @@ import {
 import { borderForCancRate, StatCard } from "../../../components/StatCard.tsx";
 import { SubscribeModal } from "../../../components/SubscribeModal.tsx";
 import { type Lang, t } from "../../../lib/i18n.ts";
-import { urlFilter } from "../../../lib/search-state.ts";
 import {
 	type DayStats,
 	findStopBySlug,
@@ -16,7 +16,9 @@ import {
 	getStopStats,
 	type StopDayDeparture,
 } from "../../../lib/queries.ts";
+import { urlFilter } from "../../../lib/search-state.ts";
 import { categoryIcons } from "../../../lib/stations.ts";
+import { makeSwr } from "../../../lib/swr.ts";
 import {
 	onTimeRate,
 	pct,
@@ -33,19 +35,51 @@ interface StationData {
 	nextDepartures: StopDayDeparture[];
 }
 
+/** Full day of departures cached once; the route handler filters down to
+ * "next 20 from now" per request so the clock stays live even when the
+ * SWR memo doesn't refresh. */
+interface StationCacheValue {
+	stopName: string;
+	categories: string[];
+	stopIds: string[];
+	days: DayStats[];
+	lastChange: string | null;
+	departures: StopDayDeparture[];
+}
+
+const stationSwr = makeSwr<StationCacheValue | null>(
+	async (slug) => {
+		const stop = await findStopBySlug(slug);
+		if (!stop) return null;
+		const today = todayBerlin();
+		const [stats, departures] = await Promise.all([
+			getStopStats(stop.stopIds),
+			getStopDayDepartures(stop.stopIds, today),
+		]);
+		return {
+			stopName: stop.stopName,
+			categories: stop.categories,
+			stopIds: stop.stopIds,
+			days: stats.days,
+			lastChange: stats.lastChange,
+			departures,
+		};
+	},
+	{ freshMs: 60_000, staleMs: 15 * 60_000 },
+);
+
 const loadStation = createServerFn({ method: "GET" })
 	.inputValidator((slug: unknown): string => {
 		if (typeof slug !== "string") throw new Error("invalid slug");
 		return slug;
 	})
 	.handler(async ({ data: slug }): Promise<StationData> => {
-		const stop = await findStopBySlug(slug);
-		if (!stop) throw new Error("not found");
-		const today = todayBerlin();
-		const [stats, departures] = await Promise.all([
-			getStopStats(stop.stopIds),
-			getStopDayDepartures(stop.stopIds, today),
-		]);
+		setResponseHeader(
+			"Cache-Control",
+			"public, max-age=30, s-maxage=60, stale-while-revalidate=900",
+		);
+		const cached = await stationSwr.get(slug);
+		if (!cached) throw new Error("not found");
 		const nowTime = new Date().toLocaleTimeString("de", {
 			hour: "2-digit",
 			minute: "2-digit",
@@ -53,15 +87,15 @@ const loadStation = createServerFn({ method: "GET" })
 			hour12: false,
 			timeZone: "Europe/Berlin",
 		});
-		const nextDepartures = departures
+		const nextDepartures = cached.departures
 			.filter((d) => d.time >= nowTime)
 			.slice(0, 20);
 		return {
-			stopName: stop.stopName,
-			categories: stop.categories,
-			stopIds: stop.stopIds,
-			days: stats.days,
-			lastChange: stats.lastChange,
+			stopName: cached.stopName,
+			categories: cached.categories,
+			stopIds: cached.stopIds,
+			days: cached.days,
+			lastChange: cached.lastChange,
 			nextDepartures,
 		};
 	});
