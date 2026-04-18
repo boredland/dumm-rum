@@ -1151,12 +1151,25 @@ function MapPage() {
 			// for a source (e.g. both Flix categories toggled off) drops the
 			// credit until something from that source is re-added.
 			const FLIX_CATS = new Set(["Flixtrain", "Flixbus"]);
+			// Attribution per category. The RMV base string is shared across
+			// every calc-only layer (Leaflet dedupes identical strings); the
+			// enriched categories append their live-GPS source so credits
+			// appear whenever that layer has markers on screen. Tram + Bus
+			// carry the HEAG credit globally because we can't predict at
+			// layer-create time whether the current viewport will happen to
+			// include Darmstadt — a small overclaim we accept to keep the
+			// attribution text stable as users pan across the region.
+			const RMV_BASE = 'Vehicles © <a href="https://www.rmv.de">RMV</a>';
 			const attrFor = (cat: string) => {
 				if (FLIX_CATS.has(cat))
 					return 'Vehicles © <a href="https://www.flixbus.com">FlixBus</a>';
 				if (cat === "Ferry")
 					return 'Ferry © <a href="https://www.primus-linie.de/">Primus-Linie</a>';
-				return 'Vehicles © <a href="https://www.rmv.de">RMV</a>';
+				if (cat === "Fernverkehr")
+					return `${RMV_BASE} · live GPS via <a href="https://bahn.expert">bahn.expert</a>`;
+				if (cat === "Tram" || cat === "Bus")
+					return `${RMV_BASE} · Darmstadt GPS © <a href="https://www.heagmobilo.de">HEAG mobilo</a>`;
+				return RMV_BASE;
 			};
 			for (const cat of CATS) {
 				const attribution = attrFor(cat);
