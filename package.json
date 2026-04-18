@@ -21,6 +21,7 @@
 		"@tanstack/react-start": "^1.167.41",
 		"@types/leaflet-fullscreen": "^1.0.10",
 		"dayjs": "^1.11.20",
+		"devalue": "^5.7.1",
 		"drizzle-orm": "^1.0.0-beta.20",
 		"leaflet": "^1.9.4",
 		"leaflet-fullscreen": "^1.0.2",

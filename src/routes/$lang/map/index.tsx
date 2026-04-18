@@ -20,6 +20,11 @@ import {
 	matchHeagToRmv,
 	parseHeagFixTime,
 } from "../../../lib/heag.ts";
+import {
+	fetchBahnExpertPositions,
+	isSupportedCategory as isBahnExpertCategory,
+	type TrainIdentity,
+} from "../../../lib/bahn-expert.ts";
 
 const FRANKFURT_CENTER = { lat: 50.1109, lon: 8.6821 };
 const POLL_INTERVAL = 15_000;
@@ -299,7 +304,12 @@ const fetchVehicles = createServerFn({ method: "GET" })
 
 			const decodedPolys = new Map<number, [number, number][]>();
 
-			const vehicles: Vehicle[] = jnyL.map((j) => {
+			// Collected during the vehicle-map pass: one entry per
+			// long-distance DB train so we can batch-enrich them with
+			// real GPS from bahn.expert after the mgate parse finishes.
+			const bahnExpertInputs: TrainIdentity[] = [];
+
+			const vehicles: Vehicle[] = jnyL.map((j, rmvIndex) => {
 				const prod = j.prodX != null ? prodL[j.prodX] : undefined;
 				const oprIdx = prod?.oprX;
 				const category = classifyProduct(prod?.cls ?? 0);
@@ -399,6 +409,25 @@ const fetchVehicles = createServerFn({ method: "GET" })
 						if (trainName) {
 							externalTrackingUrl = `https://bahn.expert/details/${encodeURIComponent(trainName)}/${y}-${mo}-${dy}T${hh}:${mm}:00.000Z`;
 						}
+						// Same prodCtx info feeds the bahn.expert live-GPS
+						// enrichment. Filter to Fernverkehr categories — DB
+						// Regio (RE/RB) and S-Bahn journeys resolve cleanly
+						// but never have `lastKnownPosition` populated, so
+						// querying them wastes round-trip time.
+						const journeyNumber = Number(tripNum);
+						if (
+							Number.isFinite(journeyNumber) &&
+							journeyNumber > 0 &&
+							cat &&
+							isBahnExpertCategory(cat)
+						) {
+							bahnExpertInputs.push({
+								rmvIndex,
+								category: cat,
+								journeyNumber,
+								serviceDate: `${y}-${mo}-${dy}`,
+							});
+						}
 					}
 				}
 
@@ -430,6 +459,13 @@ const fetchVehicles = createServerFn({ method: "GET" })
 					fetchedAt: serverTime,
 				};
 			});
+
+			// Kick off bahn.expert lookups for any DB long-distance trains
+			// we found. Runs after the mgate parse because it depends on
+			// the `bahnExpertInputs` list the parse populates, but we
+			// await it at the end in parallel with the HEAG enrichment
+			// pass so the two GPS sources merge without extra latency.
+			const bahnExpertPromise = fetchBahnExpertPositions(bahnExpertInputs);
 
 			// Enrich matched vehicles with HEAG live-GPS. We take HEAG's
 			// lat/lon/heading/timestamp verbatim since it's a real AVL fix,
@@ -468,6 +504,21 @@ const fetchVehicles = createServerFn({ method: "GET" })
 					// Leaflet map already shows for RMV.
 					if (!v.operator) v.operator = "HEAG mobilo";
 				}
+			}
+
+			// Apply bahn.expert GPS to DB long-distance trains. Same
+			// overwrite pattern as HEAG: real lat/lon replace the polyline
+			// calc, hasGps/gpsFixAt reflect the real fix, waypoints are
+			// left alone so the non-live-mode animation still has a
+			// trajectory to interpolate toward.
+			const bahnExpertPositions = await bahnExpertPromise;
+			for (const p of bahnExpertPositions) {
+				const v = vehicles[p.rmvIndex];
+				if (!v) continue;
+				v.lat = p.lat;
+				v.lon = p.lon;
+				v.hasGps = true;
+				v.gpsFixAt = p.timeMs;
 			}
 
 			return { vehicles, serverTime };
