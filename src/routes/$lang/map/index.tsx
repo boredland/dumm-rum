@@ -467,31 +467,20 @@ const fetchVehicles = createServerFn({ method: "GET" })
 			// pass so the two GPS sources merge without extra latency.
 			const bahnExpertPromise = fetchBahnExpertPositions(bahnExpertInputs);
 
-			// Shift every waypoint by the (real-GPS minus polyline-calc)
-			// delta so waypoints[0] lines up with the real fix and the
-			// scheduled trajectory continues smoothly from there. Keeps
-			// the rAF interpolation loop moving markers between polls
-			// instead of teleporting once per fix, while still honouring
-			// ground truth as the anchor.
-			const anchorWaypointsTo = (
-				v: (typeof vehicles)[number],
-				targetLat: number,
-				targetLon: number,
-			): void => {
-				if (v.waypoints.length === 0) return;
-				const dLat = targetLat - v.waypoints[0].lat;
-				const dLon = targetLon - v.waypoints[0].lon;
-				if (dLat === 0 && dLon === 0) return;
-				for (const wp of v.waypoints) {
-					wp.lat += dLat;
-					wp.lon += dLon;
-				}
+			// Clear the polyline-derived waypoints on enriched vehicles so
+			// the client renders the real GPS fix verbatim. The earlier
+			// "shift polyline onto fix" trick preserved smooth motion but
+			// introduced off-rail artifacts: HAFAS's calc position and
+			// bahn.expert's real GPS can disagree by hundreds of meters
+			// (fix staleness × train speed), so a parallel-shifted polyline
+			// slides the marker along a line parallel to — but off — the
+			// actual rails. Better to show the real position statically
+			// between polls and let the marker-div CSS transition smooth
+			// the per-poll snaps.
+			const clearWaypointsForGps = (v: (typeof vehicles)[number]): void => {
+				v.waypoints = [];
 			};
 
-			// Enrich matched vehicles with HEAG live-GPS. We take HEAG's
-			// lat/lon/heading/timestamp verbatim since it's a real AVL fix,
-			// then anchor the polyline to the fix so the animation rolls
-			// forward along the scheduled trajectory from ground truth.
 			if (heagVehicles.length) {
 				const matches = matchHeagToRmv(
 					vehicles.map((v) => ({
@@ -505,12 +494,12 @@ const fetchVehicles = createServerFn({ method: "GET" })
 				for (const m of matches) {
 					const v = vehicles[m.rmvIndex];
 					const fixAt = parseHeagFixTime(m.heag.date);
-					anchorWaypointsTo(v, m.heag.latitude, m.heag.longitude);
 					v.lat = m.heag.latitude;
 					v.lon = m.heag.longitude;
 					v.heading = heagHeadingToDirGeo(m.heag.bearing);
 					v.hasGps = true;
 					v.gpsFixAt = fixAt;
+					clearWaypointsForGps(v);
 					// HEAG's `deviation` is in seconds; convert to the minute
 					// scale RMV/Flix use for the `delay` field. Only overwrite
 					// when RMV didn't already have a realtime delay so we
@@ -531,11 +520,11 @@ const fetchVehicles = createServerFn({ method: "GET" })
 			for (const p of bahnExpertPositions) {
 				const v = vehicles[p.rmvIndex];
 				if (!v) continue;
-				anchorWaypointsTo(v, p.lat, p.lon);
 				v.lat = p.lat;
 				v.lon = p.lon;
 				v.hasGps = true;
 				v.gpsFixAt = p.timeMs;
+				clearWaypointsForGps(v);
 			}
 
 			return { vehicles, serverTime };
@@ -918,7 +907,7 @@ function MapPage() {
 							html: buildVehicleIcon(v, pos.heading, size, showLabel),
 							iconSize: [size, size],
 							iconAnchor: [size / 2, size / 2],
-							className: "",
+							className: v.hasGps ? "dummrum-gps-smooth" : "",
 						}),
 					);
 					entry.iconKey = iconKey;
@@ -933,7 +922,7 @@ function MapPage() {
 					html: buildVehicleIcon(v, pos.heading, size, showLabel),
 					iconSize: [size, size],
 					iconAnchor: [size / 2, size / 2],
-					className: "",
+					className: v.hasGps ? "dummrum-gps-smooth" : "",
 				});
 				const marker = L.marker([pos.lat, pos.lon], { icon }).addTo(layer);
 				marker.on("click", () => {

@@ -47,6 +47,15 @@ a:hover {
 	text-decoration: underline;
 }
 
+/* Real-GPS markers snap to the fresh fix on each poll (~15 s bahn.expert,
+   ~10 s HEAG) because we keep them as single-point waypoints — the
+   alternative of shifting the HAFAS polyline onto the fix introduced
+   visible off-rail motion. A transform transition smooths the snap
+   without lying about the trajectory. */
+.dummrum-gps-smooth {
+	transition: transform 800ms linear;
+}
+
 /* Slow pulse on the real-GPS indicator dot so a glance can pick out the
    "this one is ground truth" markers from the "this one is calculated"
    ones without reading the badge. */
