@@ -590,6 +590,11 @@ type MapSearch = {
 	rt?: string;
 	/** "0" hides the Schedule layer group. */
 	sched?: string;
+	/** Vehicle id to auto-follow on load — restored from the URL so a
+	 * bookmarked / shared link keeps the popup open and the map
+	 * panning with the chosen vehicle. Cleared on stopFollowing or
+	 * when the vehicle hasn't appeared in responses after ~30 s. */
+	follow?: string;
 };
 
 export const Route = createFileRoute("/$lang/map/")({
@@ -603,6 +608,7 @@ export const Route = createFileRoute("/$lang/map/")({
 		hide: typeof search.hide === "string" ? search.hide : undefined,
 		rt: typeof search.rt === "string" ? search.rt : undefined,
 		sched: typeof search.sched === "string" ? search.sched : undefined,
+		follow: typeof search.follow === "string" ? search.follow : undefined,
 	}),
 	component: MapPage,
 });
@@ -846,6 +852,12 @@ function MapPage() {
 	} | null>(null);
 	const userPanRef = useRef(false);
 	const followedPolylineRef = useRef<L.Polyline | null>(null);
+	/** Last unix-ms timestamp the followed vehicle's id was present in
+	 * a fetch response. Updated every successful load; when the gap
+	 * exceeds ~2 polls the auto-unfollow fires so the "Following X"
+	 * badge doesn't dangle after a train leaves the viewport or
+	 * reaches its destination. */
+	const followLastSeenRef = useRef<number | null>(null);
 
 	const clearFollowedPolyline = useCallback(() => {
 		const poly = followedPolylineRef.current;
@@ -854,14 +866,6 @@ function MapPage() {
 			followedPolylineRef.current = null;
 		}
 	}, []);
-
-	const stopFollowing = useCallback(() => {
-		const id = followIdRef.current;
-		if (id) markersRef.current.get(id)?.marker.closePopup();
-		followIdRef.current = null;
-		setFollowName(null);
-		clearFollowedPolyline();
-	}, [clearFollowedPolyline]);
 
 	const drawFollowedPolyline = useCallback(async (v: Vehicle) => {
 		if (v.category !== "Flixtrain" && v.category !== "Flixbus") return;
@@ -877,6 +881,72 @@ function MapPage() {
 			opacity: 0.55,
 			dashArray: "6 6",
 		}).addTo(leafletMap.current);
+	}, []);
+
+	// Start following a vehicle: bump the ref, show the "Following X"
+	// badge, draw its route polyline if we have one, and persist the
+	// vehicle id to the URL so a refresh / share-link restores the
+	// state. Keeps the click handler and the on-mount restore
+	// symmetrical — no duplicated state-setting logic.
+	const startFollowing = useCallback(
+		(v: Vehicle) => {
+			followIdRef.current = v.id;
+			// Seed the last-seen timestamp so the auto-unfollow grace
+			// window starts from *now* rather than from whenever the
+			// previous follow session ended.
+			followLastSeenRef.current = Date.now();
+			setFollowName(v.name);
+			userPanRef.current = false;
+			clearFollowedPolyline();
+			drawFollowedPolyline(v);
+			// On a click Leaflet auto-opens the popup; on a URL-restore
+			// the user never clicked, so open it manually if the marker
+			// is already on the map — saves ~15 s of waiting for the
+			// next syncMarkers tick. Defer to the next tick so we don't
+			// race Leaflet's own click-to-open handler, which runs after
+			// ours and would otherwise fire popupopen twice and leave
+			// things in an inconsistent state.
+			const entry = markersRef.current.get(v.id);
+			if (entry && !entry.marker.isPopupOpen()) {
+				setTimeout(() => {
+					if (
+						followIdRef.current === v.id &&
+						entry.marker &&
+						!entry.marker.isPopupOpen()
+					) {
+						entry.marker.openPopup();
+					}
+				}, 0);
+			}
+			navigate({
+				search: (s) => ({ ...s, follow: v.id }),
+				replace: true,
+			});
+		},
+		// Intentionally empty deps — matches the file's existing
+		// pattern of calling `navigate` inside `[]`-memoized callbacks.
+		// Listing navigate/clearFollowedPolyline would cascade-invalidate
+		// load → the polling effect on every render since TanStack's
+		// useNavigate is not stable across renders.
+		[],
+	);
+
+	const stopFollowing = useCallback(() => {
+		const id = followIdRef.current;
+		// Null the ref BEFORE closing the popup. Leaflet fires
+		// `popupclose` synchronously during closePopup(), and our
+		// per-marker popupclose handler calls stopFollowing again if it
+		// still sees its id — that produces an infinite recursion
+		// unless we clear the ref first.
+		followIdRef.current = null;
+		followLastSeenRef.current = null;
+		setFollowName(null);
+		if (id) markersRef.current.get(id)?.marker.closePopup();
+		clearFollowedPolyline();
+		navigate({
+			search: (s) => ({ ...s, follow: undefined }),
+			replace: true,
+		});
 	}, []);
 	const [vehicleCount, setVehicleCount] = useState(0);
 	const [loading, setLoading] = useState(true);
@@ -949,11 +1019,7 @@ function MapPage() {
 				const marker = L.marker([pos.lat, pos.lon], { icon }).addTo(layer);
 				marker.on("click", () => {
 					const current = vehiclesRef.current.find((cv) => cv.id === v.id);
-					followIdRef.current = v.id;
-					setFollowName(current?.name ?? v.name);
-					userPanRef.current = false;
-					clearFollowedPolyline();
-					if (current) drawFollowedPolyline(current);
+					startFollowing(current ?? v);
 				});
 				// User-initiated close (Leaflet's ✕ button, ESC, or click
 				// elsewhere) must also clear follow state, otherwise the
@@ -961,11 +1027,7 @@ function MapPage() {
 				// auto-close from clicking a different marker: by that
 				// time followIdRef has already been bumped to the new id.
 				marker.on("popupclose", () => {
-					if (followIdRef.current === v.id) {
-						followIdRef.current = null;
-						setFollowName(null);
-						clearFollowedPolyline();
-					}
+					if (followIdRef.current === v.id) stopFollowing();
 				});
 				existing.set(v.id, { marker, iconKey, layerKey, popupContent: "" });
 			}
@@ -1011,21 +1073,24 @@ function MapPage() {
 			}
 			const content = `<strong>${escapeHtml(v.name)}</strong><br/>→ ${escapeHtml(v.direction)}${v.operator ? `<br/><span style="opacity:.7">${escapeHtml(v.operator)}</span>` : ""}${positionLine}${lineDetailsLink}${subscribeLink}${trackingLink}`;
 
-			// Only rebind when the rendered popup content actually changes —
-			// unbind/bind closes any open popup, which causes a visible
-			// flicker on every poll otherwise.
+			// Update popup content in-place via setPopupContent so we
+			// don't fire a spurious popupclose on every poll when the
+			// content's dynamic bits (GPS fix age, delay) change. The
+			// previous unbind/bind dance closed the popup, causing
+			// popupclose to fire — which was interpreted as "user
+			// dismissed" and torn down the follow state.
 			if (entryNow.popupContent !== content) {
-				const wasOpen = m.isPopupOpen();
-				m.unbindPopup();
-				m.bindPopup(content, {
-					offset: [0, -(size / 2 + 4)],
-					autoPan: false,
-				});
+				if (m.getPopup()) {
+					m.setPopupContent(content);
+				} else {
+					m.bindPopup(content, {
+						offset: [0, -(size / 2 + 4)],
+						autoPan: false,
+					});
+				}
 				entryNow.popupContent = content;
-				if (wasOpen || isFollowed) m.openPopup();
-			} else if (isFollowed && !m.isPopupOpen()) {
-				m.openPopup();
 			}
+			if (isFollowed && !m.isPopupOpen()) m.openPopup();
 		}
 
 		for (const [id, entry] of existing) {
@@ -1086,6 +1151,23 @@ function MapPage() {
 			setLastUpdate(new Date());
 			lastFetchRef.current = Date.now();
 			setCountdown(POLL_INTERVAL / 1000);
+
+			// Auto-unfollow when the tracked vehicle has been absent from
+			// responses for ~2 polls. Either it left the viewport, HAFAS
+			// quietly dropped it, or the journey ended — the "Following X"
+			// badge has nothing real to track at that point.
+			const followId = followIdRef.current;
+			if (followId) {
+				if (vehicles.some((v) => v.id === followId)) {
+					followLastSeenRef.current = Date.now();
+				} else if (
+					followLastSeenRef.current != null &&
+					Date.now() - followLastSeenRef.current > 30_000
+				) {
+					stopFollowing();
+				}
+			}
+
 			await syncMarkers();
 		} catch {
 			/* network error, keep stale data */
@@ -1406,12 +1488,15 @@ function MapPage() {
 				loadRef.current?.();
 				const c = map.getCenter();
 				const z = map.getZoom();
+				// Merge into the existing search so moveend doesn't wipe
+				// hide/rt/sched/follow every time the user pans or zooms.
 				navigate({
-					search: {
+					search: (s) => ({
+						...s,
 						z: Math.round(z),
 						lat: Math.round(c.lat * 1e5) / 1e5,
 						lon: Math.round(c.lng * 1e5) / 1e5,
-					},
+					}),
 					replace: true,
 				});
 			});
@@ -1440,6 +1525,36 @@ function MapPage() {
 			if (intervalRef.current) clearInterval(intervalRef.current);
 		};
 	}, [load]);
+
+	// Restore follow-state from the URL on mount (and whenever the
+	// `follow` param changes externally, e.g. via Back/Forward). Waits
+	// for the first poll to populate vehicles, then hands off to
+	// startFollowing exactly like a click would. Gives up after 30 s
+	// so a stale bookmark doesn't keep spinning forever — most journeys
+	// complete well within the service day.
+	useEffect(() => {
+		const targetId = search.follow;
+		if (!targetId) return;
+		if (followIdRef.current === targetId) return;
+		let cancelled = false;
+		const tryRestore = () => {
+			if (cancelled) return false;
+			const v = vehiclesRef.current.find((vv) => vv.id === targetId);
+			if (!v) return false;
+			startFollowing(v);
+			return true;
+		};
+		if (tryRestore()) return;
+		const check = setInterval(() => {
+			if (tryRestore()) clearInterval(check);
+		}, 500);
+		const giveUp = setTimeout(() => clearInterval(check), 30_000);
+		return () => {
+			cancelled = true;
+			clearInterval(check);
+			clearTimeout(giveUp);
+		};
+	}, [search.follow, startFollowing]);
 
 	useEffect(() => {
 		const animate = () => {
