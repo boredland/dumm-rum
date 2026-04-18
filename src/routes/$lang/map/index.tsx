@@ -1604,16 +1604,22 @@ function MapPage() {
 			let followPos: { lat: number; lon: number } | null = null;
 			for (const v of vehiclesRef.current) {
 				const entry = existing.get(v.id);
-				if (!entry || v.waypoints.length < 2) continue;
-				// Real-GPS vehicles ride the same rAF interpolation as
-				// calc ones — the waypoints were server-anchored to the
-				// real fix, so the animation rolls forward from ground
-				// truth. clampForward is skipped for them since their
-				// positions are authoritative.
+				if (!entry) continue;
+				// GPS-enriched vehicles carry no waypoints (clearing them
+				// avoids the off-rails polyline-shift artifact), so the
+				// marker's position only changes on each fresh poll via
+				// syncMarkers. Still expose v.lat/v.lon as the follow
+				// target so the map pan-follows them as the 15 s snaps
+				// arrive — otherwise clicking a GPS train and expecting
+				// the map to track it looks broken.
+				if (v.hasGps) {
+					if (v.id === followIdRef.current)
+						followPos = { lat: v.lat, lon: v.lon };
+					continue;
+				}
+				if (v.waypoints.length < 2) continue;
 				const rawPos = interpolateVehicle(v, now);
-				const pos = v.hasGps
-					? rawPos
-					: clampForward(v.id, rawPos, now, renderedPosRef.current);
+				const pos = clampForward(v.id, rawPos, now, renderedPosRef.current);
 				entry.marker.setLatLng([pos.lat, pos.lon]);
 				if (v.id === followIdRef.current) followPos = pos;
 			}
