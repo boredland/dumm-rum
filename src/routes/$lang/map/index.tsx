@@ -16,6 +16,7 @@ import {
 } from "../../../lib/mgate.ts";
 import {
 	fetchHeagVehicles,
+	heagGpsPath,
 	heagHeadingToDirGeo,
 	matchHeagToRmv,
 	parseHeagFixTime,
@@ -25,6 +26,7 @@ import {
 	isSupportedCategory as isBahnExpertCategory,
 	type TrainIdentity,
 } from "../../../lib/bahn-expert.ts";
+import { type GpsPath, locationAtPercent } from "../../../lib/gps-path.ts";
 
 const FRANKFURT_CENTER = { lat: 50.1109, lon: 8.6821 };
 const POLL_INTERVAL = 15_000;
@@ -69,6 +71,12 @@ interface Vehicle {
 	 * publishes `location.updated_at` directly. Shown in the popup as a
 	 * human-readable age. */
 	gpsFixAt: number | null;
+	/** Forward trajectory for mid-poll animation of GPS-enriched
+	 * vehicles. Walked by `locationAtPercent` at
+	 * `(now - gpsFixAt) / windowMs * 100`. Absent or null when the
+	 * source hasn't published a trajectory (Flix and Ferry fall back
+	 * to the `waypoints` array — see that instead). */
+	gpsPath?: GpsPath | null;
 	stationary?: boolean;
 	externalTrackingUrl: string | null;
 	/** HAFAS service date (`YYYY-MM-DD`). Used to deep-link the popup into
@@ -473,6 +481,7 @@ const fetchVehicles = createServerFn({ method: "GET" })
 					hasRT,
 					hasGps,
 					gpsFixAt,
+					gpsPath: null,
 					externalTrackingUrl,
 					serviceDate: j.date
 						? `${j.date.slice(0, 4)}-${j.date.slice(4, 6)}-${j.date.slice(6, 8)}`
@@ -521,6 +530,7 @@ const fetchVehicles = createServerFn({ method: "GET" })
 					v.heading = heagHeadingToDirGeo(m.heag.bearing);
 					v.hasGps = true;
 					v.gpsFixAt = fixAt;
+					v.gpsPath = heagGpsPath(m.heag);
 					clearWaypointsForGps(v);
 					// HEAG's `deviation` is in seconds; convert to the minute
 					// scale RMV/Flix use for the `delay` field. Only overwrite
@@ -546,6 +556,7 @@ const fetchVehicles = createServerFn({ method: "GET" })
 				v.lon = p.lon;
 				v.hasGps = true;
 				v.gpsFixAt = p.timeMs;
+				v.gpsPath = p.gpsPath;
 				clearWaypointsForGps(v);
 			}
 
@@ -997,19 +1008,25 @@ function MapPage() {
 		for (const v of vehiclesRef.current) {
 			seen.add(v.id);
 			const nowAdj = Date.now() + timeDeltaRef.current;
-			// Both GPS-enriched and calc vehicles ride the same rAF
-			// interpolation now — the server has already anchored GPS
-			// waypoints to the real fix, so the first frame renders at
-			// ground truth and subsequent frames glide along the
-			// scheduled trajectory. Skip clampForward for GPS vehicles
-			// because their fix is authoritative: if the real bus
-			// genuinely moved backward we want the marker to follow,
-			// and HAFAS's "downward re-prediction" jitter that the clamp
-			// was built for doesn't apply to real AVL data.
-			const rawPos = interpolateVehicle(v, nowAdj);
-			const pos = v.hasGps
-				? rawPos
-				: clampForward(v.id, rawPos, nowAdj, renderedPosRef.current);
+			// Poll-time snap mirrors the animate-loop precedence:
+			//   1. gpsPath (HEAG encodedPath, bahn.expert polyline
+			//      slice) — walk by elapsed-time percentage.
+			//   2. waypoints (calc RMV, Flix, Ferry) — interpolate by
+			//      wall clock. Calc entries also pass through
+			//      clampForward to suppress HAFAS's downward-jitter.
+			//   3. hasGps without a path — hold at the raw fix.
+			let pos: { lat: number; lon: number; heading: number };
+			if (v.gpsPath && v.gpsFixAt != null) {
+				const elapsed = nowAdj - v.gpsFixAt;
+				const pct = (elapsed / v.gpsPath.windowMs) * 100;
+				const [pLat, pLon] = locationAtPercent(v.gpsPath.points, pct);
+				pos = { lat: pLat, lon: pLon, heading: v.heading };
+			} else if (v.hasGps || v.waypoints.length < 2) {
+				pos = { lat: v.lat, lon: v.lon, heading: v.heading };
+			} else {
+				const rawPos = interpolateVehicle(v, nowAdj);
+				pos = clampForward(v.id, rawPos, nowAdj, renderedPosRef.current);
+			}
 			const layerKey = `${v.category}${v.hasRT ? "" : " (sched)"}`;
 			const layer = layers.get(layerKey);
 			if (!layer) continue;
@@ -1605,23 +1622,34 @@ function MapPage() {
 			for (const v of vehiclesRef.current) {
 				const entry = existing.get(v.id);
 				if (!entry) continue;
-				// GPS-enriched vehicles carry no waypoints (clearing them
-				// avoids the off-rails polyline-shift artifact), so the
-				// marker's position only changes on each fresh poll via
-				// syncMarkers. Still expose v.lat/v.lon as the follow
-				// target so the map pan-follows them as the 15 s snaps
-				// arrive — otherwise clicking a GPS train and expecting
-				// the map to track it looks broken.
-				if (v.hasGps) {
-					if (v.id === followIdRef.current)
-						followPos = { lat: v.lat, lon: v.lon };
-					continue;
+				// Animation source precedence:
+				//   1. gpsPath — HEAG / bahn.expert forward trajectory,
+				//      walked by elapsed-time percentage.
+				//   2. waypoints — HAFAS ani frames (calc RMV) or
+				//      Flix-computed forward waypoints.
+				//   3. static fix — GPS vehicle without a path (HEAG
+				//      offline, bahn.expert speed=0 / polyline mismatch),
+				//      already placed by syncMarkers, no per-frame work.
+				let pos: { lat: number; lon: number } | null = null;
+				if (v.gpsPath && v.gpsFixAt != null) {
+					const elapsed = now - v.gpsFixAt;
+					const pct = (elapsed / v.gpsPath.windowMs) * 100;
+					const [pLat, pLon] = locationAtPercent(v.gpsPath.points, pct);
+					pos = { lat: pLat, lon: pLon };
+					entry.marker.setLatLng([pos.lat, pos.lon]);
+				} else if (v.waypoints.length >= 2) {
+					const rawPos = interpolateVehicle(v, now);
+					// clampForward guards against HAFAS's occasional
+					// downward re-prediction jitter; real GPS vehicles
+					// are authoritative and skip it.
+					pos = v.hasGps
+						? rawPos
+						: clampForward(v.id, rawPos, now, renderedPosRef.current);
+					entry.marker.setLatLng([pos.lat, pos.lon]);
+				} else if (v.hasGps) {
+					pos = { lat: v.lat, lon: v.lon };
 				}
-				if (v.waypoints.length < 2) continue;
-				const rawPos = interpolateVehicle(v, now);
-				const pos = clampForward(v.id, rawPos, now, renderedPosRef.current);
-				entry.marker.setLatLng([pos.lat, pos.lon]);
-				if (v.id === followIdRef.current) followPos = pos;
+				if (pos && v.id === followIdRef.current) followPos = pos;
 			}
 			// Throttle follow-pan to ~10 Hz (vs 60 Hz) — smooth enough
 			// perceptually, 6× less work per second in Leaflet's transform

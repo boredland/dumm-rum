@@ -12,6 +12,7 @@
  */
 
 import { toDirGeo } from "./flix-proxy.ts";
+import { decodeGooglePolyline, downsample, type GpsPath } from "./gps-path.ts";
 
 const HEAG_URL =
 	"https://service.ivanto.de/srs/api/v1/vehiclelivedata?tenant=heag";
@@ -30,7 +31,19 @@ export interface HeagVehicle {
 	status: number;
 	deviation: number;
 	offline: boolean;
+	/** Google-polyline-encoded forward trajectory covering the next
+	 * `HEAG_PATH_WINDOW_MS` milliseconds. HEAG's own Livemap frontend
+	 * animates markers by walking this path as a percentage of the
+	 * elapsed time since the feed was served; we do the same to get
+	 * smooth mid-poll motion for Darmstadt GPS-enriched vehicles. */
+	encodedPath?: string;
 }
+
+/** How much wall-clock time HEAG's `encodedPath` is meant to cover.
+ * Reverse-engineered from their bundle's updateMarkers() which scales
+ * `(now - feedTimestamp)` by 1/20 to get the percentage along the
+ * path. */
+export const HEAG_PATH_WINDOW_MS = 20_000;
 
 interface HeagResponse {
 	vehicles: HeagVehicle[];
@@ -176,4 +189,19 @@ export function parseHeagFixTime(date: string): number | null {
  * map's icon code expects. */
 export function heagHeadingToDirGeo(bearing: number): number {
 	return toDirGeo(bearing);
+}
+
+/** Build the mid-poll animation path for a HEAG vehicle. Decodes the
+ * feed's `encodedPath` (a Google polyline in `[lat, lon]` order) and
+ * normalises it to our shared `GpsPath` shape. Returns `null` when
+ * the path is missing or degenerate — the client falls back to
+ * static rendering in that case. */
+export function heagGpsPath(h: HeagVehicle): GpsPath | null {
+	if (!h.encodedPath) return null;
+	const points = decodeGooglePolyline(h.encodedPath);
+	if (points.length < 2) return null;
+	return {
+		points: downsample(points),
+		windowMs: HEAG_PATH_WINDOW_MS,
+	};
 }

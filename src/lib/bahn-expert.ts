@@ -21,6 +21,13 @@
  */
 
 import { parse, stringify } from "devalue";
+import {
+	closestPointIndex,
+	distanceMeters,
+	downsample,
+	type GpsPath,
+	sliceForward,
+} from "./gps-path.ts";
 
 const RPC_URL_BASE = "https://bahn.expert/rpc";
 
@@ -68,7 +75,24 @@ export interface BahnExpertPosition {
 	timeMs: number;
 	/** Speed in m/s per bahn.expert's own units. Null when not provided. */
 	speed: number | null;
+	/** Forward trajectory for mid-poll animation. Built by slicing the
+	 * train's full `journey.polyline` starting at the polyline vertex
+	 * nearest to the fix, covering ~20 s worth of travel at `speed`.
+	 * Null when the polyline fetch failed, the train is stationary, or
+	 * we couldn't localise the fix on the polyline. */
+	gpsPath: GpsPath | null;
 }
+
+/** How much wall-clock time the bahn.expert-derived path covers —
+ * matches HEAG's 20 s window for consistency in the client animator. */
+const BAHN_EXPERT_PATH_WINDOW_MS = 20_000;
+
+/** Process-local cache of decoded polylines, keyed by journeyId. Each
+ * polyline is stable for the service day so we never evict explicitly;
+ * a Bun/serverless restart flushes the map naturally. At ~3 k points
+ * (≈ 50 kB in memory) per long-distance train and maybe 500 distinct
+ * IDs seen over a service day, the ceiling is ~25 MB — acceptable. */
+const polylineCache = new Map<string, [number, number][]>();
 
 export function isSupportedCategory(category: string): boolean {
 	return SUPPORTED_CATEGORIES.has(category.trim().toUpperCase());
@@ -163,6 +187,81 @@ async function fetchPositions(
 	return results;
 }
 
+interface JourneyPolylineGeoJSON {
+	type: string;
+	coordinates: [number, number][];
+}
+interface JourneyPolylineResponse {
+	geojsons?: JourneyPolylineGeoJSON[];
+}
+
+/** Fetch and cache each journey's full GeoJSON LineString. Returns an
+ * array aligned with `journeyIds` where missing / cached entries are
+ * filled in without a network round trip. Polylines are stored as
+ * `[lat, lon]` after flipping GeoJSON's `[lon, lat]` ordering to match
+ * the rest of the app. */
+async function fetchPolylines(
+	journeyIds: string[],
+): Promise<(readonly [number, number][] | null)[]> {
+	const missing: { id: string; idx: number }[] = [];
+	const out: (readonly [number, number][] | null)[] = journeyIds.map(
+		(id, idx) => {
+			const cached = polylineCache.get(id);
+			if (cached) return cached;
+			missing.push({ id, idx });
+			return null;
+		},
+	);
+	if (missing.length === 0) return out;
+
+	const results = await rpcBatch<JourneyPolylineResponse | null>(
+		missing.map(() => "journey.polyline"),
+		missing.map((m) => m.id),
+	);
+	for (let i = 0; i < missing.length; i++) {
+		const r = results[i];
+		const raw = r?.geojsons?.[0]?.coordinates;
+		if (!Array.isArray(raw) || raw.length < 2) continue;
+		// GeoJSON is [lon, lat]; flip to our [lat, lon] convention.
+		const flipped: [number, number][] = raw.map(([lon, lat]) => [lat, lon]);
+		polylineCache.set(missing[i].id, flipped);
+		out[missing[i].idx] = flipped;
+	}
+	return out;
+}
+
+/** Build a forward-looking `GpsPath` slice from a journey's polyline
+ * anchored at the real GPS fix. Returns null when we can't produce a
+ * meaningful path (no polyline, train stationary / slower than 1 m/s,
+ * fix too far from any polyline vertex). */
+function buildGpsPath(
+	polyline: readonly [number, number][] | null,
+	fix: [number, number],
+	speedMps: number | null,
+): GpsPath | null {
+	if (!polyline || polyline.length < 2) return null;
+	if (speedMps == null || speedMps < 1) return null;
+	const anchorIdx = closestPointIndex(polyline as [number, number][], fix);
+	if (anchorIdx < 0) return null;
+	// Sanity: fix shouldn't be > 500 m from the rail. If it is, the
+	// polyline probably isn't the right one (bahn.expert occasionally
+	// returns a stale / reused polyline) and a forward slice would
+	// render the marker hundreds of metres off-track.
+	if (distanceMeters(polyline[anchorIdx], fix) > 500) return null;
+	const metersForWindow = speedMps * (BAHN_EXPERT_PATH_WINDOW_MS / 1000);
+	const slice = sliceForward(
+		polyline as [number, number][],
+		anchorIdx,
+		fix,
+		metersForWindow,
+	);
+	if (slice.length < 2) return null;
+	return {
+		points: downsample(slice),
+		windowMs: BAHN_EXPERT_PATH_WINDOW_MS,
+	};
+}
+
 /** Resolve + fetch positions for a set of trains. Returns only the
  * entries where both the resolver and the position call succeeded.
  * Called ones that silently fail (null journeyId, null position) are
@@ -185,7 +284,14 @@ export async function fetchBahnExpertPositions(
 		);
 	if (withIds.length === 0) return [];
 
-	const positions = await fetchPositions(withIds.map((x) => x.journeyId));
+	// Fetch positions and polylines in parallel. Polylines are heavy
+	// (~300 kB per train uncompressed GeoJSON) but cache forever once
+	// loaded, so the first poll for each new journey pays the cost
+	// and subsequent polls hit the in-memory map.
+	const [positions, polylines] = await Promise.all([
+		fetchPositions(withIds.map((x) => x.journeyId)),
+		fetchPolylines(withIds.map((x) => x.journeyId)),
+	]);
 	const out: BahnExpertPosition[] = [];
 	for (let i = 0; i < withIds.length; i++) {
 		const p = positions[i];
@@ -193,12 +299,14 @@ export async function fetchBahnExpertPositions(
 		const t = p.time;
 		const timeMs = t instanceof Date ? t.getTime() : Number.NaN;
 		if (!Number.isFinite(timeMs)) continue;
+		const speed = typeof p.speed === "number" ? p.speed : null;
 		out.push({
 			rmvIndex: withIds[i].train.rmvIndex,
 			lat: p.latitude,
 			lon: p.longitude,
 			timeMs,
-			speed: typeof p.speed === "number" ? p.speed : null,
+			speed,
+			gpsPath: buildGpsPath(polylines[i], [p.latitude, p.longitude], speed),
 		});
 	}
 	return out;
