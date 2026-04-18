@@ -467,11 +467,31 @@ const fetchVehicles = createServerFn({ method: "GET" })
 			// pass so the two GPS sources merge without extra latency.
 			const bahnExpertPromise = fetchBahnExpertPositions(bahnExpertInputs);
 
+			// Shift every waypoint by the (real-GPS minus polyline-calc)
+			// delta so waypoints[0] lines up with the real fix and the
+			// scheduled trajectory continues smoothly from there. Keeps
+			// the rAF interpolation loop moving markers between polls
+			// instead of teleporting once per fix, while still honouring
+			// ground truth as the anchor.
+			const anchorWaypointsTo = (
+				v: (typeof vehicles)[number],
+				targetLat: number,
+				targetLon: number,
+			): void => {
+				if (v.waypoints.length === 0) return;
+				const dLat = targetLat - v.waypoints[0].lat;
+				const dLon = targetLon - v.waypoints[0].lon;
+				if (dLat === 0 && dLon === 0) return;
+				for (const wp of v.waypoints) {
+					wp.lat += dLat;
+					wp.lon += dLon;
+				}
+			};
+
 			// Enrich matched vehicles with HEAG live-GPS. We take HEAG's
-			// lat/lon/heading/timestamp verbatim since it's a real AVL fix.
-			// RMV's waypoints stay on the vehicle so the animation loop can
-			// fall back to polyline interpolation if a later poll drops
-			// `hasGps` (e.g. HEAG coverage gap).
+			// lat/lon/heading/timestamp verbatim since it's a real AVL fix,
+			// then anchor the polyline to the fix so the animation rolls
+			// forward along the scheduled trajectory from ground truth.
 			if (heagVehicles.length) {
 				const matches = matchHeagToRmv(
 					vehicles.map((v) => ({
@@ -485,6 +505,7 @@ const fetchVehicles = createServerFn({ method: "GET" })
 				for (const m of matches) {
 					const v = vehicles[m.rmvIndex];
 					const fixAt = parseHeagFixTime(m.heag.date);
+					anchorWaypointsTo(v, m.heag.latitude, m.heag.longitude);
 					v.lat = m.heag.latitude;
 					v.lon = m.heag.longitude;
 					v.heading = heagHeadingToDirGeo(m.heag.bearing);
@@ -505,14 +526,12 @@ const fetchVehicles = createServerFn({ method: "GET" })
 				}
 			}
 
-			// Apply bahn.expert GPS to DB long-distance trains. Same
-			// overwrite pattern as HEAG: real lat/lon replace the polyline
-			// calc, hasGps/gpsFixAt reflect the real fix, waypoints stay
-			// on the vehicle as the fallback trajectory.
+			// Same for DB long-distance trains via bahn.expert.
 			const bahnExpertPositions = await bahnExpertPromise;
 			for (const p of bahnExpertPositions) {
 				const v = vehicles[p.rmvIndex];
 				if (!v) continue;
+				anchorWaypointsTo(v, p.lat, p.lon);
 				v.lat = p.lat;
 				v.lon = p.lon;
 				v.hasGps = true;
@@ -872,19 +891,19 @@ function MapPage() {
 		for (const v of vehiclesRef.current) {
 			seen.add(v.id);
 			const nowAdj = Date.now() + timeDeltaRef.current;
-			// Real-GPS vehicles render at their raw fix (snap per poll,
-			// smoothed by .dummrum-gps-smooth's CSS transition); calc
-			// vehicles interpolate along the RMV polyline waypoints and
-			// pass through clampForward to avoid visible backward jumps
-			// on downward HAFAS re-predictions.
+			// Both GPS-enriched and calc vehicles ride the same rAF
+			// interpolation now — the server has already anchored GPS
+			// waypoints to the real fix, so the first frame renders at
+			// ground truth and subsequent frames glide along the
+			// scheduled trajectory. Skip clampForward for GPS vehicles
+			// because their fix is authoritative: if the real bus
+			// genuinely moved backward we want the marker to follow,
+			// and HAFAS's "downward re-prediction" jitter that the clamp
+			// was built for doesn't apply to real AVL data.
+			const rawPos = interpolateVehicle(v, nowAdj);
 			const pos = v.hasGps
-				? { lat: v.lat, lon: v.lon, heading: v.heading }
-				: clampForward(
-						v.id,
-						interpolateVehicle(v, nowAdj),
-						nowAdj,
-						renderedPosRef.current,
-					);
+				? rawPos
+				: clampForward(v.id, rawPos, nowAdj, renderedPosRef.current);
 			const layerKey = `${v.category}${v.hasRT ? "" : " (sched)"}`;
 			const layer = layers.get(layerKey);
 			if (!layer) continue;
@@ -899,11 +918,7 @@ function MapPage() {
 							html: buildVehicleIcon(v, pos.heading, size, showLabel),
 							iconSize: [size, size],
 							iconAnchor: [size / 2, size / 2],
-							// `.dummrum-gps-smooth` gives real-GPS markers a CSS
-							// transform transition so the per-poll position
-							// snaps look continuous even though we're not
-							// interpolating in rAF for them.
-							className: v.hasGps ? "dummrum-gps-smooth" : "",
+							className: "",
 						}),
 					);
 					entry.iconKey = iconKey;
@@ -918,7 +933,7 @@ function MapPage() {
 					html: buildVehicleIcon(v, pos.heading, size, showLabel),
 					iconSize: [size, size],
 					iconAnchor: [size / 2, size / 2],
-					className: v.hasGps ? "dummrum-gps-smooth" : "",
+					className: "",
 				});
 				const marker = L.marker([pos.lat, pos.lon], { icon }).addTo(layer);
 				marker.on("click", () => {
@@ -1424,18 +1439,15 @@ function MapPage() {
 			for (const v of vehiclesRef.current) {
 				const entry = existing.get(v.id);
 				if (!entry || v.waypoints.length < 2) continue;
-				// GPS-enriched vehicles are placed by syncMarkers on the
-				// real fix; skip per-frame interpolation so the polyline
-				// doesn't drag them back onto the calc trajectory. Mid-
-				// poll motion is handled by the `.dummrum-gps-smooth` CSS
-				// transform transition on the marker div.
-				if (v.hasGps) {
-					if (v.id === followIdRef.current)
-						followPos = { lat: v.lat, lon: v.lon };
-					continue;
-				}
+				// Real-GPS vehicles ride the same rAF interpolation as
+				// calc ones — the waypoints were server-anchored to the
+				// real fix, so the animation rolls forward from ground
+				// truth. clampForward is skipped for them since their
+				// positions are authoritative.
 				const rawPos = interpolateVehicle(v, now);
-				const pos = clampForward(v.id, rawPos, now, renderedPosRef.current);
+				const pos = v.hasGps
+					? rawPos
+					: clampForward(v.id, rawPos, now, renderedPosRef.current);
 				entry.marker.setLatLng([pos.lat, pos.lon]);
 				if (v.id === followIdRef.current) followPos = pos;
 			}
