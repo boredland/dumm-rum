@@ -893,14 +893,23 @@ function MapPage() {
 			// (no waypoint walking, no forward-clamp). The marker updates
 			// at the 15 s poll cadence, and the divIcon's CSS transition
 			// softens each jump to keep it visually acceptable.
-			const pos = liveMode
-				? { lat: v.lat, lon: v.lon, heading: v.heading }
-				: clampForward(
-						v.id,
-						interpolateVehicle(v, nowAdj),
-						nowAdj,
-						renderedPosRef.current,
-					);
+			// Use the real GPS fix whenever we have one — in live mode
+			// (by explicit user request) or for any hasGps vehicle even
+			// outside live mode, since otherwise the polyline-interpolated
+			// waypoints would override our enriched lat/lon and we'd
+			// silently discard real AVL data in favour of the calc
+			// prediction. The marker jumps once per poll (~15 s for
+			// bahn.expert, ~10 s for HEAG); the CSS transition below
+			// smooths those jumps so the motion still feels continuous.
+			const pos =
+				liveMode || v.hasGps
+					? { lat: v.lat, lon: v.lon, heading: v.heading }
+					: clampForward(
+							v.id,
+							interpolateVehicle(v, nowAdj),
+							nowAdj,
+							renderedPosRef.current,
+						);
 			const layerKey = `${v.category}${v.hasRT ? "" : " (sched)"}`;
 			const layer = layers.get(layerKey);
 			if (!layer) continue;
@@ -915,7 +924,11 @@ function MapPage() {
 							html: buildVehicleIcon(v, pos.heading, size, showLabel, liveMode),
 							iconSize: [size, size],
 							iconAnchor: [size / 2, size / 2],
-							className: "",
+							// `.dummrum-gps-smooth` gives real-GPS markers a CSS
+							// transform transition so the per-poll position
+							// snaps look continuous even though we're not
+							// interpolating in rAF for them.
+							className: v.hasGps ? "dummrum-gps-smooth" : "",
 						}),
 					);
 					entry.iconKey = iconKey;
@@ -930,7 +943,7 @@ function MapPage() {
 					html: buildVehicleIcon(v, pos.heading, size, showLabel, liveMode),
 					iconSize: [size, size],
 					iconAnchor: [size / 2, size / 2],
-					className: "",
+					className: v.hasGps ? "dummrum-gps-smooth" : "",
 				});
 				const marker = L.marker([pos.lat, pos.lon], { icon }).addTo(layer);
 				marker.on("click", () => {
@@ -1469,6 +1482,16 @@ function MapPage() {
 				for (const v of vehiclesRef.current) {
 					const entry = existing.get(v.id);
 					if (!entry || v.waypoints.length < 2) continue;
+					// GPS-enriched vehicles are placed by syncMarkers on the
+					// real fix; skip per-frame interpolation so the polyline
+					// doesn't drag them back onto the calc trajectory.
+					// Mid-poll motion is handled by the CSS transform
+					// transition on the marker div.
+					if (v.hasGps) {
+						if (v.id === followIdRef.current)
+							followPos = { lat: v.lat, lon: v.lon };
+						continue;
+					}
 					const rawPos = interpolateVehicle(v, now);
 					const pos = clampForward(v.id, rawPos, now, renderedPosRef.current);
 					entry.marker.setLatLng([pos.lat, pos.lon]);

@@ -54,6 +54,14 @@ a:hover {
 	transition: transform 500ms linear;
 }
 
+/* Real-GPS markers snap to a fresh fix once per poll (~15 s bahn.expert,
+   ~10 s HEAG) even in default mode, because we skip polyline
+   interpolation for them. A slightly longer transition hides the jump
+   without lagging visibly behind the new fix. */
+.dummrum-gps-smooth {
+	transition: transform 800ms linear;
+}
+
 /* Slow pulse on the real-GPS indicator dot so a glance can pick out the
    "this one is ground truth" markers from the "this one is calculated"
    ones without reading the badge. */
