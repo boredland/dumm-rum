@@ -606,6 +606,11 @@ type MapSearch = {
 	 * panning with the chosen vehicle. Cleared on stopFollowing or
 	 * when the vehicle hasn't appeared in responses after ~30 s. */
 	follow?: string;
+	/** "0" disables the rAF-driven mid-poll animation. Markers still
+	 * jump on each 15 s poll and popup ages still tick, but per-frame
+	 * interpolation + follow-pan stop — useful on low-power devices
+	 * and for reduced-motion preferences. */
+	anim?: string;
 };
 
 export const Route = createFileRoute("/$lang/map/")({
@@ -620,6 +625,7 @@ export const Route = createFileRoute("/$lang/map/")({
 		rt: typeof search.rt === "string" ? search.rt : undefined,
 		sched: typeof search.sched === "string" ? search.sched : undefined,
 		follow: typeof search.follow === "string" ? search.follow : undefined,
+		anim: typeof search.anim === "string" ? search.anim : undefined,
 	}),
 	component: MapPage,
 });
@@ -894,6 +900,12 @@ function MapPage() {
 	 * badge doesn't dangle after a train leaves the viewport or
 	 * reaches its destination. */
 	const followLastSeenRef = useRef<number | null>(null);
+	/** When false the rAF loop short-circuits its per-frame marker
+	 * updates, leaving only the 15 s poll-driven snaps. Toggled from
+	 * the FilterControl + persisted via the `anim` URL param. Ref so
+	 * the animate loop can read the current value without a React
+	 * dependency cascade. */
+	const animationsRef = useRef(search.anim !== "0");
 
 	const clearFollowedPolyline = useCallback(() => {
 		const poly = followedPolylineRef.current;
@@ -1341,6 +1353,7 @@ function MapPage() {
 			);
 			let rtVisible = search.rt !== "0";
 			let schedVisible = search.sched !== "0";
+			let animEnabled = animationsRef.current;
 
 			const applyCatVisibility = (cat: string) => {
 				const rtG = layers.get(cat);
@@ -1363,6 +1376,7 @@ function MapPage() {
 							: undefined,
 						rt: rtVisible ? undefined : "0",
 						sched: schedVisible ? undefined : "0",
+						anim: animEnabled ? undefined : "0",
 					}),
 					replace: true,
 				});
@@ -1507,6 +1521,21 @@ function MapPage() {
 							syncSearch();
 						},
 					);
+					// Disables rAF-driven mid-poll marker motion. Useful on
+					// low-power devices or for users who find the motion
+					// distracting. Popup ages still tick and markers still
+					// snap on each poll, so the feature degrades gracefully
+					// to the slower-updating view.
+					addToggle(
+						'<svg width="16" height="16" viewBox="0 0 16 16" style="vertical-align:middle"><path d="M8 2v2m0 8v2m6-6h-2M4 8H2m9.07-3.07l-1.41 1.41M6.34 9.66l-1.41 1.41m0-6.14l1.41 1.41m3.32 3.32l1.41 1.41" stroke="#666" stroke-width="1.2" stroke-linecap="round" fill="none"/><circle cx="8" cy="8" r="1.5" fill="#666"/></svg>',
+						" Animations",
+						animEnabled,
+						(next) => {
+							animEnabled = next;
+							animationsRef.current = next;
+							syncSearch();
+						},
+					);
 					addHeading("Vehicles");
 					for (const cat of CATS) {
 						if (cat === "Other") continue;
@@ -1615,6 +1644,15 @@ function MapPage() {
 
 	useEffect(() => {
 		const animate = () => {
+			// When animations are disabled the rAF loop is still scheduled
+			// (so toggling back on resumes immediately without re-
+			// subscribing the effect) but we skip every per-frame
+			// computation. Marker positions then only change on each
+			// 15 s poll via syncMarkers.
+			if (!animationsRef.current) {
+				animRef.current = requestAnimationFrame(animate);
+				return;
+			}
 			const now = Date.now() + timeDeltaRef.current;
 			const existing = markersRef.current;
 			const nowPerf = performance.now();
