@@ -47,17 +47,10 @@ a:hover {
 	text-decoration: underline;
 }
 
-/* Soften the 15 s-cadence teleports in the map's "Live positions" mode.
-   Scoped to a container-level class so the per-frame rAF motion in the
-   default mode stays unthrottled. */
-.leaflet-live-mode .leaflet-marker-icon {
-	transition: transform 500ms linear;
-}
-
 /* Real-GPS markers snap to a fresh fix once per poll (~15 s bahn.expert,
-   ~10 s HEAG) even in default mode, because we skip polyline
-   interpolation for them. A slightly longer transition hides the jump
-   without lagging visibly behind the new fix. */
+   ~10 s HEAG) because we skip polyline interpolation for them and show
+   only the actual AVL positions. The CSS transform transition hides
+   the jump without lagging visibly behind the new fix. */
 .dummrum-gps-smooth {
 	transition: transform 800ms linear;
 }

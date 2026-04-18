@@ -34,7 +34,7 @@ export interface FerryVehicle {
 	hasRT: false;
 	/** Ferry positions are schedule-interpolated along the OSM river track,
 	 * never real GPS. Mirrors the HAFAS/Flix `hasGps` flag so the map's
-	 * "Live positions" layer can surface this distinction. */
+	 * GPS indicator dot is (correctly) absent on these markers. */
 	hasGps: false;
 	/** No GPS source, so no fix timestamp — typed as null to line up with
 	 * the RMV `Vehicle` shape for the shared popup renderer. */
