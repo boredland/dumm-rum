@@ -1011,8 +1011,8 @@ function MapPage() {
 				onAdd() {
 					const el = L.DomUtil.create("div", "leaflet-bar leaflet-control");
 					Object.assign(el.style, {
-						background: "var(--surface, #fff)",
-						color: "var(--fg, #333)",
+						background: "#fff",
+						color: "#333",
 						fontSize: "11px",
 						lineHeight: "1.8",
 						overflow: "hidden",
