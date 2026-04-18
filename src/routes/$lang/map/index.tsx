@@ -45,6 +45,19 @@ interface Vehicle {
 	delay: number | null;
 	occupancy: "L" | "M" | "H" | null;
 	hasRT: boolean;
+	/** True when the vehicle's `lat`/`lon` come from a real position
+	 * report. As of 2026-04-18 only Flix is surfacing real GPS to this
+	 * app — RMV's public mgate `JourneyGeoPos` doesn't expose `aPos`
+	 * under any `trainPosMode`, so RMV entries are always false. Kept as
+	 * a per-vehicle flag so the indicator logic can light up the moment
+	 * any source starts providing it. */
+	hasGps: boolean;
+	/** Unix-ms timestamp of the last real position fix. Null when the
+	 * vehicle has no GPS source (either schedule-interpolated or no age
+	 * report returned). HAFAS gives us `aPos` seconds-since-fix; Flix
+	 * publishes `location.updated_at` directly. Shown in the popup as a
+	 * human-readable age. */
+	gpsFixAt: number | null;
 	stationary?: boolean;
 	externalTrackingUrl: string | null;
 	/** HAFAS service date (`YYYY-MM-DD`). Used to deep-link the popup into
@@ -87,6 +100,20 @@ const CATEGORY_COLORS: Record<string, string> = {
 	Ferry: "#0088BB",
 	Other: "#666",
 };
+
+/** Format `ms` (a positive duration in milliseconds) as a compact,
+ * language-agnostic age string for the popup: `12s`, `2m 3s`, `1h 5m`.
+ * Negative / future fixes (clock skew) collapse to `0s`. */
+function formatFixAge(ms: number): string {
+	const total = Math.max(0, Math.round(ms / 1000));
+	if (total < 60) return `${total}s`;
+	const m = Math.floor(total / 60);
+	const s = total % 60;
+	if (m < 60) return s ? `${m}m ${s}s` : `${m}m`;
+	const h = Math.floor(m / 60);
+	const rm = m % 60;
+	return rm ? `${h}h ${rm}m` : `${h}h`;
+}
 
 function escapeHtml(s: string): string {
 	return s
@@ -180,6 +207,14 @@ const fetchVehicles = createServerFn({ method: "GET" })
 									value: String(data.products),
 								},
 							],
+							// RMV's public mgate endpoint does not surface real AVL
+							// positions via JourneyGeoPos — probed 2026-04-18:
+							// `REPORT` returns zero journeys entirely, and every
+							// other mode yields calculated-only data with no
+							// `aPos` on `j.pos` even under `ageOfReport: true` +
+							// `onlyRT: true`. Stay on CALC so the vehicle list
+							// stays populated; `hasGps` will always be false for
+							// RMV entries, which is the honest answer here.
 							trainPosMode: "CALC",
 						},
 					},
@@ -209,10 +244,10 @@ const fetchVehicles = createServerFn({ method: "GET" })
 								icoX?: number;
 								oprX?: number;
 								prodCtx?: {
-								catOut?: string;
-								catOutL?: string;
-								matchId?: string;
-							};
+									catOut?: string;
+									catOutL?: string;
+									matchId?: string;
+								};
 							}[];
 							opL?: { name: string }[];
 							polyL?: { crdEncYX?: string }[];
@@ -221,7 +256,7 @@ const fetchVehicles = createServerFn({ method: "GET" })
 						jnyL?: {
 							jid: string;
 							date?: string;
-							pos: { x: number; y: number };
+							pos: { x: number; y: number; aPos?: number };
 							dirTxt?: string;
 							dirGeo?: number;
 							prodX?: number;
@@ -257,6 +292,11 @@ const fetchVehicles = createServerFn({ method: "GET" })
 				const category = classifyProduct(prod?.cls ?? 0);
 				const bg = CATEGORY_COLORS[category] ?? "#666";
 				const hasRT = (j.stopL ?? []).some((s) => s.dTimeR != null);
+				// HAFAS only sets `aPos` (age-of-report in seconds) on `j.pos`
+				// when the fix originates from an operator AVL/GPS feed. Its
+				// absence means the position was interpolated from the schedule.
+				const hasGps = j.pos.aPos != null;
+				const gpsFixAt = hasGps ? serverTime - (j.pos.aPos ?? 0) * 1000 : null;
 
 				const ani = j.ani;
 				const waypoints: Waypoint[] = [];
@@ -351,9 +391,7 @@ const fetchVehicles = createServerFn({ method: "GET" })
 
 				const name = cleanLineName(
 					prod?.name?.trim() ?? "?",
-					prod?.prodCtx?.catOutL?.trim() ??
-						prod?.prodCtx?.catOut?.trim() ??
-						"",
+					prod?.prodCtx?.catOutL?.trim() ?? prod?.prodCtx?.catOut?.trim() ?? "",
 				);
 
 				return {
@@ -369,6 +407,8 @@ const fetchVehicles = createServerFn({ method: "GET" })
 					delay,
 					occupancy,
 					hasRT,
+					hasGps,
+					gpsFixAt,
 					externalTrackingUrl,
 					serviceDate: j.date
 						? `${j.date.slice(0, 4)}-${j.date.slice(4, 6)}-${j.date.slice(6, 8)}`
@@ -419,6 +459,9 @@ type MapSearch = {
 	rt?: string;
 	/** "0" hides the Schedule layer group. */
 	sched?: string;
+	/** "1" switches to the raw-position layer (no interpolation between
+	 * polls, marker shows whether each fix is real GPS or calculated). */
+	live?: string;
 };
 
 export const Route = createFileRoute("/$lang/map/")({
@@ -432,6 +475,7 @@ export const Route = createFileRoute("/$lang/map/")({
 		hide: typeof search.hide === "string" ? search.hide : undefined,
 		rt: typeof search.rt === "string" ? search.rt : undefined,
 		sched: typeof search.sched === "string" ? search.sched : undefined,
+		live: typeof search.live === "string" ? search.live : undefined,
 	}),
 	component: MapPage,
 });
@@ -503,6 +547,7 @@ function buildVehicleIcon(
 	heading: number,
 	size: number,
 	showLabel: boolean,
+	liveMode: boolean,
 ): string {
 	const s = size;
 	const c = s / 2;
@@ -529,7 +574,24 @@ function buildVehicleIcon(
 		? `<circle cx="${c}" cy="${c}" r="${r + 4}" fill="none" stroke="${v.bg}" stroke-width="2" stroke-dasharray="3 3" opacity="0.6"/>`
 		: "";
 
-	const pin = `${pointer}${stationaryHalo}<circle cx="${c}" cy="${c}" r="${r}" fill="${v.bg}" stroke="#fff" stroke-width="2"/><circle cx="${c}" cy="${c}" r="${ir}" fill="#fff"/>${innerGlyph}`;
+	// Live-mode indicator: small corner badge identifying the position
+	// source. Real GPS = solid green dot with a slow pulse; calculated =
+	// grey tilde on a dashed ring. Placed top-right of the pin so it
+	// doesn't conflict with the heading pointer or the stationary halo.
+	let liveBadge = "";
+	if (liveMode) {
+		const bx = c + r * 0.7;
+		const by = c - r * 0.7;
+		const br = Math.max(3, r * 0.3);
+		if (v.hasGps) {
+			liveBadge = `<circle class="dummrum-gps-dot" cx="${bx}" cy="${by}" r="${br}" fill="#27ae60" stroke="#fff" stroke-width="1.5"/>`;
+		} else {
+			const tildeSize = br * 1.2;
+			liveBadge = `<g><circle cx="${bx}" cy="${by}" r="${br}" fill="#fff" stroke="#888" stroke-width="1.2" stroke-dasharray="1.5 1"/><text x="${bx}" y="${by + tildeSize * 0.35}" text-anchor="middle" font-family="system-ui,sans-serif" font-size="${tildeSize}" font-weight="700" fill="#666">~</text></g>`;
+		}
+	}
+
+	const pin = `${pointer}${stationaryHalo}<circle cx="${c}" cy="${c}" r="${r}" fill="${v.bg}" stroke="#fff" stroke-width="2"/><circle cx="${c}" cy="${c}" r="${ir}" fill="#fff"/>${innerGlyph}${liveBadge}`;
 
 	let label = "";
 	if (showLabel) {
@@ -663,6 +725,10 @@ function MapPage() {
 	} | null>(null);
 	const userPanRef = useRef(false);
 	const followedPolylineRef = useRef<L.Polyline | null>(null);
+	// Ref rather than state so the animation loop can read the current
+	// value without a re-render dependency, and the imperatively-added
+	// FilterControl can mutate it from its checkbox handler.
+	const liveModeRef = useRef(search.live === "1");
 
 	const clearFollowedPolyline = useCallback(() => {
 		const poly = followedPolylineRef.current;
@@ -716,15 +782,26 @@ function MapPage() {
 		const size = getIconSize(zoom);
 		const showLabel = zoom >= 15;
 
+		const liveMode = liveModeRef.current;
 		for (const v of vehiclesRef.current) {
 			seen.add(v.id);
 			const nowAdj = Date.now() + timeDeltaRef.current;
-			const rawPos = interpolateVehicle(v, nowAdj);
-			const pos = clampForward(v.id, rawPos, nowAdj, renderedPosRef.current);
+			// Live mode pins the marker to the raw fix from the last poll
+			// (no waypoint walking, no forward-clamp). The marker updates
+			// at the 15 s poll cadence, and the divIcon's CSS transition
+			// softens each jump to keep it visually acceptable.
+			const pos = liveMode
+				? { lat: v.lat, lon: v.lon, heading: v.heading }
+				: clampForward(
+						v.id,
+						interpolateVehicle(v, nowAdj),
+						nowAdj,
+						renderedPosRef.current,
+					);
 			const layerKey = `${v.category}${v.hasRT ? "" : " (sched)"}`;
 			const layer = layers.get(layerKey);
 			if (!layer) continue;
-			const iconKey = `${size}|${showLabel}|${v.heading}|${v.category}|${v.delay}|${v.occupancy}|${v.hasRT}|${v.stationary ? 1 : 0}`;
+			const iconKey = `${size}|${showLabel}|${v.heading}|${v.category}|${v.delay}|${v.occupancy}|${v.hasRT}|${v.stationary ? 1 : 0}|${liveMode ? (v.hasGps ? "g" : "c") : "-"}`;
 
 			const entry = existing.get(v.id);
 			if (entry) {
@@ -732,7 +809,7 @@ function MapPage() {
 				if (entry.iconKey !== iconKey) {
 					entry.marker.setIcon(
 						L.divIcon({
-							html: buildVehicleIcon(v, pos.heading, size, showLabel),
+							html: buildVehicleIcon(v, pos.heading, size, showLabel, liveMode),
 							iconSize: [size, size],
 							iconAnchor: [size / 2, size / 2],
 							className: "",
@@ -747,7 +824,7 @@ function MapPage() {
 				}
 			} else {
 				const icon = L.divIcon({
-					html: buildVehicleIcon(v, pos.heading, size, showLabel),
+					html: buildVehicleIcon(v, pos.heading, size, showLabel, liveMode),
 					iconSize: [size, size],
 					iconAnchor: [size / 2, size / 2],
 					className: "",
@@ -800,7 +877,22 @@ function MapPage() {
 			const subscribeLink = !isFlix
 				? `<br/><a href="#" data-subscribe-line="${escapeHtml(v.name.trim())}" data-subscribe-direction="${escapeHtml(v.direction)}" style="font-size:11px;color:var(--accent,#0969da)">${t(l, "subscribe.cta.button")}</a>`
 				: "";
-			const content = `<strong>${escapeHtml(v.name)}</strong><br/>→ ${escapeHtml(v.direction)}${v.operator ? `<br/><span style="opacity:.7">${escapeHtml(v.operator)}</span>` : ""}${lineDetailsLink}${subscribeLink}${trackingLink}`;
+			// Position-source line. Real GPS fixes get a green dot + age
+			// (refreshes on each 15 s poll alongside everything else in
+			// this popup), schedule-calculated vehicles get a muted "~"
+			// so the distinction is visible without the live layer.
+			let positionLine = "";
+			if (v.hasGps && v.gpsFixAt != null) {
+				const ageMs = Date.now() + timeDeltaRef.current - v.gpsFixAt;
+				const label =
+					ageMs < 1500
+						? t(l, "map.gps_fix_now")
+						: t(l, "map.gps_fix_ago", { t: formatFixAge(ageMs) });
+				positionLine = `<br/><span style="font-size:10px;opacity:.7;display:inline-flex;align-items:center;gap:3px"><span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:#27ae60"></span>${escapeHtml(label)}</span>`;
+			} else {
+				positionLine = `<br/><span style="font-size:10px;opacity:.55;display:inline-flex;align-items:center;gap:3px"><span style="display:inline-block;width:7px;text-align:center;color:#888;font-weight:700">~</span>${escapeHtml(t(l, "map.gps_fix_calc"))}</span>`;
+			}
+			const content = `<strong>${escapeHtml(v.name)}</strong><br/>→ ${escapeHtml(v.direction)}${v.operator ? `<br/><span style="opacity:.7">${escapeHtml(v.operator)}</span>` : ""}${positionLine}${lineDetailsLink}${subscribeLink}${trackingLink}`;
 
 			// Only rebind when the rendered popup content actually changes —
 			// unbind/bind closes any open popup, which causes a visible
@@ -930,6 +1022,11 @@ function MapPage() {
 			}).addTo(map);
 
 			leafletMap.current = map;
+			// CSS class drives the `transition: transform 500ms` rule on
+			// marker icons — only active in live mode so the default
+			// rAF-driven motion stays unthrottled.
+			if (liveModeRef.current)
+				map.getContainer().classList.add("leaflet-live-mode");
 
 			const layers = new Map<string, L.LayerGroup>();
 			const CATS = [
@@ -980,6 +1077,7 @@ function MapPage() {
 			);
 			let rtVisible = search.rt !== "0";
 			let schedVisible = search.sched !== "0";
+			let liveMode = liveModeRef.current;
 
 			const applyCatVisibility = (cat: string) => {
 				const rtG = layers.get(cat);
@@ -1002,6 +1100,7 @@ function MapPage() {
 							: undefined,
 						rt: rtVisible ? undefined : "0",
 						sched: schedVisible ? undefined : "0",
+						live: liveMode ? "1" : undefined,
 					}),
 					replace: true,
 				});
@@ -1146,6 +1245,25 @@ function MapPage() {
 							syncSearch();
 						},
 					);
+					// Live-positions toggle: flips the map into raw-fix mode
+					// (no interpolation, no smoothing) and surfaces per-vehicle
+					// whether the fix is a real GPS report or a schedule
+					// calculation. Persisted in the URL as `live=1`.
+					addToggle(
+						'<svg width="16" height="16" viewBox="0 0 16 16" style="vertical-align:middle"><circle cx="8" cy="8" r="6" fill="none" stroke="#e74c3c" stroke-width="2"/><circle cx="8" cy="8" r="2" fill="#e74c3c"/></svg>',
+						" Live positions",
+						liveMode,
+						(next) => {
+							liveMode = next;
+							liveModeRef.current = next;
+							map.getContainer().classList.toggle("leaflet-live-mode", next);
+							// Force a re-render of every marker icon so the
+							// indicator badge reflects the new mode on the next
+							// tick — syncMarkers picks this up via the iconKey.
+							syncSearch();
+							syncMarkers();
+						},
+					);
 
 					addHeading("Vehicles");
 					for (const cat of CATS) {
@@ -1225,14 +1343,26 @@ function MapPage() {
 			const now = Date.now() + timeDeltaRef.current;
 			const existing = markersRef.current;
 			const nowPerf = performance.now();
+			const liveMode = liveModeRef.current;
 			let followPos: { lat: number; lon: number } | null = null;
-			for (const v of vehiclesRef.current) {
-				const entry = existing.get(v.id);
-				if (!entry || v.waypoints.length < 2) continue;
-				const rawPos = interpolateVehicle(v, now);
-				const pos = clampForward(v.id, rawPos, now, renderedPosRef.current);
-				entry.marker.setLatLng([pos.lat, pos.lon]);
-				if (v.id === followIdRef.current) followPos = pos;
+			// In live mode marker positions only change on each 15 s poll
+			// (handled by syncMarkers). Skip the per-frame interpolation
+			// work entirely but still run the follow-pan loop so panning
+			// tracks the one marker-move per poll.
+			if (!liveMode) {
+				for (const v of vehiclesRef.current) {
+					const entry = existing.get(v.id);
+					if (!entry || v.waypoints.length < 2) continue;
+					const rawPos = interpolateVehicle(v, now);
+					const pos = clampForward(v.id, rawPos, now, renderedPosRef.current);
+					entry.marker.setLatLng([pos.lat, pos.lon]);
+					if (v.id === followIdRef.current) followPos = pos;
+				}
+			} else if (followIdRef.current) {
+				const followed = vehiclesRef.current.find(
+					(v) => v.id === followIdRef.current,
+				);
+				if (followed) followPos = { lat: followed.lat, lon: followed.lon };
 			}
 			// Throttle follow-pan to ~10 Hz (vs 60 Hz) — smooth enough
 			// perceptually, 6× less work per second in Leaflet's transform

@@ -121,6 +121,9 @@ const translations = {
 		"map.vehicles": "Fahrzeuge",
 		"map.last_update": "Letztes Update",
 		"map.no_vehicles": "Keine aktiven Fahrzeuge",
+		"map.gps_fix_now": "GPS gerade eben",
+		"map.gps_fix_ago": "GPS vor {t}",
+		"map.gps_fix_calc": "Position berechnet",
 
 		"status.cancelled": "❌",
 		"status.ghost": "👻",
@@ -247,6 +250,9 @@ const translations = {
 		"map.vehicles": "Vehicles",
 		"map.last_update": "Last update",
 		"map.no_vehicles": "No active vehicles",
+		"map.gps_fix_now": "GPS just now",
+		"map.gps_fix_ago": "GPS {t} ago",
+		"map.gps_fix_calc": "Position calculated",
 
 		"status.cancelled": "❌",
 		"status.ghost": "👻",

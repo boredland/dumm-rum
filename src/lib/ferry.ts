@@ -32,6 +32,13 @@ export interface FerryVehicle {
 	delay: null;
 	occupancy: null;
 	hasRT: false;
+	/** Ferry positions are schedule-interpolated along the OSM river track,
+	 * never real GPS. Mirrors the HAFAS/Flix `hasGps` flag so the map's
+	 * "Live positions" layer can surface this distinction. */
+	hasGps: false;
+	/** No GPS source, so no fix timestamp — typed as null to line up with
+	 * the RMV `Vehicle` shape for the shared popup renderer. */
+	gpsFixAt: null;
 	stationary: false;
 	externalTrackingUrl: string | null;
 	serviceDate: null;
@@ -538,6 +545,8 @@ function buildVehicle(
 		delay: null,
 		occupancy: null,
 		hasRT: false,
+		hasGps: false,
+		gpsFixAt: null,
 		stationary: false,
 		externalTrackingUrl: TRACKING_URL,
 		serviceDate: null,

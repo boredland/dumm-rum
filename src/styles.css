@@ -46,3 +46,29 @@ a {
 a:hover {
 	text-decoration: underline;
 }
+
+/* Soften the 15 s-cadence teleports in the map's "Live positions" mode.
+   Scoped to a container-level class so the per-frame rAF motion in the
+   default mode stays unthrottled. */
+.leaflet-live-mode .leaflet-marker-icon {
+	transition: transform 500ms linear;
+}
+
+/* Slow pulse on the real-GPS indicator dot so a glance can pick out the
+   "this one is ground truth" markers from the "this one is calculated"
+   ones without reading the badge. */
+@keyframes dummrum-gps-pulse {
+	0%,
+	100% {
+		opacity: 1;
+		transform: scale(1);
+	}
+	50% {
+		opacity: 0.5;
+		transform: scale(1.25);
+	}
+}
+.dummrum-gps-dot {
+	transform-origin: center;
+	animation: dummrum-gps-pulse 1.6s ease-in-out infinite;
+}

@@ -30,6 +30,14 @@ export interface FlixVehicle {
 	delay: number | null;
 	occupancy: null;
 	hasRT: true;
+	/** Flix rides come from the operator's live `location` feed — always
+	 * a real GPS report, never interpolated. Surfaced by the map's "Live
+	 * positions" layer to match the HAFAS `aPos` signal. */
+	hasGps: true;
+	/** Unix-ms timestamp of the last live-feed position update, taken from
+	 * `ride.location.updated_at`. Shown in the popup alongside the GPS
+	 * indicator. */
+	gpsFixAt: number;
 	stationary: boolean;
 	externalTrackingUrl: string;
 	serviceDate: null;
@@ -292,6 +300,8 @@ export async function getAggregatedVehicles(): Promise<{
 			delay: rideDelayMinutes(ride),
 			occupancy: null,
 			hasRT: true,
+			hasGps: true,
+			gpsFixAt: curT,
 			stationary: trulyStationary,
 			externalTrackingUrl: FLIX_TRACKING_URL_BASE + ride.id,
 			serviceDate: null,
