@@ -1081,18 +1081,33 @@ function MapPage() {
 			const subscribeLink = !isFlix
 				? `<br/><a href="#" data-subscribe-line="${escapeHtml(v.name.trim())}" data-subscribe-direction="${escapeHtml(v.direction)}" style="font-size:11px;color:var(--accent,#0969da)">${t(l, "subscribe.cta.button")}</a>`
 				: "";
-			// Position-source line. Real GPS fixes get a green dot + age
-			// (refreshes on each 15 s poll alongside everything else in
-			// this popup), schedule-calculated vehicles get a muted "~"
-			// so the distinction is visible without the live layer.
+			// Position-source line. Real GPS fixes get a green dot + a
+			// "GPS <age>" label that ticks every second via the
+			// dummrum-gps-age DOM updater (see its useEffect). We
+			// stash the fix moment as a data attribute (adjusted by the
+			// server/client clock skew so `Date.now() - fixAt` matches
+			// what the operator actually reported) plus the i18n `now`
+			// label and `ago` template so the tick doesn't need access
+			// to any React state. Schedule-calculated vehicles get a
+			// muted "~" so the distinction is visible even without the
+			// signal-bars badge.
 			let positionLine = "";
 			if (v.hasGps && v.gpsFixAt != null) {
 				const ageMs = Date.now() + timeDeltaRef.current - v.gpsFixAt;
-				const label =
+				const initialLabel =
 					ageMs < 1500
 						? t(l, "map.gps_fix_now")
 						: t(l, "map.gps_fix_ago", { t: formatFixAge(ageMs) });
-				positionLine = `<br/><span style="font-size:10px;opacity:.7;display:inline-flex;align-items:center;gap:3px"><span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:#27ae60"></span>${escapeHtml(label)}</span>`;
+				const clientFixAt = v.gpsFixAt - timeDeltaRef.current;
+				const nowLabel = t(l, "map.gps_fix_now");
+				// `t(…, { t: "{t}" })` preserves the `{t}` placeholder
+				// so the DOM tick can substitute the rolling age later.
+				const agoTemplate = t(l, "map.gps_fix_ago", { t: "{t}" });
+				// Outer span holds the dot + text side-by-side; inner
+			// span.dummrum-gps-age carries the data attrs and is the
+			// only element the DOM updater rewrites (keeps the green
+			// dot out of harm's way when `textContent = …` fires).
+			positionLine = `<br/><span style="font-size:10px;opacity:.7;display:inline-flex;align-items:center;gap:3px"><span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:#27ae60"></span><span class="dummrum-gps-age" data-fix-at="${clientFixAt}" data-now="${escapeHtml(nowLabel)}" data-ago="${escapeHtml(agoTemplate)}">${escapeHtml(initialLabel)}</span></span>`;
 			} else {
 				positionLine = `<br/><span style="font-size:10px;opacity:.55;display:inline-flex;align-items:center;gap:3px"><span style="display:inline-block;width:7px;text-align:center;color:#888;font-weight:700">~</span>${escapeHtml(t(l, "map.gps_fix_calc"))}</span>`;
 			}
@@ -1630,6 +1645,35 @@ function MapPage() {
 		const tick = setInterval(() => {
 			const elapsed = (Date.now() - lastFetchRef.current) / 1000;
 			setCountdown(Math.max(0, Math.round(POLL_INTERVAL / 1000 - elapsed)));
+		}, 1000);
+		return () => clearInterval(tick);
+	}, []);
+
+	// Rolling "GPS vor Xs" age in any open popup. syncMarkers
+	// regenerates popup content on each poll (~15 s) which resets the
+	// data-fix-at attribute to the newest fix; between polls this tick
+	// rewrites just the inner text span so the age keeps ticking every
+	// second without re-rendering the whole popup. No-op when no
+	// popups are open or none is for a GPS-enriched vehicle.
+	useEffect(() => {
+		const tick = setInterval(() => {
+			const spans = document.querySelectorAll<HTMLElement>(
+				".dummrum-gps-age",
+			);
+			if (spans.length === 0) return;
+			const now = Date.now();
+			for (const el of spans) {
+				const fixAt = Number(el.dataset.fixAt);
+				if (!Number.isFinite(fixAt)) continue;
+				const ageMs = Math.max(0, now - fixAt);
+				const nowLabel = el.dataset.now ?? "";
+				const agoTemplate = el.dataset.ago ?? "";
+				const label =
+					ageMs < 1500
+						? nowLabel
+						: agoTemplate.replace("{t}", formatFixAge(ageMs));
+				if (el.textContent !== label) el.textContent = label;
+			}
 		}, 1000);
 		return () => clearInterval(tick);
 	}, []);
