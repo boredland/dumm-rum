@@ -14,6 +14,12 @@ import {
 	decodeEncodedPolyline,
 	MGATE_URL,
 } from "../../../lib/mgate.ts";
+import {
+	fetchHeagVehicles,
+	heagHeadingToDirGeo,
+	matchHeagToRmv,
+	parseHeagFixTime,
+} from "../../../lib/heag.ts";
 
 const FRANKFURT_CENTER = { lat: 50.1109, lon: 8.6821 };
 const POLL_INTERVAL = 15_000;
@@ -225,11 +231,18 @@ const fetchVehicles = createServerFn({ method: "GET" })
 				auth: AUTH,
 			};
 
-			const resp = await fetch(MGATE_URL, {
-				method: "POST",
-				headers: { "Content-Type": "application/json" },
-				body: JSON.stringify(body),
-			});
+			// Kick off HEAG in parallel with mgate. HEAG supplies real AVL
+			// positions for Darmstadt-area trams/buses — we'll match them
+			// onto the RMV vehicles further down. Its timeout (see heag.ts)
+			// guarantees it can't slow down the main response path.
+			const [resp, heagVehicles] = await Promise.all([
+				fetch(MGATE_URL, {
+					method: "POST",
+					headers: { "Content-Type": "application/json" },
+					body: JSON.stringify(body),
+				}),
+				fetchHeagVehicles(),
+			]);
 
 			if (!resp.ok) return { vehicles: [], serverTime };
 
@@ -417,6 +430,45 @@ const fetchVehicles = createServerFn({ method: "GET" })
 					fetchedAt: serverTime,
 				};
 			});
+
+			// Enrich matched vehicles with HEAG live-GPS. We take HEAG's
+			// lat/lon/heading/timestamp verbatim since it's a real AVL fix,
+			// but keep RMV's waypoints and polyline intact so the default
+			// (non-live-mode) animation still has something to interpolate
+			// against — the marker just starts from HEAG's real position
+			// instead of the polyline-calc one.
+			if (heagVehicles.length) {
+				const matches = matchHeagToRmv(
+					vehicles.map((v) => ({
+						name: v.name,
+						direction: v.direction,
+						lat: v.lat,
+						lon: v.lon,
+					})),
+					heagVehicles,
+				);
+				for (const m of matches) {
+					const v = vehicles[m.rmvIndex];
+					const fixAt = parseHeagFixTime(m.heag.date);
+					v.lat = m.heag.latitude;
+					v.lon = m.heag.longitude;
+					v.heading = heagHeadingToDirGeo(m.heag.bearing);
+					v.hasGps = true;
+					v.gpsFixAt = fixAt;
+					// HEAG's `deviation` is in seconds; convert to the minute
+					// scale RMV/Flix use for the `delay` field. Only overwrite
+					// when RMV didn't already have a realtime delay so we
+					// don't erase a 30-second value that the RMV feed
+					// surfaced but HEAG rounded to 0.
+					if (v.delay == null && m.heag.deviation != null) {
+						v.delay = Math.round(m.heag.deviation / 60);
+					}
+					// Operator tag so the popup attributes the source
+					// correctly — matches the cache-attribution line the
+					// Leaflet map already shows for RMV.
+					if (!v.operator) v.operator = "HEAG mobilo";
+				}
+			}
 
 			return { vehicles, serverTime };
 		},
