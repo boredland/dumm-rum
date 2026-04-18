@@ -21,6 +21,7 @@
  */
 
 import { parse, stringify } from "devalue";
+import { cacheMGet, cachePut } from "./cache.ts";
 import {
 	closestPointIndex,
 	distanceMeters,
@@ -87,12 +88,21 @@ export interface BahnExpertPosition {
  * matches HEAG's 20 s window for consistency in the client animator. */
 const BAHN_EXPERT_PATH_WINDOW_MS = 20_000;
 
-/** Process-local cache of decoded polylines, keyed by journeyId. Each
- * polyline is stable for the service day so we never evict explicitly;
- * a Bun/serverless restart flushes the map naturally. At ~3 k points
- * (≈ 50 kB in memory) per long-distance train and maybe 500 distinct
- * IDs seen over a service day, the ceiling is ~25 MB — acceptable. */
-const polylineCache = new Map<string, [number, number][]>();
+/** Process-local L1 cache — polylines come from the Postgres
+ * `unlogged_cache` table but we skip the DB hop on polls where we've
+ * already fetched the journey this process lifetime. Each polyline is
+ * stable for the service day so neither layer needs aggressive
+ * eviction. */
+const polylineL1 = new Map<string, [number, number][]>();
+
+/** Key prefix so the shared KV table is tidy and we can later GC old
+ * journey-day polylines without scanning every row. */
+const POLYLINE_KEY_PREFIX = "bahn-expert:polyline:";
+
+/** TTL for the persisted polylines. A service day is typically <24 h
+ * even for night services, so 36 h covers overlap without keeping
+ * yesterday's data around forever. */
+const POLYLINE_TTL_MS = 36 * 60 * 60 * 1000;
 
 export function isSupportedCategory(category: string): boolean {
 	return SUPPORTED_CATEGORIES.has(category.trim().toUpperCase());
@@ -195,37 +205,69 @@ interface JourneyPolylineResponse {
 	geojsons?: JourneyPolylineGeoJSON[];
 }
 
-/** Fetch and cache each journey's full GeoJSON LineString. Returns an
- * array aligned with `journeyIds` where missing / cached entries are
- * filled in without a network round trip. Polylines are stored as
- * `[lat, lon]` after flipping GeoJSON's `[lon, lat]` ordering to match
- * the rest of the app. */
+/** Fetch each journey's full polyline, checking the in-memory L1
+ * cache first and then the Postgres KV. Only journeys missing from
+ * both layers trigger a bahn.expert RPC; successful fetches warm both
+ * caches. Returns `[lat, lon]` pairs aligned with `journeyIds`.
+ *
+ * Errors at either layer degrade gracefully — a DB outage means we
+ * fall through to the RPC and still serve the map, and an RPC
+ * failure just leaves the caller without gpsPath enrichment for that
+ * train (it stays at its last poll's static fix). */
 async function fetchPolylines(
 	journeyIds: string[],
 ): Promise<(readonly [number, number][] | null)[]> {
-	const missing: { id: string; idx: number }[] = [];
-	const out: (readonly [number, number][] | null)[] = journeyIds.map(
-		(id, idx) => {
-			const cached = polylineCache.get(id);
-			if (cached) return cached;
-			missing.push({ id, idx });
-			return null;
-		},
-	);
-	if (missing.length === 0) return out;
+	const out: (readonly [number, number][] | null)[] = new Array(
+		journeyIds.length,
+	).fill(null);
+	const missFromL1: { id: string; idx: number }[] = [];
+	for (let i = 0; i < journeyIds.length; i++) {
+		const hit = polylineL1.get(journeyIds[i]);
+		if (hit) out[i] = hit;
+		else missFromL1.push({ id: journeyIds[i], idx: i });
+	}
+	if (missFromL1.length === 0) return out;
 
+	// L2: Postgres KV. Batched SELECT so N missing journeys = 1 query.
+	let l2: Map<string, [number, number][]>;
+	try {
+		l2 = await cacheMGet<[number, number][]>(
+			missFromL1.map((m) => POLYLINE_KEY_PREFIX + m.id),
+		);
+	} catch {
+		l2 = new Map();
+	}
+	const stillMissing: { id: string; idx: number }[] = [];
+	for (const m of missFromL1) {
+		const fromKv = l2.get(POLYLINE_KEY_PREFIX + m.id);
+		if (fromKv && fromKv.length >= 2) {
+			polylineL1.set(m.id, fromKv);
+			out[m.idx] = fromKv;
+		} else {
+			stillMissing.push(m);
+		}
+	}
+	if (stillMissing.length === 0) return out;
+
+	// L3: bahn.expert RPC. Batched so N misses = 1 HTTP round trip.
 	const results = await rpcBatch<JourneyPolylineResponse | null>(
-		missing.map(() => "journey.polyline"),
-		missing.map((m) => m.id),
+		stillMissing.map(() => "journey.polyline"),
+		stillMissing.map((m) => m.id),
 	);
-	for (let i = 0; i < missing.length; i++) {
+	for (let i = 0; i < stillMissing.length; i++) {
 		const r = results[i];
 		const raw = r?.geojsons?.[0]?.coordinates;
 		if (!Array.isArray(raw) || raw.length < 2) continue;
 		// GeoJSON is [lon, lat]; flip to our [lat, lon] convention.
 		const flipped: [number, number][] = raw.map(([lon, lat]) => [lat, lon]);
-		polylineCache.set(missing[i].id, flipped);
-		out[missing[i].idx] = flipped;
+		const id = stillMissing[i].id;
+		polylineL1.set(id, flipped);
+		out[stillMissing[i].idx] = flipped;
+		// Fire-and-forget the DB write; don't block the map response
+		// on its success.
+		cachePut(POLYLINE_KEY_PREFIX + id, flipped, POLYLINE_TTL_MS).catch(() => {
+			/* surfaces on the next poll as a re-fetch — no user impact */
+		});
 	}
 	return out;
 }

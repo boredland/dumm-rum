@@ -6,6 +6,7 @@ import {
 	primaryKey,
 	serial,
 	text,
+	timestamp,
 	unique,
 } from "drizzle-orm/pg-core";
 
@@ -72,6 +73,32 @@ export const knownStops = pgTable(
 		delayed: integer().notNull().default(0),
 	},
 	(t) => [index("idx_known_stops_slug").on(t.slug)],
+);
+
+/**
+ * Key-value cache used as a cheap KV store — currently backs the
+ * bahn.expert polyline cache but intended as a general-purpose spot for
+ * third-party responses we want to hold beyond a process restart. The
+ * table name intentionally starts with `unlogged_` to signal the
+ * migration should be hand-edited to `CREATE UNLOGGED TABLE` (drizzle
+ * doesn't emit that modifier). Unlogged = no WAL churn, lower
+ * durability guarantees, which is exactly right for recomputable
+ * data. Hash index on `key` since we only do exact-key lookups.
+ */
+export const unloggedCache = pgTable(
+	"unlogged_cache",
+	{
+		key: text("key").primaryKey(),
+		value: text("value").notNull(),
+		/** Optional expiry — null = never expires. Callers that want a TTL
+		 * set this to `now() + ttl`; cache reads skip rows where
+		 * `expiresAt < now()`. A separate sweeper can GC them. */
+		expiresAt: timestamp("expires_at", { withTimezone: true }),
+		updatedAt: timestamp("updated_at", { withTimezone: true })
+			.notNull()
+			.defaultNow(),
+	},
+	(t) => [index("idx_unlogged_cache_key").using("hash", t.key)],
 );
 
 export const telegramSubscriptions = pgTable(
