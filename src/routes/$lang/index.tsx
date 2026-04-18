@@ -1,16 +1,14 @@
 import { createFileRoute, Link, useRouter } from "@tanstack/react-router";
 import { createServerFn } from "@tanstack/react-start";
+import { setResponseHeader } from "@tanstack/react-start/server";
 import { useEffect, useRef, useState } from "react";
+import { type HomePayload, loadHomeSummaries } from "../../lib/home.ts";
 import { type Lang, t } from "../../lib/i18n.ts";
-import {
-	type DaysFilter,
-	getLineSummaries,
-	getOldestDate,
-	getOperatorSummaries,
-	getStopSummaries,
-	type LineSummary,
-	type OperatorSummary,
-	type StopSummary,
+import type {
+	DaysFilter,
+	LineSummary,
+	OperatorSummary,
+	StopSummary,
 } from "../../lib/queries.ts";
 import { categoryIcons, slugForStop } from "../../lib/stations.ts";
 import { onTimeRate, pct, shortStationName } from "../../lib/utils.ts";
@@ -22,46 +20,6 @@ const VALID_DAYS = new Set<DaysFilter>([
 	"weekends",
 ]);
 
-interface HomePayload {
-	lines: LineSummary[];
-	operators: OperatorSummary[];
-	stops: StopSummary[];
-	days: DaysFilter;
-	oldestDate: string | null;
-}
-
-/** Coalesce concurrent SSRs so N simultaneous landing requests run one DB
- * batch instead of N. TTL is short enough that clients still see fresh
- * data within the same poll window but long enough to absorb refresh
- * bursts. Matches the route's `staleTime` on the client. */
-const HOME_TTL_MS = 30_000;
-const homeMemo = new Map<DaysFilter, { value: HomePayload; expires: number }>();
-const homeInflight = new Map<DaysFilter, Promise<HomePayload>>();
-
-async function loadHomeSummaries(days: DaysFilter): Promise<HomePayload> {
-	const now = Date.now();
-	const hit = homeMemo.get(days);
-	if (hit && hit.expires > now) return hit.value;
-	const inflight = homeInflight.get(days);
-	if (inflight) return inflight;
-
-	const p = (async () => {
-		const filter = { days };
-		const [lines, operators, stops, oldestDate] = await Promise.all([
-			getLineSummaries(filter),
-			getOperatorSummaries(filter),
-			getStopSummaries(),
-			getOldestDate(),
-		]);
-		const value: HomePayload = { lines, operators, stops, days, oldestDate };
-		homeMemo.set(days, { value, expires: Date.now() + HOME_TTL_MS });
-		homeInflight.delete(days);
-		return value;
-	})();
-	homeInflight.set(days, p);
-	return p;
-}
-
 const getHomeSummaries = createServerFn({ method: "GET" })
 	.inputValidator((days: unknown): DaysFilter => {
 		if (typeof days === "string" && VALID_DAYS.has(days as DaysFilter)) {
@@ -69,9 +27,17 @@ const getHomeSummaries = createServerFn({ method: "GET" })
 		}
 		return "today";
 	})
-	.handler(
-		async ({ data: days }): Promise<HomePayload> => loadHomeSummaries(days),
-	);
+	.handler(async ({ data: days }): Promise<HomePayload> => {
+		// Same cache window as the origin memo's fresh phase — matches
+		// `HOME_FRESH_MS` in src/lib/home.ts. SWR extends on top so
+		// Cloudflare can keep serving a recent copy during the window
+		// where the origin is still warming the next revision.
+		setResponseHeader(
+			"Cache-Control",
+			"public, max-age=30, s-maxage=60, stale-while-revalidate=600",
+		);
+		return loadHomeSummaries(days);
+	});
 
 type SearchParams = { days?: DaysFilter; cat?: string };
 
