@@ -167,6 +167,28 @@ const fetchVehicles = createServerFn({ method: "GET" })
 				"Cache-Control",
 				"public, max-age=5, s-maxage=10, stale-while-revalidate=30",
 			);
+
+			// HAFAS's JourneyGeoPos quietly returns zero journeys when the
+			// request rect is below ~8 km on either axis — probed
+			// 2026-04-19 over Siegburg, empty rows under 4-5 km, partial
+			// over 8-10 km, full only above ~15 km. At z=15 a typical
+			// desktop viewport is ~4-6 km, which made GPS-enriched DB
+			// trains vanish (nothing for bahn.expert to attach to while
+			// Flix kept rendering independently). Expand the rect around
+			// its centre to a floor that's reliably above HAFAS's cutoff;
+			// off-viewport markers just sit outside Leaflet's map
+			// container, costing nothing visually.
+			const MIN_HALF_LAT = 0.09; // ~10 km vertical half-height
+			const MIN_HALF_LON = 0.14; // ~10 km horizontal half-width @ 50° N
+			const cLat = (data.swLat + data.neLat) / 2;
+			const cLon = (data.swLon + data.neLon) / 2;
+			const halfLat = Math.max((data.neLat - data.swLat) / 2, MIN_HALF_LAT);
+			const halfLon = Math.max((data.neLon - data.swLon) / 2, MIN_HALF_LON);
+			const swLat = cLat - halfLat;
+			const swLon = cLon - halfLon;
+			const neLat = cLat + halfLat;
+			const neLon = cLon + halfLon;
+
 			const now = new Date();
 			const serverTime = now.getTime();
 			const date = now
@@ -200,12 +222,12 @@ const fetchVehicles = createServerFn({ method: "GET" })
 							time,
 							rect: {
 								llCrd: {
-									x: Math.round(data.swLon * 1_000_000),
-									y: Math.round(data.swLat * 1_000_000),
+									x: Math.round(swLon * 1_000_000),
+									y: Math.round(swLat * 1_000_000),
 								},
 								urCrd: {
-									x: Math.round(data.neLon * 1_000_000),
-									y: Math.round(data.neLat * 1_000_000),
+									x: Math.round(neLon * 1_000_000),
+									y: Math.round(neLat * 1_000_000),
 								},
 							},
 							perSize: PER_SIZE,
