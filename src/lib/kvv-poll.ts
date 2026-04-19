@@ -17,8 +17,17 @@ import type PgBoss from "pg-boss";
 import type { Db } from "../db/client.ts";
 import { excluded } from "../db/helpers.ts";
 import { journeyRuns, journeyStops } from "../db/schema.ts";
+import { cacheGet, cachePut } from "./cache.ts";
 import { KVV_POLL_QUEUE } from "./kvv-discover.ts";
-import { type EfaTripDetail, efaTripDetail } from "./kvv-efa.ts";
+import {
+	decodeTripRef,
+	type EfaTripDetail,
+	efaTripDetail,
+	efaTripShape,
+	shapeCacheKey,
+	shapeFromL1,
+	shapeToL1,
+} from "./kvv-efa.ts";
 import { berlinTime, nowBerlin } from "./utils.ts";
 
 export interface KvvPollJob {
@@ -33,6 +42,12 @@ export interface KvvPollJob {
  * burn worker cycles on a dead ref. */
 const EFA_MAX_FAIL_COUNT = 5;
 const RETRY_DELAY_S = 60;
+
+/** Shapes are stable for the life of a schedule period — the j26
+ * project tag in each `stateless` rolls over annually in December. A
+ * one-week TTL refreshes opportunistically without letting the cache
+ * ossify across timetable rollouts. */
+const SHAPE_TTL_MS = 7 * 24 * 60 * 60 * 1_000;
 
 async function markRunDone(
 	db: Db,
@@ -146,6 +161,16 @@ export async function processKvvPollBatch(
 			const detail = r.detail;
 			await upsertRunFromEfa(db, journeyRef, dayOfOperation, detail, now);
 			await upsertEfaStops(db, journeyRef, dayOfOperation, detail.stops);
+
+			// Populate the polyline cache opportunistically on first
+			// sighting of a given line stateless. Fire-and-forget — a
+			// failure here doesn't compromise the schedule data, and
+			// every other poll of the same stateless will retry.
+			if (pollCount === 0) {
+				ensureShape(journeyRef, detail).catch((e) =>
+					console.error(`kvv shape fetch failed for ${journeyRef}:`, e),
+				);
+			}
 
 			const hasRt =
 				detail.status === "MONITORED" ||
@@ -289,6 +314,41 @@ async function upsertRunFromEfa(
 				snapshotAt: excluded(journeyRuns.snapshotAt),
 			},
 		});
+}
+
+/** Populate the `stateless`-keyed polyline cache if we don't already
+ * have it. Called from the poll's first-sighting path so we amortize
+ * the extra HTTP across every trip on that line for a week. Pulled into
+ * a named function to keep the main batch loop legible. */
+async function ensureShape(
+	journeyRef: string,
+	detail: EfaTripDetail,
+): Promise<void> {
+	const decoded = decodeTripRef(journeyRef);
+	if (!decoded) return;
+	if (shapeFromL1(decoded.stateless)) return;
+
+	const key = shapeCacheKey(decoded.stateless);
+	const l2 = await cacheGet<[number, number][]>(key);
+	if (l2 && l2.length > 0) {
+		shapeToL1(decoded.stateless, l2);
+		return;
+	}
+
+	const origin = detail.stops[0];
+	const dest = detail.stops[detail.stops.length - 1];
+	if (!origin?.extId || !dest?.extId || !origin.depTime) return;
+
+	const shape = await efaTripShape({
+		stateless: decoded.stateless,
+		originId: origin.extId,
+		destinationId: dest.extId,
+		yyyymmdd: decoded.yyyymmdd,
+		hhmm: origin.depTime.slice(0, 5).replace(":", ""),
+	});
+	if (!shape || shape.length === 0) return;
+	shapeToL1(decoded.stateless, shape);
+	await cachePut(key, shape, SHAPE_TTL_MS);
 }
 
 async function upsertEfaStops(

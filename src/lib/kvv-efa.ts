@@ -421,3 +421,124 @@ interface EfaTstResponse {
 // yyyymmddDashed is referenced from discover.ts for logging — keep it
 // exported close to the producer even if currently unused here.
 export { yyyymmddDashed };
+
+// ---------- polyline fetching (XSLT_TRIP_REQUEST2) ----------
+
+/** In-process L1 cache. Key = `<stateless>`. Shapes barely change for
+ * the life of a schedule period (year or two), so eviction isn't a
+ * concern for a long-running worker process. Same pattern as the
+ * bahn.expert polyline L1 in `src/lib/bahn-expert.ts`. */
+const shapeL1 = new Map<string, [number, number][]>();
+
+export function shapeCacheKey(stateless: string): string {
+	return `kvv:shape:${stateless}`;
+}
+
+export function shapeFromL1(stateless: string): [number, number][] | undefined {
+	return shapeL1.get(stateless);
+}
+
+export function shapeToL1(stateless: string, points: [number, number][]): void {
+	shapeL1.set(stateless, points);
+}
+
+/** Decode EFA's `"lon,lat lon,lat ..."` space-separated path string
+ * into `[lat, lon][]` — the shape the rest of the codebase
+ * (gps-path.ts) uses for interpolation. `leg.format` is always "x,y"
+ * (= lon,lat) in Mentz EFA, so no need to look it up. Silently drops
+ * malformed tokens instead of failing the whole shape. */
+function parseEfaPath(path: string): [number, number][] {
+	const out: [number, number][] = [];
+	for (const token of path.split(/\s+/)) {
+		if (!token) continue;
+		const [lonStr, latStr] = token.split(",");
+		const lon = Number(lonStr);
+		const lat = Number(latStr);
+		if (Number.isFinite(lat) && Number.isFinite(lon)) out.push([lat, lon]);
+	}
+	return out;
+}
+
+/**
+ * Fetch the geometry of a given line direction via the trip planner.
+ * EFA doesn't expose a "give me the polyline for this line" endpoint,
+ * but `XSLT_TRIP_REQUEST2` with `includeShape=1` returns a space-
+ * separated `lon,lat` string in `leg.path` for each transit leg.
+ * Asking the planner for a direct A→B trip on the line's origin and
+ * destination stops yields exactly the single leg we care about;
+ * filtering by `mode.diva.stateless` keeps us honest if the planner
+ * routes via a different line as a fallback.
+ *
+ * Shapes are stable across the schedule period, so callers should
+ * cache on the `stateless` key and re-use for every trip of the line.
+ *
+ * `originId`/`destinationId` are the first/last stop IDs of the
+ * already-fetched trip (see `efaTripDetail` → `stops[0].extId`,
+ * `stops[len-1].extId`).
+ */
+export async function efaTripShape(opts: {
+	stateless: string;
+	originId: string;
+	destinationId: string;
+	yyyymmdd: string;
+	hhmm: string;
+}): Promise<[number, number][] | null> {
+	const params: Record<string, string> = {
+		coordOutputFormat: "WGS84[dd.ddddd]",
+		sessionID: "0",
+		language: "de",
+		type_origin: "any",
+		name_origin: opts.originId,
+		type_destination: "any",
+		name_destination: opts.destinationId,
+		itdDate: opts.yyyymmdd,
+		itdTime: opts.hhmm,
+		useRealtime: "1",
+		calcNumberOfTrips: "1",
+		routeType: "LEASTTIME",
+		ptOptionsActive: "1",
+		includeShape: "1",
+		shapeMap: "WGS84[dd.ddddd]",
+		coordListOutputFormat: "STRING",
+		genMaps: "0",
+	};
+
+	let resp: Response;
+	try {
+		resp = await efaGet("XSLT_TRIP_REQUEST2", params);
+	} catch {
+		return null;
+	}
+	if (!resp.ok) return null;
+
+	const data = (await resp.json()) as EfaTripResponse;
+	const tripOrTrips = data.trips?.trip;
+	if (!tripOrTrips) return null;
+	const trip = Array.isArray(tripOrTrips) ? tripOrTrips[0] : tripOrTrips;
+
+	const legs = trip?.legs ?? [];
+	// Prefer the leg that actually matches the line we asked about; fall
+	// back to any leg with a `path` so a schedule glitch doesn't return
+	// a stubbornly empty shape.
+	const targetLeg =
+		legs.find((l) => l.mode?.diva?.stateless === opts.stateless && l.path) ??
+		legs.find((l) => l.path);
+
+	if (!targetLeg?.path) return null;
+	const pts = parseEfaPath(targetLeg.path);
+	return pts.length > 0 ? pts : null;
+}
+
+interface EfaLeg {
+	mode?: {
+		diva?: { stateless?: string };
+	};
+	path?: string;
+	format?: string;
+}
+
+interface EfaTripResponse {
+	trips?: {
+		trip?: { legs?: EfaLeg[] } | Array<{ legs?: EfaLeg[] }>;
+	};
+}
