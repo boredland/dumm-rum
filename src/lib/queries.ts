@@ -529,7 +529,8 @@ export interface KnownStop {
 	categories: string[];
 }
 
-/** Resolve a URL slug to stop_ids. Uses known_stops for the slug column. */
+// Three-layer cascade because WorstCard links to stops via `nameToSlug(stop_name)`
+// from journey_stops, but known_stops (the rollup) may not have caught up yet.
 export async function findStopBySlug(slug: string): Promise<KnownStop | null> {
 	const rows = await db
 		.select({
@@ -539,14 +540,8 @@ export async function findStopBySlug(slug: string): Promise<KnownStop | null> {
 		})
 		.from(knownStops)
 		.where(eq(knownStops.slug, slug));
-
 	if (rows.length > 0) return mergeStopRows(rows);
 
-	// Fallback: known_stops.slug may be NULL for rows the rollup hasn't
-	// backfilled yet (e.g. freshly-seen stops). The landing page derives
-	// slugs via `nameToSlug(stop_name)` on the fly, so a row pointed at
-	// from there can 404 here until the next rollup runs. Scan by computed
-	// slug so the symmetry holds regardless of rollup state.
 	const { nameToSlug } = await import("./stations.ts");
 	const candidates = await db
 		.select({
@@ -556,8 +551,48 @@ export async function findStopBySlug(slug: string): Promise<KnownStop | null> {
 		})
 		.from(knownStops);
 	const match = candidates.filter((r) => nameToSlug(r.stopName) === slug);
-	if (match.length === 0) return null;
-	return mergeStopRows(match);
+	if (match.length > 0) return mergeStopRows(match);
+
+	// nameToSlug isn't deterministic in SQL (umlaut transliteration + NFD in JS),
+	// so group in SQL and match in app memory.
+	const live = await db
+		.select({
+			stopId: journeyStops.stopId,
+			stopName: sql<string>`MIN(${journeyStops.stopName})`.as("stop_name"),
+		})
+		.from(journeyStops)
+		.groupBy(journeyStops.stopId);
+	const liveMatch = live.filter((r) => nameToSlug(r.stopName) === slug);
+	if (liveMatch.length === 0) return null;
+	const categoriesRow = await db
+		.select({
+			categories:
+				sql<string>`STRING_AGG(DISTINCT ${journeyRuns.category}, ',')`.as(
+					"categories",
+				),
+		})
+		.from(journeyStops)
+		.leftJoin(
+			journeyRuns,
+			and(
+				eq(journeyRuns.journeyRef, journeyStops.journeyRef),
+				eq(journeyRuns.dayOfOperation, journeyStops.dayOfOperation),
+			),
+		)
+		.where(
+			inArray(
+				journeyStops.stopId,
+				liveMatch.map((r) => r.stopId),
+			),
+		);
+	const categories = categoriesRow[0]?.categories ?? null;
+	return mergeStopRows(
+		liveMatch.map((r) => ({
+			stopId: r.stopId,
+			stopName: r.stopName,
+			categories,
+		})),
+	);
 }
 
 function mergeStopRows(

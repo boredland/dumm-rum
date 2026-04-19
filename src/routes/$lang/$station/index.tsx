@@ -124,9 +124,9 @@ function StationIndex() {
 	const { stopName, categories, days, lastChange, nextDepartures } =
 		Route.useLoaderData();
 	const { lang, station } = Route.useParams();
+	const l = lang as Lang;
 	const search = Route.useSearch();
 	const navigate = Route.useNavigate();
-	const l = lang as Lang;
 	const [daysValue, setDaysValue] = urlFilter(
 		search.days,
 		"all",
@@ -259,9 +259,7 @@ function StationIndex() {
 												) : d.ghost ? (
 													<span className="text-info">👻</span>
 												) : delay !== null && delay >= 8 ? (
-													<span className="text-warn">
-														⏳ +{delay} min
-													</span>
+													<span className="text-warn">⏳ +{delay} min</span>
 												) : (
 													<span className="text-ok">✅</span>
 												)}
