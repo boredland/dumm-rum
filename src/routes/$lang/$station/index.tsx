@@ -202,7 +202,7 @@ function StationIndex() {
 					<StatCard
 						label={t(l, "stat.ghost")}
 						value={`${pct(today.ghost, today.total)}%`}
-						tone={today.ghost > 0 ? "purple" : undefined}
+						tone={today.ghost > 0 ? "info" : undefined}
 					/>
 					<StatCard
 						label={t(l, "stat.reliability")}
@@ -255,15 +255,15 @@ function StationIndex() {
 											</td>
 											<td className="py-2 pr-3">
 												{d.cancelled ? (
-													<span className="text-red-500">❌</span>
+													<span className="text-danger">❌</span>
 												) : d.ghost ? (
-													<span className="text-purple-400">👻</span>
+													<span className="text-info">👻</span>
 												) : delay !== null && delay >= 8 ? (
-													<span className="text-amber-500">
+													<span className="text-warn">
 														⏳ +{delay} min
 													</span>
 												) : (
-													<span className="text-emerald-500">✅</span>
+													<span className="text-ok">✅</span>
 												)}
 											</td>
 										</tr>
@@ -331,7 +331,7 @@ function StationIndex() {
 											<td className="py-2 pr-4 text-right tabular-nums">
 												{d.cancelled}
 											</td>
-											<td className="py-2 pr-4 text-right tabular-nums text-purple-400">
+											<td className="py-2 pr-4 text-right tabular-nums text-info">
 												{d.ghost || "—"}
 											</td>
 											<td className="py-2 pr-4 text-right tabular-nums">

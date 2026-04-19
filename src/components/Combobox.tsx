@@ -167,7 +167,7 @@ export function Combobox({
 				aria-label={ariaLabel}
 				aria-invalid={strictInvalid || undefined}
 				className={`w-full bg-surface border rounded px-2 py-1.5 text-sm text-fg ${
-					strictInvalid ? "border-red-500" : "border-border"
+					strictInvalid ? "border-danger" : "border-border"
 				}`}
 				value={query}
 				onChange={(e) => {

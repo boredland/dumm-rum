@@ -206,11 +206,11 @@ function StationDay() {
 											</td>
 											<td className="py-2 pr-3">
 												{d.cancelled ? (
-													<span className="text-red-500">❌</span>
+													<span className="text-danger">❌</span>
 												) : d.ghost ? (
-													<span className="text-purple-400">👻</span>
+													<span className="text-info">👻</span>
 												) : delay !== null && delay >= 8 ? (
-													<span className="text-amber-500">
+													<span className="text-warn">
 														⏳ +{delay} min
 														{bahnUrl && (
 															<a
@@ -224,7 +224,7 @@ function StationDay() {
 														)}
 													</span>
 												) : (
-													<span className="text-emerald-500">✅</span>
+													<span className="text-ok">✅</span>
 												)}
 											</td>
 										</tr>

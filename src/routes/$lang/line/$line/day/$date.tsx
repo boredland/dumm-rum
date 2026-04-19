@@ -204,15 +204,15 @@ function LineDay() {
 											</td>
 											<td className="py-2 pr-3">
 												{j.cancelled ? (
-													<span className="text-red-500">❌</span>
+													<span className="text-danger">❌</span>
 												) : j.ghost ? (
-													<span className="text-purple-400">👻</span>
+													<span className="text-info">👻</span>
 												) : delay !== null && delay >= 8 ? (
-													<span className="text-amber-500">
+													<span className="text-warn">
 														⏳ +{delay} min
 													</span>
 												) : (
-													<span className="text-emerald-500">✅</span>
+													<span className="text-ok">✅</span>
 												)}
 											</td>
 										</tr>

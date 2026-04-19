@@ -136,7 +136,7 @@ function LineIndex() {
 				<StatCard
 					label={t(l, "home.ghost")}
 					value={`${((ghost / (total || 1)) * 100).toFixed(1)}%`}
-					tone={ghost > 0 ? "purple" : undefined}
+					tone={ghost > 0 ? "info" : undefined}
 				/>
 				<StatCard label={t(l, "stat.reliability")} value={`${score}%`} />
 			</section>
@@ -197,7 +197,7 @@ function LineIndex() {
 											<td className="py-2 pr-4 text-right tabular-nums">
 												{d.cancelled}
 											</td>
-											<td className="py-2 pr-4 text-right tabular-nums text-purple-400">
+											<td className="py-2 pr-4 text-right tabular-nums text-info">
 												{d.ghost || "—"}
 											</td>
 											<td className="py-2 pr-4 text-right tabular-nums">

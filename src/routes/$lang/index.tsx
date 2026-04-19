@@ -11,6 +11,7 @@ import type {
 	StopSummary,
 } from "../../lib/queries.ts";
 import { categoryIcons, slugForStop } from "../../lib/stations.ts";
+import { borderForCancRate, borderForScore } from "../../lib/status.ts";
 import { onTimeRate, pct, shortStationName } from "../../lib/utils.ts";
 
 const VALID_DAYS = new Set<DaysFilter>([
@@ -61,12 +62,6 @@ export const Route = createFileRoute("/$lang/")({
 		await getHomeSummaries({ data: deps.days ?? "today" }),
 	component: Index,
 });
-
-function borderForScore(score: number): string {
-	if (score < 80) return "border-red-500";
-	if (score < 90) return "border-amber-500";
-	return "border-emerald-500";
-}
 
 function matchesQuery(q: string, ...fields: string[]): boolean {
 	return fields.some((f) => f.toLowerCase().includes(q));
@@ -435,12 +430,7 @@ function LineCard({ line, lang }: { line: LineSummary; lang: Lang }) {
 function StopCard({ stop, lang }: { stop: StopSummary; lang: Lang }) {
 	const cancRate =
 		stop.journeyCount > 0 ? stop.cancelled / stop.journeyCount : 0;
-	const border =
-		cancRate > 0.1
-			? "border-red-500"
-			: cancRate > 0.05
-				? "border-amber-500"
-				: "border-emerald-500";
+	const border = borderForCancRate(cancRate);
 	const slug = slugForStop(stop.stopIds, stop.stopName);
 	return (
 		<Link
@@ -563,11 +553,7 @@ function OverviewCards({
 		totalAll,
 	);
 	const scoreColor =
-		score < 80
-			? "text-red-500"
-			: score < 90
-				? "text-amber-500"
-				: "text-emerald-500";
+		score < 80 ? "text-danger" : score < 90 ? "text-warn" : "text-ok";
 
 	const lineItems = (key: "cancelled" | "ghost" | "delayed") =>
 		lines.map((l) => ({
@@ -602,7 +588,7 @@ function OverviewCards({
 					<span className="text-lg text-muted">%</span>
 				</div>
 				{ghostAll > 0 && (
-					<div className="text-sm text-purple-400 mt-1">
+					<div className="text-sm text-info mt-1">
 						👻 {scoreWithGhosts}%
 					</div>
 				)}
@@ -618,7 +604,7 @@ function OverviewCards({
 				station={findWorst(stopItems("cancelled"))}
 				op={findWorst(opItems("cancelled"))}
 				lang={lang}
-				color="text-red-500"
+				color="text-danger"
 			/>
 			<WorstCard
 				title={t(lang, "home.most_ghosts")}
@@ -626,7 +612,7 @@ function OverviewCards({
 				station={findWorst(stopItems("ghost"))}
 				op={findWorst(opItems("ghost"))}
 				lang={lang}
-				color="text-purple-400"
+				color="text-info"
 			/>
 			<WorstCard
 				title={t(lang, "home.most_delays")}
@@ -634,7 +620,7 @@ function OverviewCards({
 				station={findWorst(stopItems("delayed"))}
 				op={findWorst(opItems("delayed"))}
 				lang={lang}
-				color="text-amber-500"
+				color="text-warn"
 			/>
 		</div>
 	);
@@ -662,7 +648,7 @@ function WorstCard({
 			<div className="text-[0.7rem] uppercase tracking-wide text-muted mb-1">
 				{title}
 			</div>
-			{!hasAny && <div className="text-2xl font-bold text-emerald-500">0</div>}
+			{!hasAny && <div className="text-h2 font-bold text-ok">0</div>}
 			{line && line.count > 0 && (
 				<Link
 					to="/$lang/line/$line"
