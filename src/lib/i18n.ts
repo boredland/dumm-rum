@@ -131,6 +131,19 @@ const translations = {
 		"status.delayed": "⏳",
 		"status.ok": "✅",
 		"status.on_time": "p\u00fcnktlich",
+
+		"notfound.heading": "Geisterseite",
+		"notfound.subheading": "Im Fahrplan — trotzdem nie angekommen.",
+		"notfound.body":
+			"Diese Seite ist offenbar eine Geisterfahrt. Im Plan stand sie \u2014 am Bahnsteig ist sie aber nie eingefahren.",
+		"notfound.board.header": "N\u00e4chste Abfahrt von hier",
+		"notfound.board.time": "—:—",
+		"notfound.board.line": "404",
+		"notfound.board.destination": "irgendwohin, wo du hinwolltest",
+		"notfound.board.status": "f\u00e4llt aus",
+		"notfound.cta": "🚏 Zur\u00fcck auf den Bahnsteig",
+		"notfound.tip":
+			"Tipp: Wenn dich ein Link innerhalb von DummRum hierher gef\u00fchrt hat, sag uns Bescheid \u2014 dann flicken wir die Wegweisung.",
 	},
 	en: {
 		"home.title": "DummRum",
@@ -261,6 +274,19 @@ const translations = {
 		"status.delayed": "⏳",
 		"status.ok": "✅",
 		"status.on_time": "on time",
+
+		"notfound.heading": "Ghost page",
+		"notfound.subheading": "Scheduled — never showed up.",
+		"notfound.body":
+			"Looks like this page is a ghost run. The timetable says it was supposed to be here, but the system never saw it pull up at the platform.",
+		"notfound.board.header": "Next departure from here",
+		"notfound.board.time": "—:—",
+		"notfound.board.line": "404",
+		"notfound.board.destination": "wherever you were headed",
+		"notfound.board.status": "not in service",
+		"notfound.cta": "🚏 Back to the platform",
+		"notfound.tip":
+			"Tip: if you got here by clicking a link in DummRum itself, please report it — we'd like to fix the signage.",
 	},
 } as const;
 

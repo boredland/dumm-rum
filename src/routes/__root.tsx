@@ -8,6 +8,7 @@ import {
 	useLocation,
 } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
+import { NotFoundPage } from "../components/NotFoundPage.tsx";
 import { type Lang, languages } from "../lib/i18n.ts";
 
 export const Route = createRootRoute({
@@ -42,6 +43,7 @@ export const Route = createRootRoute({
 		],
 	}),
 	component: RootComponent,
+	notFoundComponent: NotFoundPage,
 });
 
 function RootComponent() {
