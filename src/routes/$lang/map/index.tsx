@@ -24,9 +24,14 @@ import {
 import {
 	fetchBahnExpertPositions,
 	isSupportedCategory as isBahnExpertCategory,
+	MAX_RMV_BAHN_EXPERT_DRIFT_M,
 	type TrainIdentity,
 } from "../../../lib/bahn-expert.ts";
-import { type GpsPath, locationAtPercent } from "../../../lib/gps-path.ts";
+import {
+	distanceMeters,
+	type GpsPath,
+	locationAtPercent,
+} from "../../../lib/gps-path.ts";
 
 const FRANKFURT_CENTER = { lat: 50.1109, lon: 8.6821 };
 const POLL_INTERVAL = 15_000;
@@ -547,11 +552,24 @@ const fetchVehicles = createServerFn({ method: "GET" })
 				}
 			}
 
-			// Same for DB long-distance trains via bahn.expert.
+			// Same for DB long-distance trains via bahn.expert, plus any
+			// RE / RB that happen to be indexed on adjacent national
+			// networks. bahn.expert's `journey.find` matches on
+			// `{category, journeyNumber}` without a country hint, so an
+			// RB 15 on our list can sometimes resolve against an SNCB
+			// service in Belgium. Reject matches whose GPS fix is wildly
+			// far from the RMV calc position — the threshold absorbs
+			// normal HAFAS-vs-GPS drift while rejecting the cross-border
+			// false positives.
 			const bahnExpertPositions = await bahnExpertPromise;
 			for (const p of bahnExpertPositions) {
 				const v = vehicles[p.rmvIndex];
 				if (!v) continue;
+				const drift = distanceMeters(
+					[v.lat, v.lon],
+					[p.lat, p.lon],
+				);
+				if (drift > MAX_RMV_BAHN_EXPERT_DRIFT_M) continue;
 				v.lat = p.lat;
 				v.lon = p.lon;
 				v.hasGps = true;

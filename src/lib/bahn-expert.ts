@@ -41,10 +41,13 @@ const FETCH_TIMEOUT_MS = 1_500;
  * typical 8 KB limits even with ~40-char devalue payloads. */
 const MAX_BATCH = 50;
 
-/** Categories bahn.expert publishes GPS for. Tested 2026-04-18:
- * Fernverkehr always returns position where journey matches; DB Regio
- * (RE/RB) and S-Bahn always return null. Expand this set if/when we
- * see positions for them. */
+/** Categories bahn.expert publishes GPS for. Re-probed 2026-04-19:
+ * Hessen RE / RB return null on practically every fix, but adjacent
+ * national networks occasionally have AVL for the same category+number
+ * combo (e.g. an SNCB RB in Belgium). We include RE + RB so the few
+ * cross-border services that do traverse Rhein-Main get enriched; the
+ * geographic sanity check in the map route's enrichment merge rejects
+ * wrong-country matches so no marker ends up in Liège. */
 const SUPPORTED_CATEGORIES = new Set([
 	"ICE",
 	"IC",
@@ -55,7 +58,17 @@ const SUPPORTED_CATEGORIES = new Set([
 	"RJ",
 	"RJX",
 	"TGV",
+	"RE",
+	"RB",
 ]);
+
+/** Rejection threshold when comparing bahn.expert's fix to the RMV
+ * calc position during enrichment. HAFAS / GPS drift ~100-500 m, so
+ * anything past ~20 km means we matched a same-number service on a
+ * different network (most famously RE / RB share numbers with Belgian
+ * / Swiss / Dutch regional classes). Exported so the map route can
+ * reuse the constant. */
+export const MAX_RMV_BAHN_EXPERT_DRIFT_M = 20_000;
 
 export interface TrainIdentity {
 	/** RMV-side index we'll hand the match back to. */
