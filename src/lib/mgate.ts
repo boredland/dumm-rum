@@ -4,6 +4,12 @@ export const CLIENT = { id: "RMV", type: "WEB", name: "webapp", l: "vs_rmv" };
 
 const KNOWN_LINE_PREFIXES = ["Bus", "BUS", "Tram", "STR", "Str"];
 
+function nullIfBlank(s: string | null | undefined): string | null {
+	if (s == null) return null;
+	const trimmed = s.trim();
+	return trimmed.length > 0 ? trimmed : null;
+}
+
 /** Strip the redundant category prefix HAFAS prepends to bus/tram line
  * names ("Bus M34" → "M34", "Tram 12" → "12", "STR 18" → "18"). Leaves
  * rail codes like "S6"/"U4"/"RE30" untouched because their category
@@ -260,7 +266,10 @@ function parseJourneyDetailsRes(
 				name: prod.name,
 				line: cleanLineName(ctx?.line ?? prod.line ?? prod.name ?? "", catOut),
 				catOut,
-				operator: prod.oprX != null ? ops[prod.oprX]?.name : undefined,
+				operator:
+					prod.oprX != null
+						? (nullIfBlank(ops[prod.oprX]?.name) ?? undefined)
+						: undefined,
 			}
 		: undefined;
 
@@ -485,7 +494,7 @@ function parseStationBoardRes(
 			dayOfOperation,
 			line,
 			category: catOut,
-			operator: prod?.oprX != null ? (ops[prod.oprX]?.name ?? null) : null,
+			operator: nullIfBlank(prod?.oprX != null ? ops[prod.oprX]?.name : null),
 			depTime,
 			destName: j.dirTxt ?? "",
 			cancelled: !!j.isCncl,

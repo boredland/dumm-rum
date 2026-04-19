@@ -7,6 +7,7 @@ import {
 	gte,
 	inArray,
 	isNotNull,
+	ne,
 	sql,
 } from "drizzle-orm";
 import { db } from "../db/client.ts";
@@ -101,7 +102,14 @@ export async function getOperatorSummaries(
 	filter: QueryFilter = {},
 ): Promise<OperatorSummary[]> {
 	const daysCond = daysCondition(filter.days);
-	const where = and(isNotNull(journeyRuns.operator), daysCond);
+	// HAFAS occasionally returns a blank operator name alongside a valid
+	// product id — excluding NULL isn't enough, also reject the empty string
+	// so the "Betreiber" worst-card row doesn't render a nameless entry
+	// linking to `/operator/`.
+	const hasOperator = and(
+		isNotNull(journeyRuns.operator),
+		ne(journeyRuns.operator, ""),
+	);
 	const dbr = delayedByRunSq();
 
 	const [statsRows, lineRows] = await Promise.all([
@@ -118,7 +126,7 @@ export async function getOperatorSummaries(
 			})
 			.from(journeyRuns)
 			.leftJoin(dbr, delayedJoinCondition(dbr))
-			.where(where)
+			.where(and(hasOperator, daysCond))
 			.groupBy(journeyRuns.operator),
 		db
 			.selectDistinct({
@@ -129,7 +137,7 @@ export async function getOperatorSummaries(
 			.from(journeyRuns)
 			.where(
 				and(
-					isNotNull(journeyRuns.operator),
+					hasOperator,
 					gte(
 						journeyRuns.dayOfOperation,
 						sql`to_char(CURRENT_DATE - INTERVAL '30 days', 'YYYY-MM-DD')`,
@@ -338,7 +346,13 @@ export async function getLineStats(line: string): Promise<LineStats> {
 		db
 			.selectDistinct({ operator: journeyRuns.operator })
 			.from(journeyRuns)
-			.where(and(eq(journeyRuns.line, line), isNotNull(journeyRuns.operator))),
+			.where(
+				and(
+					eq(journeyRuns.line, line),
+					isNotNull(journeyRuns.operator),
+					ne(journeyRuns.operator, ""),
+				),
+			),
 		db
 			.selectDistinct({ category: journeyRuns.category })
 			.from(journeyRuns)

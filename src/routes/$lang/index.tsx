@@ -600,6 +600,7 @@ function findWorst(
 	for (const item of items) {
 		if (item.count === 0) continue;
 		if (item.total < WORST_MIN_SAMPLE) continue;
+		if (!item.name || !item.slug) continue;
 		const rate = item.count / item.total;
 		if (
 			!worst ||
