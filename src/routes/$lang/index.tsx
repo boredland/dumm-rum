@@ -302,7 +302,7 @@ function Index() {
 					{ key: "Tram", label: "Tram" },
 					{ key: "Bus", label: "Bus" },
 					{ key: "RE,RB", label: "RE/RB" },
-					{ key: "FV", label: "ICE/IC" },
+					{ key: "FV", label: "Fernverkehr" },
 				].map((f) => (
 					<Pill
 						key={f.key}

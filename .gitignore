@@ -5,3 +5,9 @@ node_modules/
 dist/
 .vinxi/
 .output/
+
+# Research / reference artefacts kept locally but never committed.
+# Transit app APKs live here for reverse-engineering competing live
+# feeds — they exceed GitHub's 100 MB per-file limit and don't belong
+# in the repo anyway.
+apks/
