@@ -5,6 +5,7 @@ import {
 	DepartureFilterBar,
 	useDepartureFilters,
 } from "../../../../components/DepartureFilters.tsx";
+import { EmptyState } from "../../../../components/EmptyState.tsx";
 import { type Lang, t } from "../../../../lib/i18n.ts";
 import {
 	findStopBySlug,
@@ -168,71 +169,136 @@ function StationDay() {
 				/>
 
 				{filters.filtered.length === 0 ? (
-					<p className="text-sm text-dimmed">{t(l, "table.no_departures")}</p>
+					<EmptyState icon="🕊️" title={t(l, "table.no_departures")} />
 				) : (
-					<div className="overflow-x-auto">
-						<table className="w-full text-sm">
-							<thead>
-								<tr className="text-left text-xs uppercase text-muted border-b border-border-dim">
-									<th className="py-2 pr-3">{t(l, "table.time")}</th>
-									<th className="py-2 pr-3">{t(l, "table.line")}</th>
-									<th className="py-2 pr-3">{t(l, "table.direction")}</th>
-									<th className="py-2 pr-3">{t(l, "table.status")}</th>
-								</tr>
-							</thead>
-							<tbody>
-								{filters.filtered.map((d, i) => {
-									const delay = delayMin(d.date, d.time, d.rtTime);
-									const isRail = /^(ICE|IC|EC|RE|RB|S)\s?\d/i.test(d.line);
-									const bahnUrl = isRail && delay !== null && delay >= 5
+					<>
+						{/* Mobile: stacked cards. Horizontally-scrolling tables
+						   on phones are awkward for the one-thumb scan the
+						   information hierarchy actually needs — a per-row
+						   card keeps each departure self-contained. */}
+						<ul className="space-y-2 sm:hidden">
+							{filters.filtered.map((d, i) => {
+								const delay = delayMin(d.date, d.time, d.rtTime);
+								const isRail = /^(ICE|IC|EC|RE|RB|S)\s?\d/i.test(d.line);
+								const bahnUrl =
+									isRail && delay !== null && delay >= 5
 										? `https://bahn.expert/details/${encodeURIComponent(d.line)}/${d.date}T${d.time.replace(/:/g, "%3A")}.000Z`
 										: null;
-									return (
-										<tr
-											key={`${i}-${d.time}-${d.line}-${d.direction}`}
-											className="border-b border-border-dim"
-										>
-											<td className="py-2 pr-3 whitespace-nowrap tabular-nums">
+								return (
+									<li
+										key={`m-${i}-${d.time}-${d.line}-${d.direction}`}
+										className="rounded-lg border border-border-dim p-3"
+									>
+										<div className="flex items-baseline justify-between gap-2">
+											<span className="tabular-nums font-semibold">
 												{formatTime(d.time)}
 												{d.rtTime && d.rtTime !== d.time && (
-													<span className="ml-1 text-dimmed">
+													<span className="ml-1 text-dimmed font-normal">
 														→ {formatTime(d.rtTime)}
 													</span>
 												)}
-											</td>
-											<td className="py-2 pr-3 font-semibold">{d.line}</td>
-											<td className="py-2 pr-3 truncate" title={d.direction}>
-												{d.direction}
-											</td>
-											<td className="py-2 pr-3">
-												{d.cancelled ? (
-													<span className="text-danger">❌</span>
-												) : d.ghost ? (
-													<span className="text-info">👻</span>
-												) : delay !== null && delay >= 8 ? (
-													<span className="text-warn">
-														⏳ +{delay} min
-														{bahnUrl && (
-															<a
-																href={bahnUrl}
-																target="_blank"
-																rel="noopener noreferrer"
-																className="ml-1 text-accent text-xs"
-															>
-																why?
-															</a>
-														)}
-													</span>
-												) : (
-													<span className="text-ok">✅</span>
-												)}
-											</td>
-										</tr>
-									);
-								})}
-							</tbody>
-						</table>
-					</div>
+											</span>
+											<span className="text-body font-semibold">{d.line}</span>
+										</div>
+										<div className="mt-1 text-body truncate" title={d.direction}>
+											{d.direction}
+										</div>
+										<div className="mt-1 text-meta">
+											{d.cancelled ? (
+												<span className="text-danger">
+													❌
+												</span>
+											) : d.ghost ? (
+												<span className="text-info">👻</span>
+											) : delay !== null && delay >= 8 ? (
+												<span className="text-warn">
+													⏳ +{delay} min
+													{bahnUrl && (
+														<a
+															href={bahnUrl}
+															target="_blank"
+															rel="noopener noreferrer"
+															className="ml-1 text-accent"
+														>
+															why?
+														</a>
+													)}
+												</span>
+											) : (
+												<span className="text-ok">✅</span>
+											)}
+										</div>
+									</li>
+								);
+							})}
+						</ul>
+
+						{/* Desktop: compact 4-column table. */}
+						<div className="hidden sm:block overflow-x-auto">
+							<table className="w-full text-body">
+								<thead>
+									<tr className="text-left text-meta uppercase text-muted border-b border-border-dim">
+										<th className="py-2 pr-3">{t(l, "table.time")}</th>
+										<th className="py-2 pr-3">{t(l, "table.line")}</th>
+										<th className="py-2 pr-3">{t(l, "table.direction")}</th>
+										<th className="py-2 pr-3">{t(l, "table.status")}</th>
+									</tr>
+								</thead>
+								<tbody>
+									{filters.filtered.map((d, i) => {
+										const delay = delayMin(d.date, d.time, d.rtTime);
+										const isRail = /^(ICE|IC|EC|RE|RB|S)\s?\d/i.test(d.line);
+										const bahnUrl =
+											isRail && delay !== null && delay >= 5
+												? `https://bahn.expert/details/${encodeURIComponent(d.line)}/${d.date}T${d.time.replace(/:/g, "%3A")}.000Z`
+												: null;
+										return (
+											<tr
+												key={`${i}-${d.time}-${d.line}-${d.direction}`}
+												className="border-b border-border-dim"
+											>
+												<td className="py-2 pr-3 whitespace-nowrap tabular-nums">
+													{formatTime(d.time)}
+													{d.rtTime && d.rtTime !== d.time && (
+														<span className="ml-1 text-dimmed">
+															→ {formatTime(d.rtTime)}
+														</span>
+													)}
+												</td>
+												<td className="py-2 pr-3 font-semibold">{d.line}</td>
+												<td className="py-2 pr-3 truncate" title={d.direction}>
+													{d.direction}
+												</td>
+												<td className="py-2 pr-3">
+													{d.cancelled ? (
+														<span className="text-danger">❌</span>
+													) : d.ghost ? (
+														<span className="text-info">👻</span>
+													) : delay !== null && delay >= 8 ? (
+														<span className="text-warn">
+															⏳ +{delay} min
+															{bahnUrl && (
+																<a
+																	href={bahnUrl}
+																	target="_blank"
+																	rel="noopener noreferrer"
+																	className="ml-1 text-accent text-meta"
+																>
+																	why?
+																</a>
+															)}
+														</span>
+													) : (
+														<span className="text-ok">✅</span>
+													)}
+												</td>
+											</tr>
+										);
+									})}
+								</tbody>
+							</table>
+						</div>
+					</>
 				)}
 			</section>
 		</main>

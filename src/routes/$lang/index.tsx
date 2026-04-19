@@ -219,8 +219,24 @@ function Index() {
 				)}
 			</header>
 
-			<details className="text-sm text-muted">
-				<summary className="cursor-pointer select-none font-medium">
+			<details className="group text-body text-muted">
+				<summary className="list-none [&::-webkit-details-marker]:hidden inline-flex items-center gap-1.5 cursor-pointer select-none font-medium hover:text-fg transition-colors">
+					<svg
+						width="10"
+						height="10"
+						viewBox="0 0 12 12"
+						className="transition-transform group-open:rotate-90"
+						aria-hidden
+					>
+						<path
+							d="M4 3 L8 6 L4 9"
+							fill="none"
+							stroke="currentColor"
+							strokeWidth="1.5"
+							strokeLinecap="round"
+							strokeLinejoin="round"
+						/>
+					</svg>
 					{t(l, "home.methodology_title")}
 				</summary>
 				<ul className="mt-2 list-disc pl-5 space-y-1">
@@ -376,7 +392,23 @@ function Section({
 			open={open}
 			onToggle={(e) => onToggle((e.target as HTMLDetailsElement).open)}
 		>
-			<summary className="text-meta uppercase text-muted font-semibold mb-3 cursor-pointer select-none">
+			<summary className="list-none [&::-webkit-details-marker]:hidden flex items-center gap-1.5 text-meta uppercase text-muted font-semibold mb-3 cursor-pointer select-none hover:text-fg transition-colors">
+				<svg
+					width="10"
+					height="10"
+					viewBox="0 0 12 12"
+					className="transition-transform group-open:rotate-90"
+					aria-hidden
+				>
+					<path
+						d="M4 3 L8 6 L4 9"
+						fill="none"
+						stroke="currentColor"
+						strokeWidth="1.5"
+						strokeLinecap="round"
+						strokeLinejoin="round"
+					/>
+				</svg>
 				{title}
 			</summary>
 			<div className={`${gridClass} mt-3`}>{children}</div>
