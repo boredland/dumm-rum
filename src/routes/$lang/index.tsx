@@ -119,6 +119,16 @@ function Index() {
 		document.addEventListener("keydown", handler);
 		return () => document.removeEventListener("keydown", handler);
 	}, []);
+	// Platform-aware shortcut label. Mac uses ⌘K, everyone else Ctrl K.
+	// `navigator` is only defined on the client so we hydrate empty and
+	// update in an effect, matching the behaviour of similar hints.
+	const [shortcutLabel, setShortcutLabel] = useState("Ctrl K");
+	useEffect(() => {
+		const isMac =
+			typeof navigator !== "undefined" &&
+			/mac|iphone|ipad|ipod/i.test(navigator.platform || navigator.userAgent);
+		if (isMac) setShortcutLabel("⌘ K");
+	}, []);
 	const [openSections, setOpenSections] = useState<Set<string>>(new Set());
 	const toggleSection = (key: string, open: boolean) => {
 		setOpenSections((prev) => {
@@ -298,11 +308,36 @@ function Index() {
 					placeholder={t(l, "search.placeholder")}
 					value={query}
 					onChange={(e) => setQuery(e.target.value)}
-					className="w-full bg-surface border border-border rounded-xl px-4 py-2.5 text-sm placeholder:text-muted focus:outline-none focus:border-accent"
+					className="w-full bg-surface border border-border rounded-xl px-4 py-2.5 pr-14 text-body placeholder:text-muted focus:outline-none focus:border-accent"
 				/>
-				<kbd className="absolute right-3 top-1/2 -translate-y-1/2 text-meta text-dimmed bg-surface-hover border border-border-dim rounded px-1.5 py-0.5 pointer-events-none">
-					Ctrl K
-				</kbd>
+				{query ? (
+					<button
+						type="button"
+						aria-label={l === "de" ? "Suche leeren" : "Clear search"}
+						onClick={() => {
+							setQuery("");
+							searchRef.current?.focus();
+						}}
+						className="absolute right-3 top-1/2 -translate-y-1/2 inline-flex h-6 w-6 items-center justify-center rounded-full text-muted hover:bg-surface-hover hover:text-fg transition-colors cursor-pointer"
+					>
+						<svg
+							width="12"
+							height="12"
+							viewBox="0 0 12 12"
+							fill="none"
+							stroke="currentColor"
+							strokeWidth="1.5"
+							strokeLinecap="round"
+							aria-hidden
+						>
+							<path d="M3 3 L9 9 M9 3 L3 9" />
+						</svg>
+					</button>
+				) : (
+					<kbd className="hidden sm:inline-flex absolute right-3 top-1/2 -translate-y-1/2 text-meta text-dimmed bg-surface-hover border border-border-dim rounded px-1.5 py-0.5 pointer-events-none">
+						{shortcutLabel}
+					</kbd>
+				)}
 			</div>
 
 			<Section
@@ -422,7 +457,7 @@ function LineCard({ line, lang }: { line: LineSummary; lang: Lang }) {
 		<Link
 			to="/$lang/line/$line"
 			params={{ lang, line: line.line }}
-			className={`bg-surface border ${borderForScore(score)} rounded-xl p-4 no-underline text-fg hover:bg-surface-hover transition-colors`}
+			className={`bg-surface border ${borderForScore(score)} rounded-xl p-4 no-underline text-fg hover:bg-surface-hover active:scale-[0.99] transition-all`}
 		>
 			<div className="text-lg font-bold">
 				{categoryIcons([line.category])} {line.line}
@@ -457,7 +492,7 @@ function StopCard({ stop, lang }: { stop: StopSummary; lang: Lang }) {
 		<Link
 			to="/$lang/$station"
 			params={{ lang, station: slug }}
-			className={`bg-surface border ${border} rounded-xl p-4 no-underline text-fg hover:bg-surface-hover transition-colors`}
+			className={`bg-surface border ${border} rounded-xl p-4 no-underline text-fg hover:bg-surface-hover active:scale-[0.99] transition-all`}
 		>
 			<div className="text-meta uppercase text-muted mb-1">
 				{categoryIcons(stop.categories)}
@@ -493,7 +528,7 @@ function OperatorCard({ op, lang }: { op: OperatorSummary; lang: Lang }) {
 		<Link
 			to="/$lang/operator/$operator"
 			params={{ lang, operator: op.operator }}
-			className={`bg-surface border ${borderForScore(score)} rounded-xl p-4 no-underline text-fg hover:bg-surface-hover transition-colors`}
+			className={`bg-surface border ${borderForScore(score)} rounded-xl p-4 no-underline text-fg hover:bg-surface-hover active:scale-[0.99] transition-all`}
 		>
 			<div className="text-meta uppercase text-muted mb-1">
 				{categoryIcons(op.categories)}
