@@ -91,26 +91,40 @@ export function decodeTripRef(
 	return { stateless, tripCode, yyyymmdd };
 }
 
-/** Map EFA `product` names to the RMV-compatible category strings the
- * rest of the codebase (categoryIcons, queries, UI) already understands.
- * Unknown products pass through so we don't drop data — the icon
- * renderer will just show nothing for them. */
-function mapCategory(product: string | undefined): string | null {
-	if (!product) return null;
-	switch (product) {
-		case "Straßenbahn":
-			return "Tram";
-		case "Einsatzwagen":
-			return "Tram";
-		case "Stadtbahn":
-			return "U-Bahn";
-		case "S-Bahn":
-			return "S-Bahn";
-		case "Bus":
-			return "Bus";
-		default:
-			return product;
-	}
+/** Map EFA `product` / `servingLine.name` values to the category
+ * strings the livemap colour table + `categoryIcons()` understand.
+ * EFA is inconsistent about which field carries the product name —
+ * `servingLine.name` can be "S", "Straßenbahn", "Regional-Bahn" or a
+ * full route code depending on the operator — so we also match on
+ * substring prefixes. Unknown strings fall back to "Other" rather than
+ * passthrough, which would leave them uncoloured on the livemap. */
+function mapCategory(raw: string | undefined): string | null {
+	if (!raw) return null;
+	const p = raw.trim();
+	if (p === "Straßenbahn" || p === "Einsatzwagen" || p === "Tram")
+		return "Tram";
+	if (p === "Stadtbahn" || p === "U-Bahn") return "U-Bahn";
+	if (p === "S-Bahn" || p === "S" || /^S\d/.test(p)) return "S-Bahn";
+	if (
+		p === "Bus" ||
+		p === "Stadtbus" ||
+		p === "Regionalbus" ||
+		p === "Schnellbus"
+	)
+		return "Bus";
+	if (
+		p === "Regional-Bahn" ||
+		p === "Regionalbahn" ||
+		p === "R-Bahn" ||
+		p === "R" ||
+		/^(RB|RE|IRE)\b/.test(p)
+	)
+		return "Regionalverkehr";
+	if (p === "ICE" || p === "IC" || p === "EC" || p === "Fernverkehr")
+		return "Fernverkehr";
+	if (p === "AST") return "AST";
+	if (p === "Schiff" || p === "Fähre") return "Ferry";
+	return "Other";
 }
 
 /** EFA gives us `{year:"2026", month:"4", day:"19", hour:"12", minute:"3"}`
