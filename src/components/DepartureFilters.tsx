@@ -3,6 +3,7 @@ import type { Lang } from "../lib/i18n.ts";
 import { t } from "../lib/i18n.ts";
 import { buildSubscribeUrl } from "../lib/telegram-deeplink.ts";
 import { DELAY_THRESHOLD_MIN } from "../lib/utils.ts";
+import { Pill } from "./Pill.tsx";
 
 type StatusFilter = "all" | "issues" | "on_time";
 type HoursFilter = "all" | "core";
@@ -130,11 +131,6 @@ export function DepartureFilterBar({
 	directions: string[];
 	lines?: string[];
 }) {
-	const pill =
-		"px-3 py-1 text-xs font-medium rounded-full border border-border cursor-pointer transition-colors";
-	const active = "bg-surface-hover text-fg";
-	const inactive = "bg-transparent text-muted hover:text-fg";
-
 	return (
 		<div className="flex flex-wrap gap-x-4 gap-y-2 mb-4">
 			<div className="flex gap-2">
@@ -145,14 +141,13 @@ export function DepartureFilterBar({
 						["on_time", t(lang, "filter.on_time")],
 					] as const
 				).map(([key, label]) => (
-					<button
+					<Pill
 						key={key}
-						type="button"
+						active={statusFilter === key}
 						onClick={() => setStatusFilter(key)}
-						className={`${pill} ${statusFilter === key ? active : inactive}`}
 					>
 						{label}
-					</button>
+					</Pill>
 				))}
 			</div>
 			<div className="flex gap-2">
@@ -162,21 +157,20 @@ export function DepartureFilterBar({
 						["core", t(lang, "hours.core")],
 					] as const
 				).map(([key, label]) => (
-					<button
+					<Pill
 						key={key}
-						type="button"
+						active={hoursFilter === key}
 						onClick={() => setHoursFilter(key)}
-						className={`${pill} ${hoursFilter === key ? active : inactive}`}
 					>
 						{label}
-					</button>
+					</Pill>
 				))}
 			</div>
 			{directions.length > 1 && (
 				<select
 					value={dirFilter}
 					onChange={(e) => setDirFilter(e.target.value)}
-					className="bg-surface border border-border rounded-full px-3 py-1 text-xs text-muted cursor-pointer"
+					className="bg-surface border border-border rounded-full px-3 py-1.5 text-meta text-muted cursor-pointer"
 				>
 					<option value="all">{t(lang, "filter.all_directions")}</option>
 					{directions.map((dir) => (
@@ -219,7 +213,7 @@ function TelegramLinks({
 					href={buildSubscribeUrl({ line, direction, timeRanges })}
 					target="_blank"
 					rel="noopener noreferrer"
-					className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-medium rounded-full border border-border text-accent hover:bg-surface-hover transition-colors no-underline"
+					className="inline-flex items-center gap-1 px-3 py-1.5 text-meta font-medium rounded-full border border-border text-accent hover:bg-surface-hover transition-colors no-underline"
 				>
 					<span>📱</span> {line} → Telegram
 				</a>

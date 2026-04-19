@@ -10,6 +10,7 @@ import type {
 	OperatorSummary,
 	StopSummary,
 } from "../../lib/queries.ts";
+import { Pill, pillClass } from "../../components/Pill.tsx";
 import { categoryIcons, slugForStop } from "../../lib/stations.ts";
 import { borderForCancRate, borderForScore } from "../../lib/status.ts";
 import { onTimeRate, pct, shortStationName } from "../../lib/utils.ts";
@@ -192,10 +193,10 @@ function Index() {
 	return (
 		<main className="mx-auto max-w-5xl p-6 space-y-10">
 			<header className="space-y-1">
-				<h1 className="text-3xl font-bold flex items-center gap-2">
+				<h1 className="text-h1 font-bold flex items-center gap-2">
 					🚏 {t(l, "home.title")}
 				</h1>
-				<p className="text-muted text-sm">
+				<p className="text-muted text-body">
 					{t(l, "home.subtitle")}
 					{" · "}
 					<Link
@@ -207,7 +208,7 @@ function Index() {
 					</Link>
 				</p>
 				{oldestDate && (
-					<p className="text-xs text-dimmed">
+					<p className="text-meta text-dimmed">
 						{t(l, "stat.since")}{" "}
 						{new Date(`${oldestDate}T00:00:00`).toLocaleDateString(l, {
 							year: "numeric",
@@ -235,24 +236,17 @@ function Index() {
 			</details>
 
 			<div className="flex flex-wrap gap-2">
-				{DAY_FILTERS.map((f) => {
-					const active = activeDays === f.key;
-					return (
-						<Link
-							key={f.key}
-							to="/$lang"
-							params={{ lang: l }}
-							search={f.key === "today" ? {} : { days: f.key }}
-							className={`px-3 py-1.5 text-xs font-medium rounded-full border border-border no-underline transition-colors ${
-								active
-									? "bg-surface-hover text-fg"
-									: "bg-transparent text-muted hover:text-fg"
-							}`}
-						>
-							{t(l, f.labelKey)}
-						</Link>
-					);
-				})}
+				{DAY_FILTERS.map((f) => (
+					<Link
+						key={f.key}
+						to="/$lang"
+						params={{ lang: l }}
+						search={f.key === "today" ? {} : { days: f.key }}
+						className={pillClass(activeDays === f.key)}
+					>
+						{t(l, f.labelKey)}
+					</Link>
+				))}
 			</div>
 
 			<div className="flex flex-wrap gap-2">
@@ -264,18 +258,13 @@ function Index() {
 					{ key: "Bus", label: "Bus" },
 					{ key: "RE,RB", label: "RE/RB" },
 				].map((f) => (
-					<button
+					<Pill
 						key={f.key}
-						type="button"
+						active={catFilter === f.key}
 						onClick={() => setCatFilter(f.key)}
-						className={`px-2.5 py-1 text-xs font-medium rounded-full border border-border cursor-pointer transition-colors ${
-							catFilter === f.key
-								? "bg-surface-hover text-fg"
-								: "bg-transparent text-muted hover:text-fg"
-						}`}
 					>
 						{f.label}
-					</button>
+					</Pill>
 				))}
 			</div>
 
@@ -295,7 +284,7 @@ function Index() {
 					onChange={(e) => setQuery(e.target.value)}
 					className="w-full bg-surface border border-border rounded-xl px-4 py-2.5 text-sm placeholder:text-muted focus:outline-none focus:border-accent"
 				/>
-				<kbd className="absolute right-3 top-1/2 -translate-y-1/2 text-[0.6rem] text-dimmed bg-surface-hover border border-border-dim rounded px-1.5 py-0.5 pointer-events-none">
+				<kbd className="absolute right-3 top-1/2 -translate-y-1/2 text-meta text-dimmed bg-surface-hover border border-border-dim rounded px-1.5 py-0.5 pointer-events-none">
 					Ctrl K
 				</kbd>
 			</div>
@@ -387,7 +376,7 @@ function Section({
 			open={open}
 			onToggle={(e) => onToggle((e.target as HTMLDetailsElement).open)}
 		>
-			<summary className="text-xs uppercase tracking-wide text-muted font-semibold mb-3 cursor-pointer select-none">
+			<summary className="text-meta uppercase text-muted font-semibold mb-3 cursor-pointer select-none">
 				{title}
 			</summary>
 			<div className={`${gridClass} mt-3`}>{children}</div>
@@ -438,7 +427,7 @@ function StopCard({ stop, lang }: { stop: StopSummary; lang: Lang }) {
 			params={{ lang, station: slug }}
 			className={`bg-surface border ${border} rounded-xl p-4 no-underline text-fg hover:bg-surface-hover transition-colors`}
 		>
-			<div className="text-[0.7rem] uppercase tracking-wide text-muted mb-1">
+			<div className="text-meta uppercase text-muted mb-1">
 				{categoryIcons(stop.categories)}
 			</div>
 			<div className="text-base font-semibold">
@@ -474,7 +463,7 @@ function OperatorCard({ op, lang }: { op: OperatorSummary; lang: Lang }) {
 			params={{ lang, operator: op.operator }}
 			className={`bg-surface border ${borderForScore(score)} rounded-xl p-4 no-underline text-fg hover:bg-surface-hover transition-colors`}
 		>
-			<div className="text-[0.7rem] uppercase tracking-wide text-muted mb-1">
+			<div className="text-meta uppercase text-muted mb-1">
 				{categoryIcons(op.categories)}
 			</div>
 			<div className="text-base font-semibold">{op.operator}</div>
@@ -580,10 +569,12 @@ function OverviewCards({
 	return (
 		<div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
 			<div className="bg-surface border border-border rounded-xl p-5">
-				<div className="text-[0.7rem] uppercase tracking-wide text-muted mb-1">
+				<div className="text-meta uppercase text-muted mb-1">
 					{t(lang, "home.overall_score")}
 				</div>
-				<div className={`text-5xl font-bold tabular-nums ${scoreColor}`}>
+				<div
+					className={`text-h1 sm:text-display font-bold tabular-nums ${scoreColor}`}
+				>
 					{score}
 					<span className="text-lg text-muted">%</span>
 				</div>
@@ -645,7 +636,7 @@ function WorstCard({
 		(line?.count ?? 0) + (station?.count ?? 0) + (op?.count ?? 0) > 0;
 	return (
 		<div className="bg-surface border border-border rounded-xl p-5">
-			<div className="text-[0.7rem] uppercase tracking-wide text-muted mb-1">
+			<div className="text-meta uppercase text-muted mb-1">
 				{title}
 			</div>
 			{!hasAny && <div className="text-h2 font-bold text-ok">0</div>}
