@@ -1,9 +1,9 @@
 @import "tailwindcss";
 
-/* Keep existing CSS vars (light-dark() based) as the source of truth,
-   expose them to Tailwind via @theme inline so arbitrary classes like
-   `bg-surface`, `text-muted` resolve to the right var without losing
-   automatic OS theme switching. */
+/* Existing CSS vars (light-dark() based) are the source of truth;
+   Tailwind picks them up through @theme inline so utilities like
+   `bg-surface`, `text-muted`, `text-danger`, `text-h1` all resolve to
+   the right var and adapt to the OS theme without a JS toggle. */
 @theme inline {
 	--color-bg: var(--bg);
 	--color-fg: var(--fg);
@@ -14,6 +14,32 @@
 	--color-accent: var(--accent);
 	--color-surface: var(--surface);
 	--color-surface-hover: var(--surface-hover);
+	--color-danger: var(--danger);
+	--color-warn: var(--warn);
+	--color-ok: var(--ok);
+	--color-info: var(--info);
+
+	/* 5-step type scale shared across headers / body / meta lines. The
+	   fixed-pixel values (rather than rem) keep text on the whole-pixel
+	   grid so sub-pixel aliasing from `text-[0.7rem]` style values is
+	   gone. Each class sets font-size + line-height + letter-spacing
+	   together so call sites don't have to remember three utilities. */
+	--text-meta: 11px;
+	--text-meta--line-height: 1.4;
+	--text-meta--letter-spacing: 0.04em;
+	--text-body: 14px;
+	--text-body--line-height: 1.55;
+	--text-lg: 16px;
+	--text-lg--line-height: 1.5;
+	--text-h2: 20px;
+	--text-h2--line-height: 1.3;
+	--text-h2--letter-spacing: -0.005em;
+	--text-h1: 30px;
+	--text-h1--line-height: 1.15;
+	--text-h1--letter-spacing: -0.01em;
+	--text-display: 44px;
+	--text-display--line-height: 1.05;
+	--text-display--letter-spacing: -0.02em;
 }
 
 :root {
@@ -27,6 +53,16 @@
 	--accent: light-dark(#0969da, #2f81f7);
 	--surface: light-dark(#f6f8fa, #161b22);
 	--surface-hover: light-dark(#eff2f5, #1f2937);
+
+	/* Status colours. Kept as light-dark() pairs so dark-mode uses a
+	   slightly lighter value for contrast against the dark bg without
+	   sacrificing recognisability. Tuned against the previous raw
+	   Tailwind ramp (red-500 / amber-500 / emerald-500 / purple-400)
+	   so existing mental models carry over. */
+	--danger: light-dark(#d1242f, #f85149);
+	--warn: light-dark(#bf8700, #e3b341);
+	--ok: light-dark(#1a7f37, #3fb950);
+	--info: light-dark(#8250df, #bc8cff);
 }
 
 html,
@@ -45,6 +81,29 @@ a {
 }
 a:hover {
 	text-decoration: underline;
+}
+
+/* WCAG 2.4.7 — visible focus for keyboard users on every interactive
+   element. Scoped to :focus-visible so mouse clicks don't draw the
+   outline. Individual components can override with their own style,
+   but the default ensures no element ships without any indicator. */
+*:focus-visible {
+	outline: 2px solid var(--accent);
+	outline-offset: 2px;
+	border-radius: 4px;
+}
+
+/* Users who've asked the OS for reduced motion shouldn't see the
+   rAF-driven marker animations, the signal-bar pulse, or CSS transform
+   transitions — freeze everything to its resting state. */
+@media (prefers-reduced-motion: reduce) {
+	.dummrum-gps-smooth {
+		transition: none;
+	}
+	.dummrum-gps-bar {
+		animation: none;
+		opacity: 1;
+	}
 }
 
 /* Real-GPS markers snap to the fresh fix on each poll (~15 s bahn.expert,
