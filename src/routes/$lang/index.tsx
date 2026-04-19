@@ -214,7 +214,7 @@ function Index() {
 						params={{ lang: l }}
 						className="text-accent hover:underline"
 					>
-						{l === "de" ? "Live-Karte" : "Live Map"} →
+						{t(l, "map.link")} →
 					</Link>
 				</p>
 				{oldestDate && (
@@ -373,36 +373,42 @@ function Index() {
 				))}
 			</Section>
 
-			<footer className="pt-8 border-t border-border-dim flex items-center gap-3 text-xs text-dimmed">
-				<a href="https://www.rmv.de" className="inline-flex shrink-0">
-					<img
-						src="/rmv-logo.svg"
-						alt="RMV"
-						width={74}
-						height={15}
-						className="opacity-60 hover:opacity-100 transition-opacity"
-					/>
-				</a>
-				<span>{l === "de" ? "Datenquelle: RMV" : "Data source: RMV"}</span>
-				<a
-					href="https://github.com/boredland/dumm-rum"
-					className="text-dimmed hover:text-fg transition-colors"
+			<footer className="pt-8 border-t border-border-dim flex flex-wrap items-center gap-x-4 gap-y-2 text-meta text-dimmed">
+				<div className="flex items-center gap-3">
+					<a href="https://www.rmv.de" className="inline-flex shrink-0">
+						<img
+							src="/rmv-logo.svg"
+							alt="RMV"
+							width={74}
+							height={15}
+							className="grayscale hover:grayscale-0 transition-[filter]"
+						/>
+					</a>
+					<span>{l === "de" ? "Datenquelle: RMV" : "Data source: RMV"}</span>
+				</div>
+				<div className="flex items-center gap-3">
+					<a
+						href="https://github.com/boredland/dumm-rum"
+						className="text-dimmed hover:text-fg transition-colors"
+					>
+						{t(l, "nav.github")}
+					</a>
+					<a
+						href="https://github.com/boredland/dumm-rum/issues/new"
+						target="_blank"
+						rel="noopener noreferrer"
+						className="text-dimmed hover:text-fg transition-colors"
+					>
+						{t(l, "nav.report_bug")}
+					</a>
+				</div>
+				<Link
+					to="/$lang"
+					params={{ lang: other }}
+					className="ml-auto text-dimmed hover:text-fg transition-colors"
 				>
-					{t(l, "nav.github")}
-				</a>
-				<a
-					href="https://github.com/boredland/dumm-rum/issues/new"
-					target="_blank"
-					rel="noopener noreferrer"
-					className="text-dimmed hover:text-fg transition-colors"
-				>
-					{t(l, "nav.report_bug")}
-				</a>
-				<span className="ml-auto">
-					<Link to="/$lang" params={{ lang: other }}>
-						{other.toUpperCase()}
-					</Link>
-				</span>
+					{other.toUpperCase()}
+				</Link>
 			</footer>
 		</main>
 	);
@@ -463,19 +469,19 @@ function LineCard({ line, lang }: { line: LineSummary; lang: Lang }) {
 				{categoryIcons([line.category])} {line.line}
 			</div>
 			<div
-				className="text-xs text-muted truncate"
+				className="text-meta text-muted truncate"
 				title={line.destinations.join(" ↔ ")}
 			>
 				{line.destinations.join(" ↔ ")}
 			</div>
-			<div className="text-sm text-muted mt-1">
+			<div className="text-body text-muted mt-1">
 				{pct(line.cancelled, line.total)}% {t(lang, "home.cancelled")}
 				{line.ghost > 0 ? ` · ${pct(line.ghost, line.total)}% 👻` : ""}
 				{" · "}
 				{pct(line.delayed, line.total)}% {t(lang, "home.delayed")}
 			</div>
 			{line.total > 0 && (
-				<div className="text-xs text-muted mt-1">
+				<div className="text-meta text-muted mt-1">
 					{t(lang, "stat.reliability")}: {score}%
 				</div>
 			)}
@@ -497,24 +503,24 @@ function StopCard({ stop, lang }: { stop: StopSummary; lang: Lang }) {
 			<div className="text-meta uppercase text-muted mb-1">
 				{categoryIcons(stop.categories)}
 			</div>
-			<div className="text-base font-semibold">
+			<div className="text-lg font-semibold">
 				{shortStationName(stop.stopName)}
 			</div>
 			{stop.lines.length > 0 && (
 				<div
-					className="text-xs text-muted truncate"
+					className="text-meta text-muted truncate"
 					title={stop.lines.join(", ")}
 				>
 					{stop.lines.join(", ")}
 				</div>
 			)}
 			{stop.journeyCount > 0 ? (
-				<div className="text-sm text-muted mt-1">
+				<div className="text-body text-muted mt-1">
 					{stop.journeyCount} {t(lang, "stat.departures").toLowerCase()} ·{" "}
 					{pct(stop.cancelled, stop.journeyCount)}% {t(lang, "home.cancelled")}
 				</div>
 			) : (
-				<div className="text-sm text-dimmed mt-1">
+				<div className="text-body text-dimmed mt-1">
 					{t(lang, "table.no_data")}
 				</div>
 			)}
@@ -533,23 +539,23 @@ function OperatorCard({ op, lang }: { op: OperatorSummary; lang: Lang }) {
 			<div className="text-meta uppercase text-muted mb-1">
 				{categoryIcons(op.categories)}
 			</div>
-			<div className="text-base font-semibold">{op.operator}</div>
+			<div className="text-lg font-semibold">{op.operator}</div>
 			{op.lines.length > 0 && (
 				<div
-					className="text-xs text-muted truncate"
+					className="text-meta text-muted truncate"
 					title={op.lines.join(", ")}
 				>
 					{op.lines.join(", ")}
 				</div>
 			)}
-			<div className="text-sm text-muted mt-1">
+			<div className="text-body text-muted mt-1">
 				{pct(op.cancelled, op.total)}% {t(lang, "home.cancelled")}
 				{op.ghost > 0 ? ` · ${pct(op.ghost, op.total)}% 👻` : ""}
 				{" · "}
 				{pct(op.delayed, op.total)}% {t(lang, "home.delayed")}
 			</div>
 			{op.total > 0 && (
-				<div className="text-xs text-muted mt-1">
+				<div className="text-meta text-muted mt-1">
 					{t(lang, "stat.reliability")}: {score}%
 				</div>
 			)}
@@ -646,11 +652,11 @@ function OverviewCards({
 					<span className="text-lg text-muted">%</span>
 				</div>
 				{ghostAll > 0 && (
-					<div className="text-sm text-info mt-1">
+					<div className="text-body text-info mt-1">
 						👻 {scoreWithGhosts}%
 					</div>
 				)}
-				<div className="text-sm text-muted mt-1">
+				<div className="text-body text-muted mt-1">
 					{totalAll.toLocaleString(lang)}{" "}
 					{t(lang, "stat.departures").toLowerCase()}
 				</div>
@@ -711,7 +717,7 @@ function WorstCard({
 				<Link
 					to="/$lang/line/$line"
 					params={{ lang, line: line.slug }}
-					className="block text-sm mt-1 no-underline text-fg hover:text-accent"
+					className="block text-body mt-1 no-underline text-fg hover:text-accent transition-colors"
 				>
 					<span className={`${color} font-semibold`}>
 						{(line.rate * 100).toFixed(1)}%
@@ -724,7 +730,7 @@ function WorstCard({
 				<Link
 					to="/$lang/$station"
 					params={{ lang, station: station.slug }}
-					className="block text-sm mt-1 truncate no-underline text-fg hover:text-accent"
+					className="block text-body mt-1 no-underline text-fg hover:text-accent transition-colors line-clamp-2"
 					title={station.name}
 				>
 					<span className={`${color} font-semibold`}>
@@ -738,7 +744,7 @@ function WorstCard({
 				<Link
 					to="/$lang/operator/$operator"
 					params={{ lang, operator: op.slug }}
-					className="block text-sm mt-1 truncate no-underline text-fg hover:text-accent"
+					className="block text-body mt-1 no-underline text-fg hover:text-accent transition-colors line-clamp-2"
 					title={op.name}
 				>
 					<span className={`${color} font-semibold`}>

@@ -118,6 +118,7 @@ const translations = {
 		"home.ghost": "Geisterfahrten",
 
 		"map.title": "Livekarte",
+		"map.link": "Live-Karte",
 		"map.vehicles": "Fahrzeuge",
 		"map.last_update": "Letztes Update",
 		"map.no_vehicles": "Keine aktiven Fahrzeuge",
@@ -247,6 +248,7 @@ const translations = {
 		"home.ghost": "ghost departures",
 
 		"map.title": "Live Map",
+		"map.link": "Live Map",
 		"map.vehicles": "Vehicles",
 		"map.last_update": "Last update",
 		"map.no_vehicles": "No active vehicles",
