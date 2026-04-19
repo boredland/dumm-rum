@@ -11,11 +11,7 @@ import {
 } from "drizzle-orm";
 import { db } from "../db/client.ts";
 import { journeyRuns, journeyStops, knownStops } from "../db/schema.ts";
-import {
-	DELAY_THRESHOLD_MIN,
-	PLANNED_FREQUENCY_MIN,
-	todayBerlin,
-} from "./utils.ts";
+import { DELAY_THRESHOLD_MIN, todayBerlin } from "./utils.ts";
 
 // Reusable SQL fragments — Postgres boolean-aware.
 const ghostCaseSql = sql<number>`CASE WHEN NOT ${journeyRuns.wasTracked} AND NOT ${journeyRuns.cancelled} THEN 1 ELSE 0 END`;
@@ -44,59 +40,35 @@ const stopHasDelayDataSql = sql`(
 	OR (${journeyStops.rtArrTime} IS NOT NULL AND ${journeyStops.arrTime} IS NOT NULL)
 )`;
 
-// A journey counts as "delayed" if any of its stops — origin, intermediate,
-// or terminus — shows (realtime - scheduled) >= threshold.
-const delayedExistsSql = sql<number>`
-	CASE WHEN NOT ${journeyRuns.cancelled} AND EXISTS (
-		SELECT 1 FROM journey_stops js
-		WHERE js.journey_ref = "journey_runs"."journey_ref"
-		AND js.day_of_operation = "journey_runs"."day_of_operation"
-		AND (
-			(js.rt_dep_time IS NOT NULL AND js.dep_time IS NOT NULL
-				AND EXTRACT(EPOCH FROM (
-					(js.day_of_operation || ' ' || js.rt_dep_time)::timestamp
-					- (js.day_of_operation || ' ' || js.dep_time)::timestamp
-				)) / 60.0 >= ${DELAY_THRESHOLD_MIN})
-			OR
-			(js.rt_arr_time IS NOT NULL AND js.arr_time IS NOT NULL
-				AND EXTRACT(EPOCH FROM (
-					(js.day_of_operation || ' ' || js.rt_arr_time)::timestamp
-					- (js.day_of_operation || ' ' || js.arr_time)::timestamp
-				)) / 60.0 >= ${DELAY_THRESHOLD_MIN})
+// Per-run "was delayed" signal, precomputed once across journey_stops so
+// summary queries can LEFT JOIN instead of running a correlated EXISTS per
+// row. The correlated form was ~6× slower on a 16k-run dataset — Postgres
+// re-scanned the stops pk index once per run. Filter first + SELECT DISTINCT
+// keeps the result small (one row per delayed run) and beats BOOL_OR across
+// every row, because most stops aren't delayed.
+function delayedByRunSq() {
+	return db
+		.selectDistinct({
+			journeyRef: journeyStops.journeyRef,
+			dayOfOperation: journeyStops.dayOfOperation,
+		})
+		.from(journeyStops)
+		.where(
+			sql`${stopHasDelayDataSql} AND ${stopDelayMinSql} >= ${DELAY_THRESHOLD_MIN}`,
 		)
-	) THEN 1 ELSE 0 END
-`;
+		.as("dbr");
+}
 
-// Per-run delay taken from the latest stop with realtime data (usually the
-// terminus once the journey has finished, else the last intermediate that
-// reported in). Cancelled → assume PLANNED_FREQUENCY_MIN wait.
-const runAvgDelaySql = sql<number | null>`
-	CASE WHEN ${journeyRuns.cancelled} THEN ${PLANNED_FREQUENCY_MIN} ELSE (
-		SELECT COALESCE(
-			CASE WHEN js.rt_dep_time IS NOT NULL AND js.dep_time IS NOT NULL THEN
-				EXTRACT(EPOCH FROM (
-					(js.day_of_operation || ' ' || js.rt_dep_time)::timestamp
-					- (js.day_of_operation || ' ' || js.dep_time)::timestamp
-				)) / 60.0
-			END,
-			CASE WHEN js.rt_arr_time IS NOT NULL AND js.arr_time IS NOT NULL THEN
-				EXTRACT(EPOCH FROM (
-					(js.day_of_operation || ' ' || js.rt_arr_time)::timestamp
-					- (js.day_of_operation || ' ' || js.arr_time)::timestamp
-				)) / 60.0
-			END
-		)
-		FROM journey_stops js
-		WHERE js.journey_ref = "journey_runs"."journey_ref"
-		AND js.day_of_operation = "journey_runs"."day_of_operation"
-		AND (
-			(js.rt_dep_time IS NOT NULL AND js.dep_time IS NOT NULL)
-			OR (js.rt_arr_time IS NOT NULL AND js.arr_time IS NOT NULL)
-		)
-		ORDER BY js.route_idx DESC
-		LIMIT 1
-	) END
-`;
+function delayedJoinCondition(dbr: ReturnType<typeof delayedByRunSq>) {
+	return and(
+		eq(dbr.journeyRef, journeyRuns.journeyRef),
+		eq(dbr.dayOfOperation, journeyRuns.dayOfOperation),
+	);
+}
+
+function runDelayedSql(dbr: ReturnType<typeof delayedByRunSq>) {
+	return sql<number>`SUM(CASE WHEN NOT ${journeyRuns.cancelled} AND ${dbr.journeyRef} IS NOT NULL THEN 1 ELSE 0 END)`;
+}
 
 export type DaysFilter = "all" | "today" | "weekdays" | "weekends";
 
@@ -123,7 +95,6 @@ export interface OperatorSummary {
 	cancelled: number;
 	ghost: number;
 	delayed: number;
-	avgDelay: number | null;
 }
 
 export async function getOperatorSummaries(
@@ -131,6 +102,7 @@ export async function getOperatorSummaries(
 ): Promise<OperatorSummary[]> {
 	const daysCond = daysCondition(filter.days);
 	const where = and(isNotNull(journeyRuns.operator), daysCond);
+	const dbr = delayedByRunSq();
 
 	const [statsRows, lineRows] = await Promise.all([
 		db
@@ -142,10 +114,10 @@ export async function getOperatorSummaries(
 						"cancelled",
 					),
 				ghost: sql<number>`SUM(${ghostCaseSql})`.as("ghost"),
-				delayed: sql<number>`SUM(${delayedExistsSql})`.as("delayed"),
-				avgDelay: sql<number | null>`AVG(${runAvgDelaySql})`.as("avg_delay"),
+				delayed: runDelayedSql(dbr).as("delayed"),
 			})
 			.from(journeyRuns)
+			.leftJoin(dbr, delayedJoinCondition(dbr))
 			.where(where)
 			.groupBy(journeyRuns.operator),
 		db
@@ -191,7 +163,6 @@ export async function getOperatorSummaries(
 			cancelled: Number(r.cancelled),
 			ghost: Number(r.ghost),
 			delayed: Number(r.delayed),
-			avgDelay: r.avgDelay === null ? null : Number(r.avgDelay),
 		}));
 }
 
@@ -206,13 +177,13 @@ export interface LineSummary {
 	cancelled: number;
 	ghost: number;
 	delayed: number;
-	avgDelay: number | null;
 }
 
 export async function getLineSummaries(
 	filter: QueryFilter = {},
 ): Promise<LineSummary[]> {
 	const daysCond = daysCondition(filter.days);
+	const dbr = delayedByRunSq();
 	const rows = await db
 		.select({
 			line: journeyRuns.line,
@@ -223,8 +194,7 @@ export async function getLineSummaries(
 					"cancelled",
 				),
 			ghost: sql<number>`SUM(${ghostCaseSql})`.as("ghost"),
-			delayed: sql<number>`SUM(${delayedExistsSql})`.as("delayed"),
-			avgDelay: sql<number | null>`AVG(${runAvgDelaySql})`.as("avg_delay"),
+			delayed: runDelayedSql(dbr).as("delayed"),
 			operators:
 				sql<string>`STRING_AGG(DISTINCT ${journeyRuns.operator}, ',')`.as(
 					"operators",
@@ -235,6 +205,7 @@ export async function getLineSummaries(
 				),
 		})
 		.from(journeyRuns)
+		.leftJoin(dbr, delayedJoinCondition(dbr))
 		.where(daysCond)
 		.groupBy(journeyRuns.line)
 		.orderBy(sql`MAX(${journeyRuns.category})`, journeyRuns.line);
@@ -248,7 +219,6 @@ export async function getLineSummaries(
 		cancelled: Number(r.cancelled),
 		ghost: Number(r.ghost),
 		delayed: Number(r.delayed),
-		avgDelay: r.avgDelay === null ? null : Number(r.avgDelay),
 	}));
 }
 
@@ -335,7 +305,6 @@ export interface LineDayStats {
 	cancelled: number;
 	ghost: number;
 	delayed: number;
-	avgDelay: number | null;
 }
 
 export interface LineStats {
@@ -347,6 +316,7 @@ export interface LineStats {
 
 /** Per-day stats for one line, ad-hoc from journey_runs. */
 export async function getLineStats(line: string): Promise<LineStats> {
+	const dbr = delayedByRunSq();
 	const rows = await db
 		.select({
 			date: journeyRuns.dayOfOperation,
@@ -356,10 +326,10 @@ export async function getLineStats(line: string): Promise<LineStats> {
 					"cancelled",
 				),
 			ghost: sql<number>`SUM(${ghostCaseSql})`.as("ghost"),
-			delayed: sql<number>`SUM(${delayedExistsSql})`.as("delayed"),
-			avgDelay: sql<number | null>`AVG(${runAvgDelaySql})`.as("avg_delay"),
+			delayed: runDelayedSql(dbr).as("delayed"),
 		})
 		.from(journeyRuns)
+		.leftJoin(dbr, delayedJoinCondition(dbr))
 		.where(eq(journeyRuns.line, line))
 		.groupBy(journeyRuns.dayOfOperation)
 		.orderBy(desc(journeyRuns.dayOfOperation));
@@ -386,7 +356,6 @@ export async function getLineStats(line: string): Promise<LineStats> {
 			cancelled: Number(d.cancelled),
 			ghost: Number(d.ghost),
 			delayed: Number(d.delayed),
-			avgDelay: d.avgDelay === null ? null : Number(d.avgDelay),
 		})),
 		operators: opRows.map((r) => r.operator).filter((o): o is string => !!o),
 		categories: catRows.map((r) => r.category).filter((c): c is string => !!c),
@@ -449,7 +418,6 @@ export interface OperatorDayStats {
 	cancelled: number;
 	ghost: number;
 	delayed: number;
-	avgDelay: number | null;
 }
 
 export interface OperatorStats {
@@ -461,6 +429,7 @@ export interface OperatorStats {
 export async function getOperatorStats(
 	operator: string,
 ): Promise<OperatorStats> {
+	const dbr = delayedByRunSq();
 	const rows = await db
 		.select({
 			date: journeyRuns.dayOfOperation,
@@ -470,10 +439,10 @@ export async function getOperatorStats(
 					"cancelled",
 				),
 			ghost: sql<number>`SUM(${ghostCaseSql})`.as("ghost"),
-			delayed: sql<number>`SUM(${delayedExistsSql})`.as("delayed"),
-			avgDelay: sql<number | null>`AVG(${runAvgDelaySql})`.as("avg_delay"),
+			delayed: runDelayedSql(dbr).as("delayed"),
 		})
 		.from(journeyRuns)
+		.leftJoin(dbr, delayedJoinCondition(dbr))
 		.where(eq(journeyRuns.operator, operator))
 		.groupBy(journeyRuns.dayOfOperation)
 		.orderBy(desc(journeyRuns.dayOfOperation));
@@ -502,7 +471,6 @@ export async function getOperatorStats(
 			cancelled: Number(d.cancelled),
 			ghost: Number(d.ghost),
 			delayed: Number(d.delayed),
-			avgDelay: d.avgDelay === null ? null : Number(d.avgDelay),
 		})),
 		lines: lineRows.map((r) => r.line),
 		categories: catRows.map((r) => r.category).filter((c): c is string => !!c),
@@ -656,7 +624,6 @@ export interface DayStats {
 	cancelled: number;
 	ghost: number;
 	delayed: number;
-	avgDelay: number | null;
 }
 
 export interface StopStats {
@@ -686,12 +653,6 @@ export async function getStopStats(stopIds: string[]): Promise<StopStats> {
 						AND ${stopDelayMinSql} >= ${DELAY_THRESHOLD_MIN}
 					THEN 1 ELSE 0 END)
 				`.as("delayed"),
-				avgDelay: sql<number | null>`
-					AVG(CASE
-						WHEN ${journeyStops.cancelled} THEN ${PLANNED_FREQUENCY_MIN}
-						WHEN ${stopHasDelayDataSql} THEN ${stopDelayMinSql}
-					END)
-				`.as("avg_delay"),
 			})
 			.from(journeyStops)
 			.innerJoin(
@@ -733,7 +694,6 @@ export async function getStopStats(stopIds: string[]): Promise<StopStats> {
 			cancelled: Number(d.cancelled),
 			ghost: Number(d.ghost),
 			delayed: Number(d.delayed),
-			avgDelay: d.avgDelay === null ? null : Number(d.avgDelay),
 		})),
 		lastChange: meta?.lastChange ?? null,
 		categories: meta?.categories ? dedupeCsv(meta.categories) : [],
