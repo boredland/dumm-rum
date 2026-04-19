@@ -587,13 +587,20 @@ function OperatorCard({ op, lang }: { op: OperatorSummary; lang: Lang }) {
 
 type Worst = { name: string; slug: string; count: number; rate: number };
 
+// Tiny samples dominate a pure count/total ranking (1-of-1 cancelled = 100%),
+// so require a floor before an entry qualifies. Most long-distance trains run
+// 5–10 services through Frankfurt per day, so 10 covers nearly everything a
+// user would recognise while excluding first-run noise.
+const WORST_MIN_SAMPLE = 10;
+
 function findWorst(
 	items: { name: string; slug: string; count: number; total: number }[],
 ): Worst | null {
 	let worst: Worst | null = null;
 	for (const item of items) {
 		if (item.count === 0) continue;
-		const rate = item.total > 0 ? item.count / item.total : 0;
+		if (item.total < WORST_MIN_SAMPLE) continue;
+		const rate = item.count / item.total;
 		if (
 			!worst ||
 			rate > worst.rate ||
