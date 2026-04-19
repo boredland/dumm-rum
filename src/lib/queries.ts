@@ -20,40 +20,81 @@ import {
 // Reusable SQL fragments — Postgres boolean-aware.
 const ghostCaseSql = sql<number>`CASE WHEN NOT ${journeyRuns.wasTracked} AND NOT ${journeyRuns.cancelled} THEN 1 ELSE 0 END`;
 
-const stopDelayMinSql = sql<number>`
-	EXTRACT(EPOCH FROM (
-		(${journeyStops.dayOfOperation} || ' ' || ${journeyStops.rtDepTime})::timestamp
-		- (${journeyStops.dayOfOperation} || ' ' || ${journeyStops.depTime})::timestamp
-	)) / 60.0
-`;
+// Prefer departure timestamps — they're what riders wait for — but fall
+// back to arrival when the stop has no dep_time (i.e. the terminus).
+// Without this, a train that ran on time out of the origin but arrived
+// 30 min late at its terminal was invisible to the delay metrics.
+const stopDelayMinSql = sql<number>`COALESCE(
+	CASE WHEN ${journeyStops.rtDepTime} IS NOT NULL AND ${journeyStops.depTime} IS NOT NULL THEN
+		EXTRACT(EPOCH FROM (
+			(${journeyStops.dayOfOperation} || ' ' || ${journeyStops.rtDepTime})::timestamp
+			- (${journeyStops.dayOfOperation} || ' ' || ${journeyStops.depTime})::timestamp
+		)) / 60.0
+	END,
+	CASE WHEN ${journeyStops.rtArrTime} IS NOT NULL AND ${journeyStops.arrTime} IS NOT NULL THEN
+		EXTRACT(EPOCH FROM (
+			(${journeyStops.dayOfOperation} || ' ' || ${journeyStops.rtArrTime})::timestamp
+			- (${journeyStops.dayOfOperation} || ' ' || ${journeyStops.arrTime})::timestamp
+		)) / 60.0
+	END
+)`;
 
-// A journey counts as "delayed" if any of its stops has rtDepTime - depTime >= threshold.
+const stopHasDelayDataSql = sql`(
+	(${journeyStops.rtDepTime} IS NOT NULL AND ${journeyStops.depTime} IS NOT NULL)
+	OR (${journeyStops.rtArrTime} IS NOT NULL AND ${journeyStops.arrTime} IS NOT NULL)
+)`;
+
+// A journey counts as "delayed" if any of its stops — origin, intermediate,
+// or terminus — shows (realtime - scheduled) >= threshold.
 const delayedExistsSql = sql<number>`
 	CASE WHEN NOT ${journeyRuns.cancelled} AND EXISTS (
 		SELECT 1 FROM journey_stops js
 		WHERE js.journey_ref = "journey_runs"."journey_ref"
 		AND js.day_of_operation = "journey_runs"."day_of_operation"
-		AND js.rt_dep_time IS NOT NULL AND js.dep_time IS NOT NULL
-		AND EXTRACT(EPOCH FROM (
-			(js.day_of_operation || ' ' || js.rt_dep_time)::timestamp
-			- (js.day_of_operation || ' ' || js.dep_time)::timestamp
-		)) / 60.0 >= ${DELAY_THRESHOLD_MIN}
+		AND (
+			(js.rt_dep_time IS NOT NULL AND js.dep_time IS NOT NULL
+				AND EXTRACT(EPOCH FROM (
+					(js.day_of_operation || ' ' || js.rt_dep_time)::timestamp
+					- (js.day_of_operation || ' ' || js.dep_time)::timestamp
+				)) / 60.0 >= ${DELAY_THRESHOLD_MIN})
+			OR
+			(js.rt_arr_time IS NOT NULL AND js.arr_time IS NOT NULL
+				AND EXTRACT(EPOCH FROM (
+					(js.day_of_operation || ' ' || js.rt_arr_time)::timestamp
+					- (js.day_of_operation || ' ' || js.arr_time)::timestamp
+				)) / 60.0 >= ${DELAY_THRESHOLD_MIN})
+		)
 	) THEN 1 ELSE 0 END
 `;
 
-// Per-run avg delay from the origin stop (route_idx=0). Cancelled →
-// assume PLANNED_FREQUENCY_MIN wait.
+// Per-run delay taken from the latest stop with realtime data (usually the
+// terminus once the journey has finished, else the last intermediate that
+// reported in). Cancelled → assume PLANNED_FREQUENCY_MIN wait.
 const runAvgDelaySql = sql<number | null>`
 	CASE WHEN ${journeyRuns.cancelled} THEN ${PLANNED_FREQUENCY_MIN} ELSE (
-		SELECT EXTRACT(EPOCH FROM (
-			(js.day_of_operation || ' ' || js.rt_dep_time)::timestamp
-			- (js.day_of_operation || ' ' || js.dep_time)::timestamp
-		)) / 60.0
+		SELECT COALESCE(
+			CASE WHEN js.rt_dep_time IS NOT NULL AND js.dep_time IS NOT NULL THEN
+				EXTRACT(EPOCH FROM (
+					(js.day_of_operation || ' ' || js.rt_dep_time)::timestamp
+					- (js.day_of_operation || ' ' || js.dep_time)::timestamp
+				)) / 60.0
+			END,
+			CASE WHEN js.rt_arr_time IS NOT NULL AND js.arr_time IS NOT NULL THEN
+				EXTRACT(EPOCH FROM (
+					(js.day_of_operation || ' ' || js.rt_arr_time)::timestamp
+					- (js.day_of_operation || ' ' || js.arr_time)::timestamp
+				)) / 60.0
+			END
+		)
 		FROM journey_stops js
 		WHERE js.journey_ref = "journey_runs"."journey_ref"
 		AND js.day_of_operation = "journey_runs"."day_of_operation"
-		AND js.rt_dep_time IS NOT NULL AND js.dep_time IS NOT NULL
-		AND js.route_idx = 0
+		AND (
+			(js.rt_dep_time IS NOT NULL AND js.dep_time IS NOT NULL)
+			OR (js.rt_arr_time IS NOT NULL AND js.arr_time IS NOT NULL)
+		)
+		ORDER BY js.route_idx DESC
+		LIMIT 1
 	) END
 `;
 
@@ -242,8 +283,7 @@ export async function getStopSummaries(): Promise<StopSummary[]> {
 				),
 			ghost: sql<number>`SUM(${ghostCaseSql})`.as("ghost"),
 			delayed: sql<number>`SUM(CASE WHEN NOT ${journeyStops.cancelled}
-				AND ${journeyStops.rtDepTime} IS NOT NULL
-				AND ${journeyStops.depTime} IS NOT NULL
+				AND ${stopHasDelayDataSql}
 				AND ${stopDelayMinSql} >= ${DELAY_THRESHOLD_MIN}
 			THEN 1 ELSE 0 END)`.as("delayed"),
 			lines: sql<string>`STRING_AGG(DISTINCT ${journeyRuns.line}, ',')`.as(
@@ -642,15 +682,14 @@ export async function getStopStats(stopIds: string[]): Promise<StopStats> {
 				ghost: sql<number>`SUM(${ghostCaseSql})`.as("ghost"),
 				delayed: sql<number>`
 					SUM(CASE WHEN NOT ${journeyStops.cancelled}
-						AND ${journeyStops.rtDepTime} IS NOT NULL
-						AND ${journeyStops.depTime} IS NOT NULL
+						AND ${stopHasDelayDataSql}
 						AND ${stopDelayMinSql} >= ${DELAY_THRESHOLD_MIN}
 					THEN 1 ELSE 0 END)
 				`.as("delayed"),
 				avgDelay: sql<number | null>`
 					AVG(CASE
 						WHEN ${journeyStops.cancelled} THEN ${PLANNED_FREQUENCY_MIN}
-						WHEN ${journeyStops.rtDepTime} IS NOT NULL AND ${journeyStops.depTime} IS NOT NULL THEN ${stopDelayMinSql}
+						WHEN ${stopHasDelayDataSql} THEN ${stopDelayMinSql}
 					END)
 				`.as("avg_delay"),
 			})
