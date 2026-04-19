@@ -102,9 +102,34 @@ export async function memoGet(
 	const now = Date.now();
 	const hit = memo.get(key);
 	if (hit && hit.expires > now) return hit.body;
+
+	// L2: Postgres unlogged_cache. Survives a process restart and
+	// deduplicates across container replicas — a fresh boot no longer
+	// re-hammers Flix for route polylines another replica already
+	// fetched. Lazy-imported so client bundles (which transitively
+	// touch this file) don't pull in the DB client.
+	try {
+		const { cacheGet } = await import("./cache.ts");
+		const fromKv = await cacheGet<unknown>(`flix-memo:${key}`);
+		if (fromKv !== null) {
+			const body = JSON.stringify(fromKv);
+			memo.set(key, { body, expires: now + ttlSec * 1000 });
+			return body;
+		}
+	} catch {
+		/* DB blip → fall through to upstream; surfaces as a cache miss */
+	}
+
 	const value = await build();
 	const body = JSON.stringify(value);
 	memo.set(key, { body, expires: now + ttlSec * 1000 });
+	import("./cache.ts")
+		.then(({ cachePut }) => cachePut(`flix-memo:${key}`, value, ttlSec * 1000))
+		.catch(() => {
+			/* persistence failure is cosmetic — memo still holds the
+			 * response for the process lifetime, subsequent polls just
+			 * re-fetch on a cache miss. */
+		});
 	return body;
 }
 

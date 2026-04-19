@@ -95,14 +95,26 @@ const BAHN_EXPERT_PATH_WINDOW_MS = 20_000;
  * eviction. */
 const polylineL1 = new Map<string, [number, number][]>();
 
+/** Same L1 idea for the journey.find resolver. Mapping from
+ * `{category, journeyNumber, serviceDate}` → bahn.expert journeyId is
+ * stable for the whole service day, so once resolved we never need
+ * to ask again. */
+const journeyIdL1 = new Map<string, string>();
+
 /** Key prefix so the shared KV table is tidy and we can later GC old
  * journey-day polylines without scanning every row. */
 const POLYLINE_KEY_PREFIX = "bahn-expert:polyline:";
+const JOURNEY_ID_KEY_PREFIX = "bahn-expert:journey-id:";
 
-/** TTL for the persisted polylines. A service day is typically <24 h
+/** TTL for persisted cache entries. A service day is typically <24 h
  * even for night services, so 36 h covers overlap without keeping
  * yesterday's data around forever. */
-const POLYLINE_TTL_MS = 36 * 60 * 60 * 1000;
+const BAHN_EXPERT_CACHE_TTL_MS = 36 * 60 * 60 * 1000;
+
+/** Stable cache key for a train identity. */
+function journeyIdKey(t: TrainIdentity): string {
+	return `${t.category}|${t.journeyNumber}|${t.serviceDate}`;
+}
 
 export function isSupportedCategory(category: string): boolean {
 	return SUPPORTED_CATEGORIES.has(category.trim().toUpperCase());
@@ -173,20 +185,76 @@ async function rpcBatch<T>(
 	});
 }
 
+/** Resolve each train identity to bahn.expert's journeyId, hitting
+ * the in-memory L1 first, then the Postgres KV, and finally the
+ * `journey.find` RPC for whatever remains. Mappings are stable per
+ * service day so we can cache for the full TTL. */
 async function findJourneyIds(
 	trains: TrainIdentity[],
 ): Promise<(string | null)[]> {
-	const procs = trains.map(() => "journey.find");
-	const inputs = trains.map((t) => ({
+	const out: (string | null)[] = new Array(trains.length).fill(null);
+
+	// L1: process-local Map.
+	const missFromL1: { t: TrainIdentity; idx: number }[] = [];
+	for (let i = 0; i < trains.length; i++) {
+		const hit = journeyIdL1.get(journeyIdKey(trains[i]));
+		if (hit) out[i] = hit;
+		else missFromL1.push({ t: trains[i], idx: i });
+	}
+	if (missFromL1.length === 0) return out;
+
+	// L2: Postgres unlogged_cache. One batched SELECT.
+	let l2: Map<string, string>;
+	try {
+		l2 = await cacheMGet<string>(
+			missFromL1.map((m) => JOURNEY_ID_KEY_PREFIX + journeyIdKey(m.t)),
+		);
+	} catch {
+		l2 = new Map();
+	}
+	const stillMissing: { t: TrainIdentity; idx: number }[] = [];
+	for (const m of missFromL1) {
+		const kvKey = JOURNEY_ID_KEY_PREFIX + journeyIdKey(m.t);
+		const fromKv = l2.get(kvKey);
+		if (typeof fromKv === "string" && fromKv.length > 0) {
+			journeyIdL1.set(journeyIdKey(m.t), fromKv);
+			out[m.idx] = fromKv;
+		} else {
+			stillMissing.push(m);
+		}
+	}
+	if (stillMissing.length === 0) return out;
+
+	// L3: bahn.expert journey.find RPC. Batched.
+	const inputs = stillMissing.map(({ t }) => ({
 		journeyNumber: t.journeyNumber,
 		category: t.category,
 		initialDepartureDate: new Date(`${t.serviceDate}T00:00:00.000Z`),
 	}));
-	const results = await rpcBatch<JourneyFindHit[] | null>(procs, inputs);
-	return results.map((hits) => {
-		if (!Array.isArray(hits) || hits.length === 0) return null;
-		return hits[0].journeyId ?? null;
-	});
+	const results = await rpcBatch<JourneyFindHit[] | null>(
+		stillMissing.map(() => "journey.find"),
+		inputs,
+	);
+	for (let i = 0; i < stillMissing.length; i++) {
+		const hits = results[i];
+		const id =
+			Array.isArray(hits) && hits.length > 0
+				? (hits[0].journeyId ?? null)
+				: null;
+		if (!id) continue;
+		const { t, idx } = stillMissing[i];
+		journeyIdL1.set(journeyIdKey(t), id);
+		out[idx] = id;
+		// Fire-and-forget persistence.
+		cachePut(
+			JOURNEY_ID_KEY_PREFIX + journeyIdKey(t),
+			id,
+			BAHN_EXPERT_CACHE_TTL_MS,
+		).catch(() => {
+			/* surfaces as a re-fetch next poll — no user impact */
+		});
+	}
+	return out;
 }
 
 async function fetchPositions(
@@ -265,9 +333,11 @@ async function fetchPolylines(
 		out[stillMissing[i].idx] = flipped;
 		// Fire-and-forget the DB write; don't block the map response
 		// on its success.
-		cachePut(POLYLINE_KEY_PREFIX + id, flipped, POLYLINE_TTL_MS).catch(() => {
-			/* surfaces on the next poll as a re-fetch — no user impact */
-		});
+		cachePut(POLYLINE_KEY_PREFIX + id, flipped, BAHN_EXPERT_CACHE_TTL_MS).catch(
+			() => {
+				/* surfaces on the next poll as a re-fetch — no user impact */
+			},
+		);
 	}
 	return out;
 }
