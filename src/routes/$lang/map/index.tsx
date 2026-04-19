@@ -6,21 +6,6 @@ import "leaflet-fullscreen/dist/leaflet.fullscreen.css";
 import "leaflet.locatecontrol/dist/L.Control.Locate.min.css";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { SubscribeModal } from "../../../components/SubscribeModal.tsx";
-import { type Lang, t } from "../../../lib/i18n.ts";
-import {
-	AUTH,
-	CLIENT,
-	cleanLineName,
-	decodeEncodedPolyline,
-	MGATE_URL,
-} from "../../../lib/mgate.ts";
-import {
-	fetchHeagVehicles,
-	heagGpsPath,
-	heagHeadingToDirGeo,
-	matchHeagToRmv,
-	parseHeagFixTime,
-} from "../../../lib/heag.ts";
 import {
 	fetchBahnExpertPositions,
 	isSupportedCategory as isBahnExpertCategory,
@@ -32,6 +17,21 @@ import {
 	type GpsPath,
 	locationAtPercent,
 } from "../../../lib/gps-path.ts";
+import {
+	fetchHeagVehicles,
+	heagGpsPath,
+	heagHeadingToDirGeo,
+	matchHeagToRmv,
+	parseHeagFixTime,
+} from "../../../lib/heag.ts";
+import { type Lang, t } from "../../../lib/i18n.ts";
+import {
+	AUTH,
+	CLIENT,
+	cleanLineName,
+	decodeEncodedPolyline,
+	MGATE_URL,
+} from "../../../lib/mgate.ts";
 
 const FRANKFURT_CENTER = { lat: 50.1109, lon: 8.6821 };
 const POLL_INTERVAL = 15_000;
@@ -565,10 +565,7 @@ const fetchVehicles = createServerFn({ method: "GET" })
 			for (const p of bahnExpertPositions) {
 				const v = vehicles[p.rmvIndex];
 				if (!v) continue;
-				const drift = distanceMeters(
-					[v.lat, v.lon],
-					[p.lat, p.lon],
-				);
+				const drift = distanceMeters([v.lat, v.lon], [p.lat, p.lon]);
 				if (drift > MAX_RMV_BAHN_EXPERT_DRIFT_M) continue;
 				v.lat = p.lat;
 				v.lon = p.lon;
@@ -588,6 +585,23 @@ async function fetchFlixVehicles(): Promise<{
 }> {
 	const resp = await fetch("/api/flix/vehicles");
 	if (!resp.ok) throw new Error(`flix vehicles HTTP ${resp.status}`);
+	return (await resp.json()) as { vehicles: Vehicle[]; serverTime: number };
+}
+
+async function fetchKvvVehicles(bbox: {
+	swLat: number;
+	swLon: number;
+	neLat: number;
+	neLon: number;
+}): Promise<{ vehicles: Vehicle[]; serverTime: number }> {
+	const q = new URLSearchParams({
+		swLat: String(bbox.swLat),
+		swLon: String(bbox.swLon),
+		neLat: String(bbox.neLat),
+		neLon: String(bbox.neLon),
+	});
+	const resp = await fetch(`/api/kvv/vehicles?${q.toString()}`);
+	if (!resp.ok) throw new Error(`kvv vehicles HTTP ${resp.status}`);
 	return (await resp.json()) as { vehicles: Vehicle[]; serverTime: number };
 }
 
@@ -1151,10 +1165,10 @@ function MapPage() {
 				// so the DOM tick can substitute the rolling age later.
 				const agoTemplate = t(l, "map.gps_fix_ago", { t: "{t}" });
 				// Outer span holds the dot + text side-by-side; inner
-			// span.dummrum-gps-age carries the data attrs and is the
-			// only element the DOM updater rewrites (keeps the green
-			// dot out of harm's way when `textContent = …` fires).
-			positionLine = `<br/><span style="font-size:10px;opacity:.7;display:inline-flex;align-items:center;gap:3px"><span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:#27ae60"></span><span class="dummrum-gps-age" data-fix-at="${clientFixAt}" data-now="${escapeHtml(nowLabel)}" data-ago="${escapeHtml(agoTemplate)}">${escapeHtml(initialLabel)}</span></span>`;
+				// span.dummrum-gps-age carries the data attrs and is the
+				// only element the DOM updater rewrites (keeps the green
+				// dot out of harm's way when `textContent = …` fires).
+				positionLine = `<br/><span style="font-size:10px;opacity:.7;display:inline-flex;align-items:center;gap:3px"><span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:#27ae60"></span><span class="dummrum-gps-age" data-fix-at="${clientFixAt}" data-now="${escapeHtml(nowLabel)}" data-ago="${escapeHtml(agoTemplate)}">${escapeHtml(initialLabel)}</span></span>`;
 			} else {
 				positionLine = `<br/><span style="font-size:10px;opacity:.55;display:inline-flex;align-items:center;gap:3px"><span style="display:inline-block;width:7px;text-align:center;color:#888;font-weight:700">~</span>${escapeHtml(t(l, "map.gps_fix_calc"))}</span>`;
 			}
@@ -1195,7 +1209,7 @@ function MapPage() {
 		const sw = bounds.getSouthWest();
 		const ne = bounds.getNorthEast();
 		try {
-			const [rmvRes, flixRes, ferryRes] = await Promise.allSettled([
+			const [rmvRes, flixRes, ferryRes, kvvRes] = await Promise.allSettled([
 				fetchVehicles({
 					data: {
 						swLat: sw.lat,
@@ -1207,6 +1221,12 @@ function MapPage() {
 				}),
 				fetchFlixVehicles(),
 				fetchFerryVehicles(),
+				fetchKvvVehicles({
+					swLat: sw.lat,
+					swLon: sw.lng,
+					neLat: ne.lat,
+					neLon: ne.lng,
+				}),
 			]);
 
 			const vehicles: Vehicle[] = [];
@@ -1224,6 +1244,11 @@ function MapPage() {
 				vehicles.push(...ferryRes.value.vehicles);
 			} else {
 				console.warn("ferry fetch failed:", ferryRes.reason);
+			}
+			if (kvvRes.status === "fulfilled") {
+				vehicles.push(...kvvRes.value.vehicles);
+			} else {
+				console.warn("kvv fetch failed:", kvvRes.reason);
 			}
 
 			timeDeltaRef.current = serverTime - Date.now();
@@ -1747,9 +1772,7 @@ function MapPage() {
 	// popups are open or none is for a GPS-enriched vehicle.
 	useEffect(() => {
 		const tick = setInterval(() => {
-			const spans = document.querySelectorAll<HTMLElement>(
-				".dummrum-gps-age",
-			);
+			const spans = document.querySelectorAll<HTMLElement>(".dummrum-gps-age");
 			if (spans.length === 0) return;
 			const now = Date.now();
 			for (const el of spans) {

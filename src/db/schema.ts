@@ -1,5 +1,6 @@
 import {
 	boolean,
+	doublePrecision,
 	index,
 	integer,
 	pgTable,
@@ -51,6 +52,12 @@ export const journeyStops = pgTable(
 		rtDepTime: text("rt_dep_time"),
 		rtArrTime: text("rt_arr_time"),
 		cancelled: boolean().notNull().default(false),
+		/** Stop coordinates — WGS84 degrees. Nullable because the RMV
+		 * ingest doesn't populate them (HAFAS delivers positions via a
+		 * separate live-map feed). KVV's EFA includes coords in every
+		 * TripStopTimes response, so every kvv-source row carries them. */
+		lat: doublePrecision("lat"),
+		lon: doublePrecision("lon"),
 	},
 	(t) => [
 		primaryKey({ columns: [t.journeyRef, t.dayOfOperation, t.routeIdx] }),

@@ -369,6 +369,11 @@ async function upsertEfaStops(
 		rtDepTime: s.rtDepTime ?? null,
 		rtArrTime: s.rtArrTime ?? null,
 		cancelled: !!s.cancelled,
+		// EFA populates coords on every stop. Guard against the 0,0
+		// fallback in kvv-efa.ts (we emit 0,0 when parsing fails) so a
+		// null column beats a lat-0/lon-0 point off Africa.
+		lat: s.lat !== 0 ? s.lat : null,
+		lon: s.lon !== 0 ? s.lon : null,
 	}));
 
 	await db
@@ -384,6 +389,8 @@ async function upsertEfaStops(
 				rtDepTime: sql`COALESCE(${excluded(journeyStops.rtDepTime)}, ${journeyStops.rtDepTime})`,
 				rtArrTime: sql`COALESCE(${excluded(journeyStops.rtArrTime)}, ${journeyStops.rtArrTime})`,
 				cancelled: sql`${journeyStops.cancelled} OR ${excluded(journeyStops.cancelled)}`,
+				lat: sql`COALESCE(${excluded(journeyStops.lat)}, ${journeyStops.lat})`,
+				lon: sql`COALESCE(${excluded(journeyStops.lon)}, ${journeyStops.lon})`,
 			},
 		});
 }
