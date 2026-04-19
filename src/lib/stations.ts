@@ -110,9 +110,27 @@ export function slugForStop(stopIds: string[], stopName: string): string {
 	return nameToSlug(stopName);
 }
 
+/** High-speed + night + cross-border long-distance trains — collapsed
+ * onto one icon so stations served by several of them don't produce a
+ * row of near-identical glyphs. Kept as a Set so we can probe in O(1)
+ * without `.includes()` churn on every summary render. */
+const LONG_DISTANCE_CATEGORIES = new Set([
+	"ICE",
+	"ICE-Sprinter",
+	"IC",
+	"EC",
+	"ECE",
+	"NJ",
+	"EN",
+	"RJ",
+	"RJX",
+	"TGV",
+	"EST",
+]);
+
 export function categoryIcons(categories: string[]): string {
 	const icons: string[] = [];
-	if (categories.some((c) => ["ICE", "IC", "EC"].includes(c))) icons.push("🚄");
+	if (categories.some((c) => LONG_DISTANCE_CATEGORIES.has(c))) icons.push("🚄");
 	if (categories.some((c) => ["RE", "RB", "R"].includes(c))) icons.push("🚆");
 	if (categories.some((c) => ["S-Bahn", "S"].includes(c))) icons.push("🚈");
 	if (categories.includes("U-Bahn")) icons.push("🚇");

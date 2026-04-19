@@ -152,6 +152,25 @@ function Index() {
 		if (catFilter === "RE,RB")
 			return normalized.some((c) => c === "RE" || c === "RB");
 		if (catFilter === "S") return normalized.some((c) => c === "S-Bahn");
+		// Long-distance rail — ICE / IC / EC / ECE / NJ / EN / RJ / RJX /
+		// TGV / EST all share the "Fernverkehr" filter so users don't
+		// need a chip per category.
+		if (catFilter === "FV")
+			return normalized.some((c) =>
+				[
+					"ICE",
+					"ICE-Sprinter",
+					"IC",
+					"EC",
+					"ECE",
+					"NJ",
+					"EN",
+					"RJ",
+					"RJX",
+					"TGV",
+					"EST",
+				].includes(c),
+			);
 		return normalized.includes(catFilter);
 	};
 
@@ -283,6 +302,7 @@ function Index() {
 					{ key: "Tram", label: "Tram" },
 					{ key: "Bus", label: "Bus" },
 					{ key: "RE,RB", label: "RE/RB" },
+					{ key: "FV", label: "ICE/IC" },
 				].map((f) => (
 					<Pill
 						key={f.key}
