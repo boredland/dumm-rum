@@ -16,6 +16,7 @@ import {
 	StatCard,
 } from "../../../../components/StatCard.tsx";
 import { ledForCount, ledForScore } from "../../../../lib/status.ts";
+import { EmptyState } from "../../../../components/EmptyState.tsx";
 import { SubscribeModal } from "../../../../components/SubscribeModal.tsx";
 import { type Lang, t } from "../../../../lib/i18n.ts";
 import { getLineStats, type LineStats } from "../../../../lib/queries.ts";
@@ -155,7 +156,7 @@ function LineIndex() {
 					setActive={daysFilter.setActive}
 				/>
 				{daysFilter.filtered.length === 0 ? (
-					<p className="text-sm text-dimmed">{t(l, "table.no_data")}</p>
+					<EmptyState icon="⌛" title={t(l, "table.no_data")} />
 				) : (
 					<div className="overflow-x-auto">
 						<table className="w-full text-sm">

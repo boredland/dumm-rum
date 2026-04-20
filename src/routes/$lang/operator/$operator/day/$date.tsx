@@ -5,6 +5,7 @@ import {
 	DepartureFilterBar,
 	useDepartureFilters,
 } from "../../../../../components/DepartureFilters.tsx";
+import { EmptyState } from "../../../../../components/EmptyState.tsx";
 import {
 	BackLink,
 	SignageHeader,
@@ -142,7 +143,7 @@ function OperatorDay() {
 				<DepartureFilterBar lang={l} {...filters} />
 
 				{filters.filtered.length === 0 ? (
-					<p className="text-sm text-dimmed">{t(l, "table.no_departures")}</p>
+					<EmptyState icon="🕊️" title={t(l, "table.no_departures")} />
 				) : (
 					<div className="overflow-x-auto">
 						<table className="w-full text-sm">

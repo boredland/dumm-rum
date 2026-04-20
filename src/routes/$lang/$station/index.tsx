@@ -11,6 +11,7 @@ import {
 	SignageHeader,
 	SubscribeButton,
 } from "../../../components/SignageHeader.tsx";
+import { EmptyState } from "../../../components/EmptyState.tsx";
 import { LedRow } from "../../../components/LedRow.tsx";
 import { borderForCancRate, StatCard } from "../../../components/StatCard.tsx";
 import { ledForCount, ledForScore } from "../../../lib/status.ts";
@@ -258,7 +259,7 @@ function StationIndex() {
 					setActive={daysFilter.setActive}
 				/>
 				{daysFilter.filtered.length === 0 ? (
-					<p className="text-sm text-dimmed">{t(l, "table.no_data")}</p>
+					<EmptyState icon="⌛" title={t(l, "table.no_data")} />
 				) : (
 					<div className="overflow-x-auto">
 						<table className="w-full text-sm">

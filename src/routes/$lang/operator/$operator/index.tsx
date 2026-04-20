@@ -5,6 +5,7 @@ import {
 	DaysToggleBar,
 	useDaysFilter,
 } from "../../../../components/DaysToggle.tsx";
+import { EmptyState } from "../../../../components/EmptyState.tsx";
 import {
 	BackLink,
 	SignageHeader,
@@ -148,7 +149,7 @@ function OperatorIndex() {
 					setActive={daysFilter.setActive}
 				/>
 				{daysFilter.filtered.length === 0 ? (
-					<p className="text-sm text-dimmed">{t(l, "table.no_data")}</p>
+					<EmptyState icon="⌛" title={t(l, "table.no_data")} />
 				) : (
 					<div className="overflow-x-auto">
 						<table className="w-full text-sm">

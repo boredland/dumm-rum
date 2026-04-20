@@ -1,9 +1,8 @@
 /**
- * Shared empty-state block. Replaces the bare `text-dimmed` paragraphs
- * scattered across `no_departures` / `no_data` branches — those read as
- * errors instead of "we found nothing, which is fine". Keeps the
- * contents quiet and helpful: a small icon, one-line headline, an
- * optional action button (typically "reset filters").
+ * Hazard-placard empty state. Yellow-black tactile stripe above and below,
+ * concrete-dark middle with the icon + title treated like an "OUT OF
+ * SERVICE" sign. Callers supply the voice via `title`; keep it short and
+ * signage-like ("Keine Abfahrten", "No departures").
  */
 
 export function EmptyState({
@@ -12,30 +11,37 @@ export function EmptyState({
 	hint,
 	action,
 }: {
-	/** Unicode / emoji glyph rendered large. Kept as a string rather
-	 * than an SVG slot so the call sites stay one-liners and match the
-	 * app's existing emoji-forward iconography (🚏, 👻, 📱). */
 	icon: string;
 	title: string;
 	hint?: string;
 	action?: { label: string; onClick: () => void };
 }) {
 	return (
-		<div className="flex flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-border-dim bg-surface/50 px-6 py-10 text-center">
-			<div aria-hidden className="text-[28px] leading-none opacity-70">
-				{icon}
+		<div className="overflow-hidden rounded-sm">
+			<div className="platform-yellow-line h-1.5" />
+			<div className="bg-signage px-6 py-8 text-center space-y-2">
+				<div aria-hidden className="text-[28px] leading-none opacity-60">
+					{icon}
+				</div>
+				<p className="text-h2 font-black uppercase tracking-widest text-white/80">
+					{title}
+				</p>
+				{hint && (
+					<p className="text-meta uppercase tracking-wider text-white/40">
+						{hint}
+					</p>
+				)}
+				{action && (
+					<button
+						type="button"
+						onClick={action.onClick}
+						className="mt-3 cursor-pointer rounded-full bg-platform-yellow text-black font-black uppercase tracking-wider px-4 py-2 text-meta active:translate-y-px transition-transform"
+					>
+						{action.label}
+					</button>
+				)}
 			</div>
-			<p className="text-body font-bold text-muted">{title}</p>
-			{hint && <p className="text-meta text-dimmed">{hint}</p>}
-			{action && (
-				<button
-					type="button"
-					onClick={action.onClick}
-					className="mt-1 cursor-pointer rounded-full border border-border px-3 py-1.5 text-meta font-bold text-fg transition-colors hover:bg-surface-hover"
-				>
-					{action.label}
-				</button>
-			)}
+			<div className="platform-yellow-line h-1.5" />
 		</div>
 	);
 }
