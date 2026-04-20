@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 
-type Status = "cancelled" | "ghost" | "delayed" | "ok";
+export type Status = "cancelled" | "ghost" | "delayed" | "ok";
 
 function deriveStatus(
 	cancelled: boolean,

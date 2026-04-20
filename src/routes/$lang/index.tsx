@@ -485,7 +485,7 @@ function LineCard({ line, lang }: { line: LineSummary; lang: Lang }) {
 				</div>
 				<div className="flex justify-between items-center border-t border-black/5 pt-2">
 					<span className="text-micro font-black text-muted/30 uppercase tracking-widest">
-						Reliability Index
+						{t(lang, "board.reliability_index")}
 					</span>
 					<span
 						className={`text-xs font-black tabular-nums ${score < 90 ? "text-danger" : "text-ok"}`}
@@ -511,7 +511,7 @@ function StopCard({ stop, lang }: { stop: StopSummary; lang: Lang }) {
 		>
 			<div className="bg-signage px-3 py-1.5 flex justify-between items-center border-b border-black/40">
 				<div className="text-white/90 text-micro font-black uppercase tracking-[0.2em]">
-					Station
+					{t(lang, "board.station_label")}
 				</div>
 				<div className="text-white/30 scale-75">
 					{categoryIcons(stop.categories)}
@@ -526,7 +526,7 @@ function StopCard({ stop, lang }: { stop: StopSummary; lang: Lang }) {
 				</div>
 				<div className="flex justify-between items-center border-t border-black/5 pt-2">
 					<span className="text-micro font-black text-muted/30 uppercase tracking-widest">
-						Reliability Index
+						{t(lang, "board.reliability_index")}
 					</span>
 					<span
 						className={`text-xs font-black tabular-nums ${Number(score) < 90 ? "text-danger" : "text-ok"}`}
@@ -549,7 +549,7 @@ function OperatorCard({ op, lang }: { op: OperatorSummary; lang: Lang }) {
 		>
 			<div className="bg-signage px-3 py-1.5 flex justify-between items-center border-b border-black/40">
 				<div className="text-white/90 text-micro font-black uppercase tracking-[0.2em]">
-					Operator
+					{t(lang, "board.operator_label")}
 				</div>
 				<div className="flex gap-0.5 scale-75 origin-right opacity-30">
 					{op.categories.slice(0, 3).map((c) => (
@@ -571,7 +571,7 @@ function OperatorCard({ op, lang }: { op: OperatorSummary; lang: Lang }) {
 				</div>
 				<div className="flex justify-between items-center border-t border-black/5 pt-2">
 					<span className="text-micro font-black text-muted/30 uppercase tracking-widest">
-						Reliability Index
+						{t(lang, "board.reliability_index")}
 					</span>
 					<span
 						className={`text-xs font-black tabular-nums ${score < 90 ? "text-danger" : "text-ok"}`}
@@ -670,7 +670,7 @@ function OverviewCards({
 			<div className="sm:col-span-1 signage-frame p-2 flex flex-col">
 				<div className="flex justify-between items-center mb-1 px-1">
 					<span className="text-micro font-black text-white/20 uppercase tracking-tighter">
-						Status Monitor
+						{t(lang, "board.status_monitor")}
 					</span>
 					<div className="w-1.5 h-1.5 rounded-full bg-green-500/30 animate-pulse" />
 				</div>
@@ -691,7 +691,7 @@ function OverviewCards({
 					)}
 				</div>
 				<div className="text-micro text-center text-muted/40 uppercase font-black mt-2 py-1 bg-black/20 rounded-sm">
-					{totalAll.toLocaleString(lang)} tracked
+					{totalAll.toLocaleString(lang)} {t(lang, "board.tracked")}
 				</div>
 			</div>
 

@@ -23,7 +23,7 @@ export function NotFoundPage() {
 
 			<p className="text-body text-muted">{t(lang, "notfound.body")}</p>
 
-			<section className="w-full rounded-xl border border-border-dim bg-surface/60 p-4 text-left">
+			<section className="w-full rounded-sm border border-border-dim bg-surface/60 p-4 text-left">
 				<p className="mb-2 text-meta uppercase tracking-wide text-muted">
 					{t(lang, "notfound.board.header")}
 				</p>

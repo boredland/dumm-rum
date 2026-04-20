@@ -6,6 +6,7 @@ import {
 	useDepartureFilters,
 } from "../../../../../components/DepartureFilters.tsx";
 import { EmptyState } from "../../../../../components/EmptyState.tsx";
+import { StatusGlyph } from "../../../../../components/LedRow.tsx";
 import {
 	BackLink,
 	SignageHeader,
@@ -180,15 +181,11 @@ function OperatorDay() {
 												{j.direction}
 											</td>
 											<td className="py-2 pr-3">
-												{j.cancelled ? (
-													<span className="text-danger">❌</span>
-												) : j.ghost ? (
-													<span className="text-info">👻</span>
-												) : delay !== null && delay >= 8 ? (
-													<span className="text-warn">⏳ +{delay} min</span>
-												) : (
-													<span className="text-ok">✅</span>
-												)}
+												<StatusGlyph
+													cancelled={j.cancelled}
+													ghost={j.ghost}
+													delayMin={delay}
+												/>
 											</td>
 										</tr>
 									);

@@ -135,6 +135,13 @@ const translations = {
 		"status.ok": "✅",
 		"status.on_time": "p\u00fcnktlich",
 
+		"board.reliability_index": "P\u00fcnktlichkeitsindex",
+		"board.status_monitor": "Statusanzeige",
+		"board.tracked": "erfasst",
+		"board.line_label": "Linie",
+		"board.station_label": "Haltestelle",
+		"board.operator_label": "Betreiber",
+
 		"notfound.heading": "Geisterseite",
 		"notfound.subheading": "Im Fahrplan — trotzdem nie angekommen.",
 		"notfound.body":
@@ -280,6 +287,13 @@ const translations = {
 		"status.delayed": "⏳",
 		"status.ok": "✅",
 		"status.on_time": "on time",
+
+		"board.reliability_index": "Reliability index",
+		"board.status_monitor": "Status monitor",
+		"board.tracked": "tracked",
+		"board.line_label": "Line",
+		"board.station_label": "Station",
+		"board.operator_label": "Operator",
 
 		"notfound.heading": "Ghost page",
 		"notfound.subheading": "Scheduled — never showed up.",

@@ -6,6 +6,7 @@ import {
 	useDepartureFilters,
 } from "../../../../components/DepartureFilters.tsx";
 import { EmptyState } from "../../../../components/EmptyState.tsx";
+import { StatusGlyph } from "../../../../components/LedRow.tsx";
 import {
 	BackLink,
 	SignageHeader,
@@ -184,7 +185,7 @@ function StationDay() {
 								return (
 									<li
 										key={`m-${i}-${d.time}-${d.line}-${d.direction}`}
-										className="rounded-lg border border-border-dim p-3"
+										className="rounded-sm border border-border-dim p-3"
 									>
 										<div className="flex items-baseline justify-between gap-2">
 											<span className="tabular-nums font-bold">
@@ -203,27 +204,21 @@ function StationDay() {
 										>
 											{d.direction}
 										</div>
-										<div className="mt-1 text-meta">
-											{d.cancelled ? (
-												<span className="text-danger">❌</span>
-											) : d.ghost ? (
-												<span className="text-info">👻</span>
-											) : delay !== null && delay >= 8 ? (
-												<span className="text-warn">
-													⏳ +{delay} min
-													{bahnUrl && (
-														<a
-															href={bahnUrl}
-															target="_blank"
-															rel="noopener noreferrer"
-															className="ml-1 text-accent"
-														>
-															why?
-														</a>
-													)}
-												</span>
-											) : (
-												<span className="text-ok">✅</span>
+										<div className="mt-1 text-meta flex items-center gap-2">
+											<StatusGlyph
+												cancelled={d.cancelled}
+												ghost={d.ghost}
+												delayMin={delay}
+											/>
+											{bahnUrl && (
+												<a
+													href={bahnUrl}
+													target="_blank"
+													rel="noopener noreferrer"
+													className="text-accent"
+												>
+													why?
+												</a>
 											)}
 										</div>
 									</li>
@@ -268,27 +263,23 @@ function StationDay() {
 													{d.direction}
 												</td>
 												<td className="py-2 pr-3">
-													{d.cancelled ? (
-														<span className="text-danger">❌</span>
-													) : d.ghost ? (
-														<span className="text-info">👻</span>
-													) : delay !== null && delay >= 8 ? (
-														<span className="text-warn">
-															⏳ +{delay} min
-															{bahnUrl && (
-																<a
-																	href={bahnUrl}
-																	target="_blank"
-																	rel="noopener noreferrer"
-																	className="ml-1 text-accent text-meta"
-																>
-																	why?
-																</a>
-															)}
-														</span>
-													) : (
-														<span className="text-ok">✅</span>
-													)}
+													<div className="flex items-center gap-2">
+														<StatusGlyph
+															cancelled={d.cancelled}
+															ghost={d.ghost}
+															delayMin={delay}
+														/>
+														{bahnUrl && (
+															<a
+																href={bahnUrl}
+																target="_blank"
+																rel="noopener noreferrer"
+																className="text-accent text-meta"
+															>
+																why?
+															</a>
+														)}
+													</div>
 												</td>
 											</tr>
 										);

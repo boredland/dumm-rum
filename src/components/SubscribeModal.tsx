@@ -226,7 +226,7 @@ export function SubscribeModal({
 			}}
 		>
 			<div
-				className="relative w-full max-w-md bg-surface border border-border rounded-lg shadow-xl p-5 space-y-4"
+				className="relative w-full max-w-md bg-surface border border-border rounded-sm shadow-xl p-5 space-y-4"
 				onClick={(e) => e.stopPropagation()}
 				onKeyDown={(e) => e.stopPropagation()}
 			>
