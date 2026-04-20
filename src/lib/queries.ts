@@ -12,7 +12,7 @@ import {
 } from "drizzle-orm";
 import { db } from "../db/client.ts";
 import { journeyRuns, journeyStops, knownStops } from "../db/schema.ts";
-import { DELAY_THRESHOLD_MIN, todayBerlin } from "./utils.ts";
+import { DELAY_THRESHOLD_MIN, parseLineSlug, todayBerlin } from "./utils.ts";
 
 // Reusable SQL fragments — Postgres boolean-aware.
 const ghostCaseSql = sql<number>`CASE WHEN NOT ${journeyRuns.wasTracked} AND NOT ${journeyRuns.cancelled} THEN 1 ELSE 0 END`;
@@ -102,10 +102,6 @@ export async function getOperatorSummaries(
 	filter: QueryFilter = {},
 ): Promise<OperatorSummary[]> {
 	const daysCond = daysCondition(filter.days);
-	// HAFAS occasionally returns a blank operator name alongside a valid
-	// product id — excluding NULL isn't enough, also reject the empty string
-	// so the "Betreiber" worst-card row doesn't render a nameless entry
-	// linking to `/operator/`.
 	const hasOperator = and(
 		isNotNull(journeyRuns.operator),
 		ne(journeyRuns.operator, ""),
@@ -129,7 +125,7 @@ export async function getOperatorSummaries(
 			.where(and(hasOperator, daysCond))
 			.groupBy(journeyRuns.operator),
 		db
-			.selectDistinct({
+			.select({
 				operator: journeyRuns.operator,
 				line: journeyRuns.line,
 				category: journeyRuns.category,
@@ -144,7 +140,8 @@ export async function getOperatorSummaries(
 					),
 				),
 			)
-			.orderBy(journeyRuns.operator, journeyRuns.line),
+			.groupBy(journeyRuns.operator, journeyRuns.line, journeyRuns.category)
+			.orderBy(journeyRuns.operator, journeyRuns.category, journeyRuns.line),
 	]);
 
 	const lineMap = new Map<string, string[]>();
@@ -152,7 +149,13 @@ export async function getOperatorSummaries(
 	for (const row of lineRows) {
 		if (!row.operator) continue;
 		const lines = lineMap.get(row.operator) ?? [];
-		lines.push(row.line);
+		// Use composite slug for the line list so the UI can link correctly
+		// without collisions between modes sharing a number.
+		const slug =
+			row.category && row.category !== "Bus"
+				? `${row.category}:${row.line}`
+				: row.line;
+		lines.push(slug);
 		lineMap.set(row.operator, lines);
 		if (row.category) {
 			const cats = catMap.get(row.operator) ?? new Set();
@@ -179,6 +182,7 @@ export async function getOperatorSummaries(
 export interface LineSummary {
 	line: string;
 	category: string;
+	slug: string;
 	operators: string[];
 	destinations: string[];
 	total: number;
@@ -195,7 +199,7 @@ export async function getLineSummaries(
 	const rows = await db
 		.select({
 			line: journeyRuns.line,
-			category: sql<string | null>`MAX(${journeyRuns.category})`.as("category"),
+			category: journeyRuns.category,
 			total: count().as("total"),
 			cancelled:
 				sql<number>`SUM(CASE WHEN ${journeyRuns.cancelled} THEN 1 ELSE 0 END)`.as(
@@ -215,19 +219,23 @@ export async function getLineSummaries(
 		.from(journeyRuns)
 		.leftJoin(dbr, delayedJoinCondition(dbr))
 		.where(daysCond)
-		.groupBy(journeyRuns.line)
-		.orderBy(sql`MAX(${journeyRuns.category})`, journeyRuns.line);
+		.groupBy(journeyRuns.line, journeyRuns.category)
+		.orderBy(journeyRuns.category, journeyRuns.line);
 
-	return rows.map((r) => ({
-		line: r.line,
-		category: r.category ?? "Bus",
-		operators: r.operators ? dedupeCsv(r.operators) : [],
-		destinations: r.destinations ? dedupeCsv(r.destinations) : [],
-		total: Number(r.total),
-		cancelled: Number(r.cancelled),
-		ghost: Number(r.ghost),
-		delayed: Number(r.delayed),
-	}));
+	return rows.map((r) => {
+		const category = r.category ?? "Bus";
+		return {
+			line: r.line,
+			category,
+			slug: category !== "Bus" ? `${category}:${r.line}` : r.line,
+			operators: r.operators ? dedupeCsv(r.operators) : [],
+			destinations: r.destinations ? dedupeCsv(r.destinations) : [],
+			total: Number(r.total),
+			cancelled: Number(r.cancelled),
+			ghost: Number(r.ghost),
+			delayed: Number(r.delayed),
+		};
+	});
 }
 
 // ─── Stop summaries ────────────────────────────────────────────────────
@@ -264,9 +272,10 @@ export async function getStopSummaries(): Promise<StopSummary[]> {
 				AND ${stopHasDelayDataSql}
 				AND ${stopDelayMinSql} >= ${DELAY_THRESHOLD_MIN}
 			THEN 1 ELSE 0 END)`.as("delayed"),
-			lines: sql<string>`STRING_AGG(DISTINCT ${journeyRuns.line}, ',')`.as(
-				"lines",
-			),
+			lines:
+				sql<string>`STRING_AGG(DISTINCT (CASE WHEN ${journeyRuns.category} IS NOT NULL AND ${journeyRuns.category} <> 'Bus' THEN ${journeyRuns.category} || ':' || ${journeyRuns.line} ELSE ${journeyRuns.line} END), ',')`.as(
+					"lines",
+				),
 			categories:
 				sql<string>`STRING_AGG(DISTINCT ${journeyRuns.category}, ',')`.as(
 					"categories",
@@ -323,8 +332,14 @@ export interface LineStats {
 }
 
 /** Per-day stats for one line, ad-hoc from journey_runs. */
-export async function getLineStats(line: string): Promise<LineStats> {
+export async function getLineStats(lineSlug: string): Promise<LineStats> {
+	const { line, category } = parseLineSlug(lineSlug);
 	const dbr = delayedByRunSq();
+
+	const where = category
+		? and(eq(journeyRuns.line, line), eq(journeyRuns.category, category))
+		: eq(journeyRuns.line, line);
+
 	const rows = await db
 		.select({
 			date: journeyRuns.dayOfOperation,
@@ -338,7 +353,7 @@ export async function getLineStats(line: string): Promise<LineStats> {
 		})
 		.from(journeyRuns)
 		.leftJoin(dbr, delayedJoinCondition(dbr))
-		.where(eq(journeyRuns.line, line))
+		.where(where)
 		.groupBy(journeyRuns.dayOfOperation)
 		.orderBy(desc(journeyRuns.dayOfOperation));
 
@@ -348,7 +363,7 @@ export async function getLineStats(line: string): Promise<LineStats> {
 			.from(journeyRuns)
 			.where(
 				and(
-					eq(journeyRuns.line, line),
+					where,
 					isNotNull(journeyRuns.operator),
 					ne(journeyRuns.operator, ""),
 				),
@@ -356,11 +371,11 @@ export async function getLineStats(line: string): Promise<LineStats> {
 		db
 			.selectDistinct({ category: journeyRuns.category })
 			.from(journeyRuns)
-			.where(and(eq(journeyRuns.line, line), isNotNull(journeyRuns.category))),
+			.where(and(where, isNotNull(journeyRuns.category))),
 		db
 			.selectDistinct({ dest: journeyRuns.destName })
 			.from(journeyRuns)
-			.where(eq(journeyRuns.line, line)),
+			.where(where),
 	]);
 
 	return {
@@ -391,9 +406,18 @@ export interface LineDayJourney {
 }
 
 export async function getLineDayJourneys(
-	line: string,
+	lineSlug: string,
 	date: string,
 ): Promise<LineDayJourney[]> {
+	const { line, category } = parseLineSlug(lineSlug);
+	const where = category
+		? and(
+				eq(journeyRuns.line, line),
+				eq(journeyRuns.category, category),
+				eq(journeyRuns.dayOfOperation, date),
+			)
+		: and(eq(journeyRuns.line, line), eq(journeyRuns.dayOfOperation, date));
+
 	const rows = await db
 		.select({
 			journeyRef: journeyRuns.journeyRef,
@@ -413,9 +437,7 @@ export async function getLineDayJourneys(
 			stop: journeyRuns.originName,
 		})
 		.from(journeyRuns)
-		.where(
-			and(eq(journeyRuns.line, line), eq(journeyRuns.dayOfOperation, date)),
-		)
+		.where(where)
 		.orderBy(asc(journeyRuns.originDepTime), asc(journeyRuns.destName));
 
 	return rows.map((r) => ({
@@ -463,10 +485,13 @@ export async function getOperatorStats(
 
 	const [lineRows, catRows] = await Promise.all([
 		db
-			.selectDistinct({ line: journeyRuns.line })
+			.selectDistinct({
+				line: journeyRuns.line,
+				category: journeyRuns.category,
+			})
 			.from(journeyRuns)
 			.where(eq(journeyRuns.operator, operator))
-			.orderBy(journeyRuns.line),
+			.orderBy(journeyRuns.category, journeyRuns.line),
 		db
 			.selectDistinct({ category: journeyRuns.category })
 			.from(journeyRuns)
@@ -486,7 +511,9 @@ export async function getOperatorStats(
 			ghost: Number(d.ghost),
 			delayed: Number(d.delayed),
 		})),
-		lines: lineRows.map((r) => r.line),
+		lines: lineRows.map((r) =>
+			r.category && r.category !== "Bus" ? `${r.category}:${r.line}` : r.line,
+		),
 		categories: catRows.map((r) => r.category).filter((c): c is string => !!c),
 	};
 }
@@ -740,7 +767,9 @@ export async function getStopDayDepartures(
 			>`COALESCE(${journeyStops.rtDepTime}, ${journeyStops.rtArrTime})`.as(
 				"rt_time",
 			),
-			line: journeyRuns.line,
+			line: sql<string>`(CASE WHEN ${journeyRuns.category} IS NOT NULL AND ${journeyRuns.category} <> 'Bus' THEN ${journeyRuns.category} || ':' || ${journeyRuns.line} ELSE ${journeyRuns.line} END)`.as(
+				"line",
+			),
 			direction: journeyRuns.destName,
 			cancelled: journeyStops.cancelled,
 			ghost: sql<number>`${ghostCaseSql}`.as("ghost"),
@@ -803,11 +832,15 @@ export async function getAllStopNames(): Promise<StopPickerEntry[]> {
 /** All distinct line codes seen in journey_runs. */
 export async function getAllLineNames(): Promise<string[]> {
 	const rows = await db
-		.selectDistinct({ line: journeyRuns.line })
+		.selectDistinct({ line: journeyRuns.line, category: journeyRuns.category })
 		.from(journeyRuns)
 		.where(isNotNull(journeyRuns.line))
-		.orderBy(journeyRuns.line);
-	return rows.map((r) => r.line).filter(Boolean);
+		.orderBy(journeyRuns.category, journeyRuns.line);
+	return rows
+		.map((r) =>
+			r.category && r.category !== "Bus" ? `${r.category}:${r.line}` : r.line,
+		)
+		.filter(Boolean);
 }
 
 /** All distinct destinations (headsigns) seen in journey_runs. */
@@ -821,13 +854,20 @@ export async function getAllDirections(): Promise<string[]> {
 }
 
 /** All distinct destinations a given line has run to in the last 30 days. */
-export async function getDirectionsForLine(line: string): Promise<string[]> {
+export async function getDirectionsForLine(
+	lineSlug: string,
+): Promise<string[]> {
+	const { line, category } = parseLineSlug(lineSlug);
+	const where = category
+		? and(eq(journeyRuns.line, line), eq(journeyRuns.category, category))
+		: eq(journeyRuns.line, line);
+
 	const rows = await db
 		.selectDistinct({ dest: journeyRuns.destName })
 		.from(journeyRuns)
 		.where(
 			and(
-				eq(journeyRuns.line, line),
+				where,
 				isNotNull(journeyRuns.destName),
 				gte(
 					journeyRuns.dayOfOperation,
@@ -840,7 +880,12 @@ export async function getDirectionsForLine(line: string): Promise<string[]> {
 }
 
 /** All distinct stop names served by a line in the last 30 days. */
-export async function getStopsForLine(line: string): Promise<string[]> {
+export async function getStopsForLine(lineSlug: string): Promise<string[]> {
+	const { line, category } = parseLineSlug(lineSlug);
+	const where = category
+		? and(eq(journeyRuns.line, line), eq(journeyRuns.category, category))
+		: eq(journeyRuns.line, line);
+
 	const rows = await db
 		.selectDistinct({
 			name: journeyStops.stopName,
@@ -855,7 +900,7 @@ export async function getStopsForLine(line: string): Promise<string[]> {
 		)
 		.where(
 			and(
-				eq(journeyRuns.line, line),
+				where,
 				gte(
 					journeyStops.dayOfOperation,
 					sql`to_char(CURRENT_DATE - INTERVAL '30 days', 'YYYY-MM-DD')`,

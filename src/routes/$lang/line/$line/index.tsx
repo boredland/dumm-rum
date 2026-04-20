@@ -209,7 +209,7 @@ function LineIndex() {
 											<td className="py-2 pr-4 text-right">
 												<Link
 													to="/$lang/line/$line/day/$date"
-													params={{ lang: l, line, date: d.date }}
+													params={{ lang: l, line: line, date: d.date }}
 													className="text-xs"
 												>
 													→

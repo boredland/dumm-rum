@@ -6,7 +6,7 @@ import {
 	knownStops,
 	telegramSubscriptions,
 } from "../db/schema.ts";
-import { DELAY_THRESHOLD_MIN, nowBerlin } from "./utils.ts";
+import { DELAY_THRESHOLD_MIN, nowBerlin, parseLineSlug } from "./utils.ts";
 
 interface TelegramUpdate {
 	message?: {
@@ -99,13 +99,18 @@ function formatWeekdays(weekdays: string): string {
 		.join(", ");
 }
 
-async function fetchDirections(line: string) {
+async function fetchDirections(lineSlug: string) {
+	const { line, category } = parseLineSlug(lineSlug);
+	const where = category
+		? and(eq(journeyRuns.line, line), eq(journeyRuns.category, category))
+		: eq(journeyRuns.line, line);
+
 	return db
 		.selectDistinct({ direction: journeyRuns.destName })
 		.from(journeyRuns)
 		.where(
 			and(
-				eq(journeyRuns.line, line),
+				where,
 				isNotNull(journeyRuns.destName),
 				gte(
 					journeyRuns.dayOfOperation,

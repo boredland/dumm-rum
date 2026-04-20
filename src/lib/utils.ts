@@ -61,3 +61,14 @@ export function shortStationName(name: string): string {
 		.replace(/^Frankfurt \(Main\)\s*/i, "FFM ")
 		.replace(/Hauptbahnhof/g, "Hbf");
 }
+
+export function parseLineSlug(slug: string): {
+	line: string;
+	category: string | null;
+} {
+	if (slug.includes(":")) {
+		const [category, ...rest] = slug.split(":");
+		return { category, line: rest.join(":") };
+	}
+	return { category: null, line: slug };
+}

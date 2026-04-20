@@ -443,7 +443,7 @@ function LineCard({ line, lang }: { line: LineSummary; lang: Lang }) {
 	return (
 		<Link
 			to="/$lang/line/$line"
-			params={{ lang, line: line.line }}
+			params={{ lang, line: line.slug }}
 			className="signage-frame overflow-hidden no-underline group active:scale-[0.98] transition-all"
 		>
 			<div className="bg-[#111112] px-3 py-1.5 flex justify-between items-center border-b border-black/40">
