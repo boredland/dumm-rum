@@ -65,10 +65,22 @@ export function shortStationName(name: string): string {
 export function parseLineSlug(slug: string): {
 	line: string;
 	category: string | null;
+	source: string | null;
 } {
-	if (slug.includes(":")) {
-		const [category, ...rest] = slug.split(":");
-		return { category, line: rest.join(":") };
+	const parts = slug.split(":");
+	if (parts.length === 3) {
+		return { source: parts[0], category: parts[1], line: parts[2] };
 	}
-	return { category: null, line: slug };
+	if (parts.length === 2) {
+		return { source: null, category: parts[0], line: parts[1] };
+	}
+	return { source: null, category: null, line: slug };
+}
+
+export function providerFromRef(ref: string): string {
+	if (ref.startsWith("kvv|")) return "kvv";
+	if (ref.startsWith("flix|")) return "flix";
+	if (ref.startsWith("ferry|")) return "ferry";
+	if (/^[12]\|/.test(ref)) return "rmv";
+	return "unknown";
 }

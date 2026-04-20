@@ -8,11 +8,17 @@ import {
 	inArray,
 	isNotNull,
 	ne,
+	type SQL,
 	sql,
 } from "drizzle-orm";
 import { db } from "../db/client.ts";
 import { journeyRuns, journeyStops, knownStops } from "../db/schema.ts";
-import { DELAY_THRESHOLD_MIN, parseLineSlug, todayBerlin } from "./utils.ts";
+import {
+	DELAY_THRESHOLD_MIN,
+	parseLineSlug,
+	providerFromRef,
+	todayBerlin,
+} from "./utils.ts";
 
 // Reusable SQL fragments — Postgres boolean-aware.
 const ghostCaseSql = sql<number>`CASE WHEN NOT ${journeyRuns.wasTracked} AND NOT ${journeyRuns.cancelled} THEN 1 ELSE 0 END`;
@@ -129,6 +135,7 @@ export async function getOperatorSummaries(
 				operator: journeyRuns.operator,
 				line: journeyRuns.line,
 				category: journeyRuns.category,
+				ref: journeyRuns.journeyRef,
 			})
 			.from(journeyRuns)
 			.where(
@@ -140,7 +147,18 @@ export async function getOperatorSummaries(
 					),
 				),
 			)
-			.groupBy(journeyRuns.operator, journeyRuns.line, journeyRuns.category)
+			.groupBy(
+				journeyRuns.operator,
+				journeyRuns.line,
+				journeyRuns.category,
+				sql`CASE
+					WHEN ${journeyRuns.journeyRef} LIKE 'kvv|%' THEN 'kvv'
+					WHEN ${journeyRuns.journeyRef} LIKE 'flix|%' THEN 'flix'
+					WHEN ${journeyRuns.journeyRef} LIKE 'ferry|%' THEN 'ferry'
+					WHEN ${journeyRuns.journeyRef} ~ '^[12]\|' THEN 'rmv'
+					ELSE 'unknown'
+				END`,
+			)
 			.orderBy(journeyRuns.operator, journeyRuns.category, journeyRuns.line),
 	]);
 
@@ -149,12 +167,11 @@ export async function getOperatorSummaries(
 	for (const row of lineRows) {
 		if (!row.operator) continue;
 		const lines = lineMap.get(row.operator) ?? [];
-		// Use composite slug for the line list so the UI can link correctly
-		// without collisions between modes sharing a number.
-		const slug =
-			row.category && row.category !== "Bus"
-				? `${row.category}:${row.line}`
-				: row.line;
+		// Use composite slug (source:category:line) for the line list so
+		// the UI can link correctly without collisions.
+		const source = providerFromRef(row.ref);
+		const category = row.category ?? "Bus";
+		const slug = `${source}:${category}:${row.line}`;
 		lines.push(slug);
 		lineMap.set(row.operator, lines);
 		if (row.category) {
@@ -200,6 +217,7 @@ export async function getLineSummaries(
 		.select({
 			line: journeyRuns.line,
 			category: journeyRuns.category,
+			ref: journeyRuns.journeyRef,
 			total: count().as("total"),
 			cancelled:
 				sql<number>`SUM(CASE WHEN ${journeyRuns.cancelled} THEN 1 ELSE 0 END)`.as(
@@ -219,15 +237,26 @@ export async function getLineSummaries(
 		.from(journeyRuns)
 		.leftJoin(dbr, delayedJoinCondition(dbr))
 		.where(daysCond)
-		.groupBy(journeyRuns.line, journeyRuns.category)
+		.groupBy(
+			journeyRuns.line,
+			journeyRuns.category,
+			sql`CASE
+				WHEN ${journeyRuns.journeyRef} LIKE 'kvv|%' THEN 'kvv'
+				WHEN ${journeyRuns.journeyRef} LIKE 'flix|%' THEN 'flix'
+				WHEN ${journeyRuns.journeyRef} LIKE 'ferry|%' THEN 'ferry'
+				WHEN ${journeyRuns.journeyRef} ~ '^[12]\|' THEN 'rmv'
+				ELSE 'unknown'
+			END`,
+		)
 		.orderBy(journeyRuns.category, journeyRuns.line);
 
 	return rows.map((r) => {
 		const category = r.category ?? "Bus";
+		const source = providerFromRef(r.ref);
 		return {
 			line: r.line,
 			category,
-			slug: category !== "Bus" ? `${category}:${r.line}` : r.line,
+			slug: `${source}:${category}:${r.line}`,
 			operators: r.operators ? dedupeCsv(r.operators) : [],
 			destinations: r.destinations ? dedupeCsv(r.destinations) : [],
 			total: Number(r.total),
@@ -272,10 +301,17 @@ export async function getStopSummaries(): Promise<StopSummary[]> {
 				AND ${stopHasDelayDataSql}
 				AND ${stopDelayMinSql} >= ${DELAY_THRESHOLD_MIN}
 			THEN 1 ELSE 0 END)`.as("delayed"),
-			lines:
-				sql<string>`STRING_AGG(DISTINCT (CASE WHEN ${journeyRuns.category} IS NOT NULL AND ${journeyRuns.category} <> 'Bus' THEN ${journeyRuns.category} || ':' || ${journeyRuns.line} ELSE ${journeyRuns.line} END), ',')`.as(
-					"lines",
-				),
+			lines: sql<string>`STRING_AGG(DISTINCT (
+				(CASE
+					WHEN ${journeyRuns.journeyRef} LIKE 'kvv|%' THEN 'kvv'
+					WHEN ${journeyRuns.journeyRef} LIKE 'flix|%' THEN 'flix'
+					WHEN ${journeyRuns.journeyRef} LIKE 'ferry|%' THEN 'ferry'
+					WHEN ${journeyRuns.journeyRef} ~ '^[12]\|' THEN 'rmv'
+					ELSE 'unknown'
+				END) || ':' ||
+				COALESCE(${journeyRuns.category}, 'Bus') || ':' ||
+				${journeyRuns.line}
+			), ',')`.as("lines"),
 			categories:
 				sql<string>`STRING_AGG(DISTINCT ${journeyRuns.category}, ',')`.as(
 					"categories",
@@ -333,12 +369,21 @@ export interface LineStats {
 
 /** Per-day stats for one line, ad-hoc from journey_runs. */
 export async function getLineStats(lineSlug: string): Promise<LineStats> {
-	const { line, category } = parseLineSlug(lineSlug);
+	const { line, category, source } = parseLineSlug(lineSlug);
 	const dbr = delayedByRunSq();
 
-	const where = category
-		? and(eq(journeyRuns.line, line), eq(journeyRuns.category, category))
-		: eq(journeyRuns.line, line);
+	let where: SQL | undefined = eq(journeyRuns.line, line);
+	if (category) where = and(where, eq(journeyRuns.category, category));
+	if (source) {
+		const sourceSql = sql`CASE
+			WHEN ${journeyRuns.journeyRef} LIKE 'kvv|%' THEN 'kvv'
+			WHEN ${journeyRuns.journeyRef} LIKE 'flix|%' THEN 'flix'
+			WHEN ${journeyRuns.journeyRef} LIKE 'ferry|%' THEN 'ferry'
+			WHEN ${journeyRuns.journeyRef} ~ '^[12]\|' THEN 'rmv'
+			ELSE 'unknown'
+		END`;
+		where = and(where, eq(sourceSql, source));
+	}
 
 	const rows = await db
 		.select({
@@ -409,14 +454,22 @@ export async function getLineDayJourneys(
 	lineSlug: string,
 	date: string,
 ): Promise<LineDayJourney[]> {
-	const { line, category } = parseLineSlug(lineSlug);
-	const where = category
-		? and(
-				eq(journeyRuns.line, line),
-				eq(journeyRuns.category, category),
-				eq(journeyRuns.dayOfOperation, date),
-			)
-		: and(eq(journeyRuns.line, line), eq(journeyRuns.dayOfOperation, date));
+	const { line, category, source } = parseLineSlug(lineSlug);
+	let where = and(
+		eq(journeyRuns.line, line),
+		eq(journeyRuns.dayOfOperation, date),
+	);
+	if (category) where = and(where, eq(journeyRuns.category, category));
+	if (source) {
+		const sourceSql = sql`CASE
+			WHEN ${journeyRuns.journeyRef} LIKE 'kvv|%' THEN 'kvv'
+			WHEN ${journeyRuns.journeyRef} LIKE 'flix|%' THEN 'flix'
+			WHEN ${journeyRuns.journeyRef} LIKE 'ferry|%' THEN 'ferry'
+			WHEN ${journeyRuns.journeyRef} ~ '^[12]\|' THEN 'rmv'
+			ELSE 'unknown'
+		END`;
+		where = and(where, eq(sourceSql, source));
+	}
 
 	const rows = await db
 		.select({
@@ -488,6 +541,7 @@ export async function getOperatorStats(
 			.selectDistinct({
 				line: journeyRuns.line,
 				category: journeyRuns.category,
+				ref: journeyRuns.journeyRef,
 			})
 			.from(journeyRuns)
 			.where(eq(journeyRuns.operator, operator))
@@ -511,9 +565,11 @@ export async function getOperatorStats(
 			ghost: Number(d.ghost),
 			delayed: Number(d.delayed),
 		})),
-		lines: lineRows.map((r) =>
-			r.category && r.category !== "Bus" ? `${r.category}:${r.line}` : r.line,
-		),
+		lines: lineRows.map((r) => {
+			const source = providerFromRef(r.ref);
+			const category = r.category ?? "Bus";
+			return `${source}:${category}:${r.line}`;
+		}),
 		categories: catRows.map((r) => r.category).filter((c): c is string => !!c),
 	};
 }
@@ -767,9 +823,17 @@ export async function getStopDayDepartures(
 			>`COALESCE(${journeyStops.rtDepTime}, ${journeyStops.rtArrTime})`.as(
 				"rt_time",
 			),
-			line: sql<string>`(CASE WHEN ${journeyRuns.category} IS NOT NULL AND ${journeyRuns.category} <> 'Bus' THEN ${journeyRuns.category} || ':' || ${journeyRuns.line} ELSE ${journeyRuns.line} END)`.as(
-				"line",
-			),
+			line: sql<string>`(
+				(CASE
+					WHEN ${journeyRuns.journeyRef} LIKE 'kvv|%' THEN 'kvv'
+					WHEN ${journeyRuns.journeyRef} LIKE 'flix|%' THEN 'flix'
+					WHEN ${journeyRuns.journeyRef} LIKE 'ferry|%' THEN 'ferry'
+					WHEN ${journeyRuns.journeyRef} ~ '^[12]\|' THEN 'rmv'
+					ELSE 'unknown'
+				END) || ':' ||
+				COALESCE(${journeyRuns.category}, 'Bus') || ':' ||
+				${journeyRuns.line}
+			)`.as("line"),
 			direction: journeyRuns.destName,
 			cancelled: journeyStops.cancelled,
 			ghost: sql<number>`${ghostCaseSql}`.as("ghost"),
@@ -832,14 +896,20 @@ export async function getAllStopNames(): Promise<StopPickerEntry[]> {
 /** All distinct line codes seen in journey_runs. */
 export async function getAllLineNames(): Promise<string[]> {
 	const rows = await db
-		.selectDistinct({ line: journeyRuns.line, category: journeyRuns.category })
+		.selectDistinct({
+			line: journeyRuns.line,
+			category: journeyRuns.category,
+			ref: journeyRuns.journeyRef,
+		})
 		.from(journeyRuns)
 		.where(isNotNull(journeyRuns.line))
 		.orderBy(journeyRuns.category, journeyRuns.line);
 	return rows
-		.map((r) =>
-			r.category && r.category !== "Bus" ? `${r.category}:${r.line}` : r.line,
-		)
+		.map((r) => {
+			const source = providerFromRef(r.ref);
+			const category = r.category ?? "Bus";
+			return `${source}:${category}:${r.line}`;
+		})
 		.filter(Boolean);
 }
 

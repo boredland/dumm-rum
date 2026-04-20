@@ -1,4 +1,4 @@
-import { and, eq, gte, inArray, isNotNull, sql } from "drizzle-orm";
+import { and, eq, gte, inArray, isNotNull, or, sql } from "drizzle-orm";
 import { db } from "../db/client.ts";
 import {
 	journeyRuns,
@@ -6,7 +6,12 @@ import {
 	knownStops,
 	telegramSubscriptions,
 } from "../db/schema.ts";
-import { DELAY_THRESHOLD_MIN, nowBerlin, parseLineSlug } from "./utils.ts";
+import {
+	DELAY_THRESHOLD_MIN,
+	nowBerlin,
+	parseLineSlug,
+	providerFromRef,
+} from "./utils.ts";
 
 interface TelegramUpdate {
 	message?: {
@@ -507,11 +512,19 @@ async function notifySubscribers(
 ): Promise<void> {
 	if (issues.length === 0 || !token) return;
 
-	const issueLines = [...new Set(issues.map((i) => i.line))];
+	const issueSlugs = [...new Set(issues.map((i) => i.line))];
+	// Extract raw line number from slug (last part) for legacy matching
+	const rawLines = issueSlugs.map((s) => parseLineSlug(s).line);
+
 	const subs = await db
 		.select()
 		.from(telegramSubscriptions)
-		.where(inArray(telegramSubscriptions.line, issueLines));
+		.where(
+			or(
+				inArray(telegramSubscriptions.line, issueSlugs),
+				inArray(telegramSubscriptions.line, rawLines),
+			),
+		);
 	if (subs.length === 0) return;
 
 	const subsByLine = new Map<string, typeof subs>();
@@ -525,8 +538,13 @@ async function notifySubscribers(
 	const notifications = new Map<string, { lang: Lang; msgs: string[] }>();
 
 	for (const issue of issues) {
-		const lineSubs = subsByLine.get(issue.line);
-		if (!lineSubs) continue;
+		const rawLine = parseLineSlug(issue.line).line;
+		// Match against either the composite slug or the raw line
+		const lineSubs = [
+			...(subsByLine.get(issue.line) ?? []),
+			...(subsByLine.get(rawLine) ?? []),
+		];
+		if (lineSubs.length === 0) continue;
 
 		for (const sub of lineSubs) {
 			if (!issue.direction.toLowerCase().includes(sub.direction.toLowerCase()))
@@ -579,20 +597,36 @@ export async function notifyJourneyIssues(
 	token: string,
 	journeyRef: string,
 	dayOfOperation: string,
-	line: string,
+	rawLine: string,
 	destName: string,
 ): Promise<void> {
 	if (!token) return;
 
-	const stops = await db
-		.select()
-		.from(journeyStops)
-		.where(
-			and(
-				eq(journeyStops.journeyRef, journeyRef),
-				eq(journeyStops.dayOfOperation, dayOfOperation),
+	const [run, stops] = await Promise.all([
+		db
+			.select({ category: journeyRuns.category })
+			.from(journeyRuns)
+			.where(
+				and(
+					eq(journeyRuns.journeyRef, journeyRef),
+					eq(journeyRuns.dayOfOperation, dayOfOperation),
+				),
+			)
+			.limit(1),
+		db
+			.select()
+			.from(journeyStops)
+			.where(
+				and(
+					eq(journeyStops.journeyRef, journeyRef),
+					eq(journeyStops.dayOfOperation, dayOfOperation),
+				),
 			),
-		);
+	]);
+
+	const source = providerFromRef(journeyRef);
+	const category = run[0]?.category ?? "Bus";
+	const line = `${source}:${category}:${rawLine}`;
 
 	const issues: Issue[] = [];
 	for (const stop of stops) {

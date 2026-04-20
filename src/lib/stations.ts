@@ -131,16 +131,27 @@ const LONG_DISTANCE_CATEGORIES = new Set([
 export function categoryIcons(categories: string[]): string {
 	const icons: string[] = [];
 	if (categories.some((c) => LONG_DISTANCE_CATEGORIES.has(c))) icons.push("🚄");
-	if (categories.some((c) => ["RE", "RB", "R"].includes(c))) icons.push("🚆");
+	if (categories.some((c) => ["RE", "RB", "R", "Regionalverkehr"].includes(c)))
+		icons.push("🚆");
 	if (categories.some((c) => ["S-Bahn", "S"].includes(c))) icons.push("🚈");
 	if (categories.some((c) => c === "U-Bahn")) icons.push("🚇");
 	if (
 		categories.some(
-			(c) => /stra(ß|ss)enbahn/i.test(c) || c === "Str" || c === "Tram",
+			(c) =>
+				/stra(ß|ss)enbahn/i.test(c) ||
+				c === "Str" ||
+				c === "Tram" ||
+				c === "Hochflurstraßenbahn" ||
+				c === "Niederflurstraßenbahn",
 		)
 	)
 		icons.push("🚋");
-	if (categories.some((c) => /bus$/i.test(c) || c === "AST" || c === "Bus"))
+	if (
+		categories.some(
+			(c) =>
+				/bus$/i.test(c) || c === "AST" || c === "Bus" || c === "Niederflurbus",
+		)
+	)
 		icons.push("🚌");
 	return icons.join("");
 }

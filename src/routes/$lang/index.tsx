@@ -448,7 +448,7 @@ function LineCard({ line, lang }: { line: LineSummary; lang: Lang }) {
 		>
 			<div className="bg-[#111112] px-3 py-1.5 flex justify-between items-center border-b border-black/40">
 				<div className="text-white/90 text-[9px] font-black uppercase tracking-[0.2em]">
-					Line
+					{line.slug.split(":")[0]} · {line.category}
 				</div>
 				<div className="text-white/30 scale-75">{categoryIcons([line.category])}</div>
 			</div>
