@@ -18,7 +18,7 @@ const BASE =
  * router `<Link>`s and other non-button triggers. */
 export function pillClass(active: boolean): string {
 	const state = active
-		? "bg-accent text-white border-accent shadow-sm"
+		? "bg-accent !text-white border-accent shadow-sm"
 		: "bg-surface-hover text-muted hover:text-fg surface-backlit";
 	return `${BASE} ${state}`;
 }

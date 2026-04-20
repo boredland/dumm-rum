@@ -109,31 +109,39 @@ a:hover {
 	text-decoration: underline;
 }
 
-/* Backlit Signage Effect for cards/surfaces */
-.surface-backlit {
-	box-shadow: 0 0 0 1px var(--border);
-	transition: box-shadow 0.2s ease;
-}
-.surface-backlit:hover {
-	box-shadow: 0 0 12px -2px rgba(0, 51, 153, 0.15);
-	background: var(--surface-hover);
-}
-
-/* Split-flap style numbers */
-.tabular-nums {
-	font-variant-numeric: tabular-nums;
-	letter-spacing: -0.02em;
+/* Industrial Signage Effects */
+.signage-frame {
+	border: 2px solid #2a2a2b;
+	border-radius: 4px;
+	background: #1a1a1b;
+	box-shadow: 
+		inset 0 1px 1px rgba(255,255,255,0.05),
+		0 2px 4px rgba(0,0,0,0.3);
 }
 
-/* Tactile Paving (The Yellow Line) Utility */
+.led-display {
+	background: #050506;
+	border-radius: 2px;
+	box-shadow: inset 0 2px 4px rgba(0,0,0,0.8);
+	padding: 0.5rem;
+	position: relative;
+	overflow: hidden;
+}
+
+/* Simulated LED Glow */
+.led-text-ok { color: #30d158; text-shadow: 0 0 8px rgba(48, 209, 88, 0.4); }
+.led-text-warn { color: #ff9f0a; text-shadow: 0 0 8px rgba(255, 159, 10, 0.4); }
+.led-text-danger { color: #ff453a; text-shadow: 0 0 8px rgba(255, 69, 58, 0.4); }
+.led-text-info { color: #5e5ce6; text-shadow: 0 0 8px rgba(94, 92, 230, 0.4); }
+
 .platform-yellow-line {
-	height: 4px;
+	height: 6px; /* Heavier paving */
 	background: repeating-linear-gradient(
 		90deg,
-		var(--color-platform-yellow),
-		var(--color-platform-yellow) 20px,
-		#000 20px,
-		#000 40px
+		#fdb913,
+		#fdb913 30px,
+		#000 30px,
+		#000 60px
 	);
 }
 

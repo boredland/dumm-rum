@@ -12,7 +12,6 @@ import type {
 } from "../../lib/queries.ts";
 import { Pill, pillClass } from "../../components/Pill.tsx";
 import { categoryIcons, slugForStop } from "../../lib/stations.ts";
-import { borderForCancRate, borderForScore } from "../../lib/status.ts";
 import { onTimeRate, pct, shortStationName } from "../../lib/utils.ts";
 
 const VALID_DAYS = new Set<DaysFilter>([
@@ -30,10 +29,6 @@ const getHomeSummaries = createServerFn({ method: "GET" })
 		return "today";
 	})
 	.handler(async ({ data: days }): Promise<HomePayload> => {
-		// Same cache window as the origin memo's fresh phase — matches
-		// `HOME_FRESH_MS` in src/lib/home.ts. SWR extends on top so
-		// Cloudflare can keep serving a recent copy during the window
-		// where the origin is still warming the next revision.
 		setResponseHeader(
 			"Cache-Control",
 			"public, max-age=30, s-maxage=60, stale-while-revalidate=600",
@@ -119,9 +114,6 @@ function Index() {
 		document.addEventListener("keydown", handler);
 		return () => document.removeEventListener("keydown", handler);
 	}, []);
-	// Platform-aware shortcut label. Mac uses ⌘K, everyone else Ctrl K.
-	// `navigator` is only defined on the client so we hydrate empty and
-	// update in an effect, matching the behaviour of similar hints.
 	const [shortcutLabel, setShortcutLabel] = useState("Ctrl K");
 	useEffect(() => {
 		const isMac =
@@ -152,9 +144,6 @@ function Index() {
 		if (catFilter === "RE,RB")
 			return normalized.some((c) => c === "RE" || c === "RB");
 		if (catFilter === "S") return normalized.some((c) => c === "S-Bahn");
-		// Long-distance rail — ICE / IC / EC / ECE / NJ / EN / RJ / RJX /
-		// TGV / EST all share the "Fernverkehr" filter so users don't
-		// need a chip per category.
 		if (catFilter === "FV")
 			return normalized.some((c) =>
 				[
@@ -224,10 +213,10 @@ function Index() {
 			<div className="platform-yellow-line sticky top-0 z-50" />
 			<main className="mx-auto max-w-5xl p-6 space-y-10">
 				<header className="space-y-1">
-					<h1 className="text-h1 font-bold flex items-center gap-2">
+					<h1 className="text-h1 font-black flex items-center gap-2 tracking-tighter">
 						🚏 {t(l, "home.title")}
 					</h1>
-					<p className="text-muted text-body">
+					<p className="text-muted text-body font-bold">
 						{t(l, "home.subtitle")}
 						{" · "}
 						<Link
@@ -239,7 +228,7 @@ function Index() {
 						</Link>
 					</p>
 					{oldestDate && (
-						<p className="text-meta text-dimmed">
+						<p className="text-[10px] text-dimmed uppercase font-black tracking-widest">
 							{t(l, "stat.since")}{" "}
 							{new Date(`${oldestDate}T00:00:00`).toLocaleDateString(l, {
 								year: "numeric",
@@ -251,34 +240,25 @@ function Index() {
 				</header>
 
 				<details className="group text-body text-muted">
-					<summary className="list-none [&::-webkit-details-marker]:hidden inline-flex items-center gap-1.5 cursor-pointer select-none font-medium hover:text-fg transition-colors">
-						<svg
-							width="10"
-							height="10"
-							viewBox="0 0 12 12"
-							className="transition-transform group-open:rotate-90"
-							aria-hidden
-						>
-							<path
-								d="M4 3 L8 6 L4 9"
-								fill="none"
-								stroke="currentColor"
-								strokeWidth="1.5"
-								strokeLinecap="round"
-								strokeLinejoin="round"
-							/>
-						</svg>
+					<summary className="list-none [&::-webkit-details-marker]:hidden inline-flex items-center gap-1.5 cursor-pointer select-none font-bold hover:text-fg transition-colors uppercase text-xs tracking-wider">
+						<div className="w-4 h-4 bg-muted/20 flex items-center justify-center rounded-sm group-open:rotate-90 transition-transform">▶</div>
 						{t(l, "home.methodology_title")}
 					</summary>
-					<ul className="mt-2 list-disc pl-5 space-y-1">
-						<li>{t(l, "home.methodology_collection")}</li>
-						<li>{t(l, "home.methodology_cancellation")}</li>
-						<li>{t(l, "home.methodology_delay")}</li>
-						<li>{t(l, "home.methodology_delayed")}</li>
-						<li>{t(l, "home.methodology_ghost")}</li>
-						<li>{t(l, "home.methodology_reliability")}</li>
-						<li>{t(l, "home.methodology_dedup")}</li>
-						<li>{t(l, "home.methodology_colors")}</li>
+					<ul className="mt-4 list-none pl-6 space-y-2 border-l-2 border-border/30">
+						{[
+							"collection",
+							"cancellation",
+							"delay",
+							"delayed",
+							"ghost",
+							"reliability",
+							"dedup",
+							"colors",
+						].map((key) => (
+							<li key={key} className="text-xs leading-relaxed">
+								{t(l, `home.methodology_${key}` as any)}
+							</li>
+						))}
 					</ul>
 				</details>
 
@@ -324,13 +304,14 @@ function Index() {
 				/>
 
 				<div className="relative">
+					<div className="absolute left-4 top-1/2 -translate-y-1/2 text-muted/40 pointer-events-none">🔍</div>
 					<input
 						ref={searchRef}
 						type="search"
 						placeholder={t(l, "search.placeholder")}
 						value={query}
 						onChange={(e) => setQuery(e.target.value)}
-						className="w-full bg-surface border border-border rounded-xl px-4 py-2.5 pr-14 text-body placeholder:text-muted focus:outline-none focus:border-accent"
+						className="w-full bg-surface border-2 border-border/50 rounded-sm px-10 py-3 text-body font-bold placeholder:text-muted/40 focus:outline-none focus:border-accent transition-colors"
 					/>
 					{query ? (
 						<button
@@ -340,23 +321,12 @@ function Index() {
 								setQuery("");
 								searchRef.current?.focus();
 							}}
-							className="absolute right-3 top-1/2 -translate-y-1/2 inline-flex h-6 w-6 items-center justify-center rounded-full text-muted hover:bg-surface-hover hover:text-fg transition-colors cursor-pointer"
+							className="absolute right-3 top-1/2 -translate-y-1/2 inline-flex h-8 w-8 items-center justify-center rounded-sm text-muted hover:bg-surface-hover hover:text-fg transition-colors cursor-pointer"
 						>
-							<svg
-								width="12"
-								height="12"
-								viewBox="0 0 12 12"
-								fill="none"
-								stroke="currentColor"
-								strokeWidth="1.5"
-								strokeLinecap="round"
-								aria-hidden
-							>
-								<path d="M3 3 L9 9 M9 3 L3 9" />
-							</svg>
+							✕
 						</button>
 					) : (
-						<kbd className="hidden sm:inline-flex absolute right-3 top-1/2 -translate-y-1/2 text-meta text-dimmed bg-surface-hover border border-border-dim rounded px-1.5 py-0.5 pointer-events-none">
+						<kbd className="hidden sm:inline-flex absolute right-3 top-1/2 -translate-y-1/2 text-[10px] font-black uppercase text-dimmed bg-surface-hover border border-border-dim rounded-sm px-2 py-1 pointer-events-none">
 							{shortcutLabel}
 						</kbd>
 					)}
@@ -395,23 +365,23 @@ function Index() {
 					))}
 				</Section>
 
-				<footer className="pt-8 border-t border-border-dim flex flex-wrap items-center gap-x-4 gap-y-2 text-meta text-dimmed">
-					<div className="flex items-center gap-3">
+				<footer className="pt-12 border-t-4 border-black flex flex-wrap items-center gap-x-8 gap-y-4 text-[10px] font-black uppercase tracking-widest text-dimmed">
+					<div className="flex items-center gap-4 bg-surface px-4 py-2 rounded-sm border border-border/50">
 						<a href="https://www.rmv.de" className="inline-flex shrink-0">
 							<img
 								src="/rmv-logo.svg"
 								alt="RMV"
 								width={74}
 								height={15}
-								className="grayscale hover:grayscale-0 transition-[filter]"
+								className="grayscale hover:grayscale-0 transition-[filter] opacity-50 hover:opacity-100"
 							/>
 						</a>
-						<span>{l === "de" ? "Datenquelle: RMV" : "Data source: RMV"}</span>
+						<span className="border-l border-border/50 pl-4">{l === "de" ? "Datenquelle: RMV" : "Data source: RMV"}</span>
 					</div>
-					<div className="flex items-center gap-3">
+					<div className="flex items-center gap-6">
 						<a
 							href="https://github.com/boredland/dumm-rum"
-							className="text-dimmed hover:text-fg transition-colors"
+							className="hover:text-fg transition-colors"
 						>
 							{t(l, "nav.github")}
 						</a>
@@ -419,7 +389,7 @@ function Index() {
 							href="https://github.com/boredland/dumm-rum/issues/new"
 							target="_blank"
 							rel="noopener noreferrer"
-							className="text-dimmed hover:text-fg transition-colors"
+							className="hover:text-fg transition-colors"
 						>
 							{t(l, "nav.report_bug")}
 						</a>
@@ -427,7 +397,7 @@ function Index() {
 					<Link
 						to="/$lang"
 						params={{ lang: other }}
-						className="ml-auto text-dimmed hover:text-fg transition-colors"
+						className="ml-auto bg-fg text-bg px-3 py-1.5 rounded-sm hover:opacity-80 transition-opacity"
 					>
 						{other.toUpperCase()}
 					</Link>
@@ -456,24 +426,12 @@ function Section({
 			open={open}
 			onToggle={(e) => onToggle((e.target as HTMLDetailsElement).open)}
 		>
-			<summary className="list-none [&::-webkit-details-marker]:hidden flex items-center gap-1.5 text-meta uppercase text-muted font-semibold mb-3 cursor-pointer select-none hover:text-fg transition-colors">
-				<svg
-					width="10"
-					height="10"
-					viewBox="0 0 12 12"
-					className="transition-transform group-open:rotate-90"
-					aria-hidden
-				>
-					<path
-						d="M4 3 L8 6 L4 9"
-						fill="none"
-						stroke="currentColor"
-						strokeWidth="1.5"
-						strokeLinecap="round"
-						strokeLinejoin="round"
-					/>
-				</svg>
+			<summary className="list-none [&::-webkit-details-marker]:hidden flex items-center gap-2 text-xs uppercase font-black text-fg mb-4 cursor-pointer select-none">
+				<div className="w-5 h-5 bg-fg text-bg flex items-center justify-center text-[10px] font-black group-open:rotate-90 transition-transform rounded-sm">
+					▶
+				</div>
 				{title}
+				<div className="h-0.5 bg-border flex-1 ml-3 opacity-30" />
 			</summary>
 			<div className={`${gridClass} mt-3`}>{children}</div>
 		</details>
@@ -486,28 +444,26 @@ function LineCard({ line, lang }: { line: LineSummary; lang: Lang }) {
 		<Link
 			to="/$lang/line/$line"
 			params={{ lang, line: line.line }}
-			className={`bg-surface border ${borderForScore(score)} rounded-xl p-4 no-underline text-fg hover:bg-surface-hover active:scale-[0.99] transition-all`}
+			className="signage-frame overflow-hidden no-underline group active:scale-[0.98] transition-all"
 		>
-			<div className="text-lg font-bold">
-				{categoryIcons([line.category])} {line.line}
-			</div>
-			<div
-				className="text-meta text-muted truncate"
-				title={line.destinations.join(" ↔ ")}
-			>
-				{line.destinations.join(" ↔ ")}
-			</div>
-			<div className="text-body text-muted mt-1">
-				{pct(line.cancelled, line.total)}% {t(lang, "home.cancelled")}
-				{line.ghost > 0 ? ` · ${pct(line.ghost, line.total)}% 👻` : ""}
-				{" · "}
-				{pct(line.delayed, line.total)}% {t(lang, "home.delayed")}
-			</div>
-			{line.total > 0 && (
-				<div className="text-meta text-muted mt-1">
-					{t(lang, "stat.reliability")}: {score}%
+			<div className="bg-[#003399] px-3 py-2 border-b-2 border-black/40">
+				<div className="text-white text-sm font-black tracking-tight flex items-center gap-2">
+					<span className="opacity-50 text-[10px]">L</span> {categoryIcons([line.category])} {line.line}
 				</div>
-			)}
+			</div>
+			<div className="p-3">
+				<div className="text-[10px] font-black text-muted/60 truncate mb-3 uppercase tracking-tighter" title={line.destinations.join(" ↔ ")}>
+					{line.destinations.join(" ↔ ")}
+				</div>
+				<div className="flex justify-between items-end">
+					<div className="text-[10px] font-black text-muted/40 uppercase">
+						<span className="text-danger">{pct(line.cancelled, line.total)}%</span> Canc
+					</div>
+					<div className="text-xl font-black tabular-nums text-fg leading-none flex items-baseline gap-0.5">
+						{score}<span className="text-[10px] text-muted/30">%</span>
+					</div>
+				</div>
+			</div>
 		</Link>
 	);
 }
@@ -515,38 +471,33 @@ function LineCard({ line, lang }: { line: LineSummary; lang: Lang }) {
 function StopCard({ stop, lang }: { stop: StopSummary; lang: Lang }) {
 	const cancRate =
 		stop.journeyCount > 0 ? stop.cancelled / stop.journeyCount : 0;
-	const border = borderForCancRate(cancRate);
 	const slug = slugForStop(stop.stopIds, stop.stopName);
 	return (
 		<Link
 			to="/$lang/$station"
 			params={{ lang, station: slug }}
-			className={`bg-surface border ${border} rounded-xl p-4 no-underline text-fg hover:bg-surface-hover active:scale-[0.99] transition-all`}
+			className="signage-frame overflow-hidden no-underline group active:scale-[0.98] transition-all"
 		>
-			<div className="text-meta uppercase text-muted mb-1">
-				{categoryIcons(stop.categories)}
+			<div className="bg-fg px-3 py-1.5 flex justify-between items-center border-b border-black/20">
+				<div className="text-bg text-[9px] font-black uppercase tracking-[0.2em]">
+					Station
+				</div>
+				<div className="text-bg/40 scale-75">{categoryIcons(stop.categories)}</div>
 			</div>
-			<div className="text-lg font-semibold">
-				{shortStationName(stop.stopName)}
+			<div className="p-3 bg-surface/30">
+				<div className="text-sm font-black text-fg mb-1 leading-tight tracking-tight">
+					{shortStationName(stop.stopName)}
+				</div>
+				<div className="text-[9px] font-bold text-muted/40 uppercase truncate mb-4">
+					{stop.lines.join(" · ")}
+				</div>
+				<div className="flex justify-between items-center border-t border-black/5 pt-2">
+					<span className="text-[8px] font-black text-muted/30 uppercase tracking-widest">Reliability Index</span>
+					<span className={`text-xs font-black tabular-nums ${cancRate > 0.1 ? 'text-danger' : 'text-ok'}`}>
+						{((1 - cancRate) * 100).toFixed(0)}%
+					</span>
+				</div>
 			</div>
-			{stop.lines.length > 0 && (
-				<div
-					className="text-meta text-muted truncate"
-					title={stop.lines.join(", ")}
-				>
-					{stop.lines.join(", ")}
-				</div>
-			)}
-			{stop.journeyCount > 0 ? (
-				<div className="text-body text-muted mt-1">
-					{stop.journeyCount} {t(lang, "stat.departures").toLowerCase()} ·{" "}
-					{pct(stop.cancelled, stop.journeyCount)}% {t(lang, "home.cancelled")}
-				</div>
-			) : (
-				<div className="text-body text-dimmed mt-1">
-					{t(lang, "table.no_data")}
-				</div>
-			)}
 		</Link>
 	);
 }
@@ -557,43 +508,31 @@ function OperatorCard({ op, lang }: { op: OperatorSummary; lang: Lang }) {
 		<Link
 			to="/$lang/operator/$operator"
 			params={{ lang, operator: op.operator }}
-			className={`bg-surface border ${borderForScore(score)} rounded-xl p-4 no-underline text-fg hover:bg-surface-hover active:scale-[0.99] transition-all`}
+			className="signage-frame p-4 no-underline group active:scale-[0.98] transition-all flex flex-col justify-between min-h-[90px]"
 		>
-			<div className="text-meta uppercase text-muted mb-1">
-				{categoryIcons(op.categories)}
-			</div>
-			<div className="text-lg font-semibold">{op.operator}</div>
-			{op.lines.length > 0 && (
-				<div
-					className="text-meta text-muted truncate"
-					title={op.lines.join(", ")}
-				>
-					{op.lines.join(", ")}
+			<div>
+				<div className="text-[8px] font-black text-muted/30 uppercase tracking-[0.3em] mb-2">
+					Service Provider
 				</div>
-			)}
-			<div className="text-body text-muted mt-1">
-				{pct(op.cancelled, op.total)}% {t(lang, "home.cancelled")}
-				{op.ghost > 0 ? ` · ${pct(op.ghost, op.total)}% 👻` : ""}
-				{" · "}
-				{pct(op.delayed, op.total)}% {t(lang, "home.delayed")}
-			</div>
-			{op.total > 0 && (
-				<div className="text-meta text-muted mt-1">
-					{t(lang, "stat.reliability")}: {score}%
+				<div className="text-sm font-black text-fg leading-tight tracking-tight">
+					{op.operator}
 				</div>
-			)}
+			</div>
+			<div className="flex justify-between items-center mt-4 border-t border-black/5 pt-3">
+				<div className="flex gap-1.5">
+					{op.categories.slice(0,3).map(c => (
+						<span key={c} className="w-4 h-4 bg-muted/10 border border-border/20 rounded-sm flex items-center justify-center text-[8px] font-black text-muted">{c[0]}</span>
+					))}
+				</div>
+				<div className="text-xs font-black tabular-nums text-fg/60 bg-black/5 px-2 py-0.5 rounded-sm">
+					{score}%
+				</div>
+			</div>
 		</Link>
 	);
 }
 
-// ─── Overview cards (OTP + worst offenders) ────────────────────────────
-
 type Worst = { name: string; slug: string; count: number; rate: number };
-
-// Tiny samples dominate a pure count/total ranking (1-of-1 cancelled = 100%),
-// so require a floor before an entry qualifies. Most long-distance trains run
-// 5–10 services through Frankfurt per day, so 10 covers nearly everything a
-// user would recognise while excluding first-run noise.
 const WORST_MIN_SAMPLE = 10;
 
 function findWorst(
@@ -646,7 +585,7 @@ function OverviewCards({
 		totalAll,
 	);
 	const scoreColor =
-		score < 80 ? "text-danger" : score < 90 ? "text-warn" : "text-ok";
+		score < 80 ? "led-text-danger" : score < 90 ? "led-text-warn" : "led-text-ok";
 
 	const lineItems = (key: "cancelled" | "ghost" | "delayed") =>
 		lines.map((l) => ({
@@ -671,52 +610,56 @@ function OverviewCards({
 		}));
 
 	return (
-		<div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-			<div className="bg-surface border border-border rounded-xl p-5 surface-backlit hover:-translate-y-0.5 transition-transform duration-200">
-				<div className="text-meta uppercase text-muted mb-1 font-semibold tracking-wider">
-					{t(lang, "home.overall_score")}
+		<div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
+			<div className="sm:col-span-1 signage-frame p-2 flex flex-col">
+				<div className="flex justify-between items-center mb-1 px-1">
+					<span className="text-[8px] font-black text-white/20 uppercase tracking-tighter">Main Monitor</span>
+					<div className="w-1.5 h-1.5 rounded-full bg-green-500/30 animate-pulse" />
 				</div>
-				<div
-					className={`text-h1 sm:text-display font-bold tabular-nums ${scoreColor}`}
-				>
-					{score}
-					<span className="text-lg text-muted">%</span>
-				</div>
-				{ghostAll > 0 && (
-					<div className="text-body text-info mt-1 font-medium">
-						👻 {scoreWithGhosts}%
+				<div className="led-display flex-1 flex flex-col justify-center py-4">
+					<div className="text-[10px] uppercase font-black text-muted/60 tracking-widest text-center mb-2">
+						{t(lang, "home.overall_score")}
 					</div>
-				)}
-				<div className="text-body text-muted mt-1 opacity-80">
-					{totalAll.toLocaleString(lang)}{" "}
-					{t(lang, "stat.departures").toLowerCase()}
+					<div className={`text-5xl font-black text-center tabular-nums ${scoreColor}`}>
+						{score}<span className="text-xl opacity-50">%</span>
+					</div>
+					{ghostAll > 0 && (
+						<div className="text-[10px] text-info text-center mt-3 font-black uppercase tracking-widest border-t border-white/10 pt-2 mx-4">
+							👻 {scoreWithGhosts}% Reliability
+						</div>
+					)}
+				</div>
+				<div className="text-[9px] text-center text-muted/40 uppercase font-black mt-2 py-1 bg-black/20 rounded-sm">
+					{totalAll.toLocaleString(lang)} tracked
 				</div>
 			</div>
 
-			<WorstCard
-				title={t(lang, "home.most_cancellations")}
-				line={findWorst(lineItems("cancelled"))}
-				station={findWorst(stopItems("cancelled"))}
-				op={findWorst(opItems("cancelled"))}
-				lang={lang}
-				color="text-danger"
-			/>
-			<WorstCard
-				title={t(lang, "home.most_ghosts")}
-				line={findWorst(lineItems("ghost"))}
-				station={findWorst(stopItems("ghost"))}
-				op={findWorst(opItems("ghost"))}
-				lang={lang}
-				color="text-info"
-			/>
-			<WorstCard
-				title={t(lang, "home.most_delays")}
-				line={findWorst(lineItems("delayed"))}
-				station={findWorst(stopItems("delayed"))}
-				op={findWorst(opItems("delayed"))}
-				lang={lang}
-				color="text-warn"
-			/>
+			<div className="sm:col-span-3 grid grid-cols-1 sm:grid-cols-3 gap-4">
+				<WorstCard
+					title={t(lang, "home.most_cancellations")}
+					line={findWorst(lineItems("cancelled"))}
+					station={findWorst(stopItems("cancelled"))}
+					op={findWorst(opItems("cancelled"))}
+					lang={lang}
+					color="text-danger"
+				/>
+				<WorstCard
+					title={t(lang, "home.most_ghosts")}
+					line={findWorst(lineItems("ghost"))}
+					station={findWorst(stopItems("ghost"))}
+					op={findWorst(opItems("ghost"))}
+					lang={lang}
+					color="text-info"
+				/>
+				<WorstCard
+					title={t(lang, "home.most_delays")}
+					line={findWorst(lineItems("delayed"))}
+					station={findWorst(stopItems("delayed"))}
+					op={findWorst(opItems("delayed"))}
+					lang={lang}
+					color="text-warn"
+				/>
+			</div>
 		</div>
 	);
 }
@@ -739,52 +682,58 @@ function WorstCard({
 	const hasAny =
 		(line?.count ?? 0) + (station?.count ?? 0) + (op?.count ?? 0) > 0;
 	return (
-		<div className="bg-surface border border-border rounded-xl p-5 surface-backlit hover:-translate-y-0.5 transition-transform duration-200">
-			<div className="text-meta uppercase text-muted mb-1 font-semibold tracking-wider">
-				{title}
+		<div className="signage-frame p-3 hover:border-muted/50 transition-colors">
+			<div className="text-[10px] uppercase font-black text-muted/50 mb-3 border-b border-white/5 pb-1 flex items-center gap-2">
+				<div className="w-1 h-1 bg-white/20 rounded-full" /> {title}
 			</div>
-			{!hasAny && <div className="text-h2 font-bold text-ok tabular-nums">0</div>}
-			{line && line.count > 0 && (
-				<Link
-					to="/$lang/line/$line"
-					params={{ lang, line: line.slug }}
-					className="block text-body mt-1 no-underline text-fg hover:text-accent transition-colors group"
-				>
-					<span className={`${color} font-bold`}>
-						{(line.rate * 100).toFixed(1)}%
-					</span>{" "}
-					<span className="text-muted group-hover:text-fg transition-colors">{t(lang, "home.line")}</span>{" "}
-					<span className="font-bold underline decoration-accent/30 group-hover:decoration-accent">{line.name}</span>
-				</Link>
-			)}
-			{station && station.count > 0 && (
-				<Link
-					to="/$lang/$station"
-					params={{ lang, station: station.slug }}
-					className="block text-body mt-1 no-underline text-fg hover:text-accent transition-colors line-clamp-2 group"
-					title={station.name}
-				>
-					<span className={`${color} font-bold`}>
-						{(station.rate * 100).toFixed(1)}%
-					</span>{" "}
-					<span className="text-muted group-hover:text-fg transition-colors">{t(lang, "home.station")}</span>{" "}
-					<span className="font-bold underline decoration-accent/30 group-hover:decoration-accent">{station.name}</span>
-				</Link>
-			)}
-			{op && op.count > 0 && (
-				<Link
-					to="/$lang/operator/$operator"
-					params={{ lang, operator: op.slug }}
-					className="block text-body mt-1 no-underline text-fg hover:text-accent transition-colors line-clamp-2 group"
-					title={op.name}
-				>
-					<span className={`${color} font-bold`}>
-						{(op.rate * 100).toFixed(1)}%
-					</span>{" "}
-					<span className="text-muted group-hover:text-fg transition-colors">{t(lang, "home.operator")}</span>{" "}
-					<span className="font-bold underline decoration-accent/30 group-hover:decoration-accent">{op.name}</span>
-				</Link>
-			)}
+			{!hasAny && <div className="text-xl font-black text-ok/30 tabular-nums">0.0%</div>}
+			<div className="space-y-3">
+				{line && line.count > 0 && (
+					<Link
+						to="/$lang/line/$line"
+						params={{ lang, line: line.slug }}
+						className="block no-underline group"
+					>
+						<div className="flex items-baseline justify-between">
+							<span className="text-xs font-black text-fg truncate flex-1 mr-2">{line.name}</span>
+							<span className={`${color} text-sm font-black tabular-nums`}>{(line.rate * 100).toFixed(1)}%</span>
+						</div>
+						<div className="text-[9px] uppercase font-bold text-muted/40 group-hover:text-muted/80 transition-colors">
+							{t(lang, "home.line")}
+						</div>
+					</Link>
+				)}
+				{station && station.count > 0 && (
+					<Link
+						to="/$lang/$station"
+						params={{ lang, station: station.slug }}
+						className="block no-underline group"
+					>
+						<div className="flex items-baseline justify-between">
+							<span className="text-xs font-black text-fg truncate flex-1 mr-2">{station.name}</span>
+							<span className={`${color} text-sm font-black tabular-nums`}>{(station.rate * 100).toFixed(1)}%</span>
+						</div>
+						<div className="text-[9px] uppercase font-bold text-muted/40 group-hover:text-muted/80 transition-colors">
+							{t(lang, "home.station")}
+						</div>
+					</Link>
+				)}
+				{op && op.count > 0 && (
+					<Link
+						to="/$lang/operator/$operator"
+						params={{ lang, operator: op.slug }}
+						className="block no-underline group"
+					>
+						<div className="flex items-baseline justify-between">
+							<span className="text-xs font-black text-fg truncate flex-1 mr-2">{op.name}</span>
+							<span className={`${color} text-sm font-black tabular-nums`}>{(op.rate * 100).toFixed(1)}%</span>
+						</div>
+						<div className="text-[9px] uppercase font-bold text-muted/40 group-hover:text-muted/80 transition-colors">
+							{t(lang, "home.operator")}
+						</div>
+					</Link>
+				)}
+			</div>
 		</div>
 	);
 }
