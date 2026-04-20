@@ -18,6 +18,7 @@
 	--color-warn: var(--warn);
 	--color-ok: var(--ok);
 	--color-info: var(--info);
+	--color-white: var(--white);
 
 	/* 5-step type scale shared across headers / body / meta lines. The
 	   fixed-pixel values (rather than rem) keep text on the whole-pixel
@@ -53,6 +54,7 @@
 	--accent: light-dark(#0969da, #2f81f7);
 	--surface: light-dark(#f6f8fa, #161b22);
 	--surface-hover: light-dark(#eff2f5, #1f2937);
+	--white: #ffffff;
 
 	/* Status colours. Kept as light-dark() pairs so dark-mode uses a
 	   slightly lighter value for contrast against the dark bg without
