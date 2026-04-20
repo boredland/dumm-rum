@@ -133,8 +133,14 @@ export function categoryIcons(categories: string[]): string {
 	if (categories.some((c) => LONG_DISTANCE_CATEGORIES.has(c))) icons.push("🚄");
 	if (categories.some((c) => ["RE", "RB", "R"].includes(c))) icons.push("🚆");
 	if (categories.some((c) => ["S-Bahn", "S"].includes(c))) icons.push("🚈");
-	if (categories.includes("U-Bahn")) icons.push("🚇");
-	if (categories.includes("Tram")) icons.push("🚋");
-	if (categories.includes("Bus")) icons.push("🚌");
+	if (categories.some((c) => c === "U-Bahn")) icons.push("🚇");
+	if (
+		categories.some(
+			(c) => /stra(ß|ss)enbahn/i.test(c) || c === "Str" || c === "Tram",
+		)
+	)
+		icons.push("🚋");
+	if (categories.some((c) => /bus$/i.test(c) || c === "AST" || c === "Bus"))
+		icons.push("🚌");
 	return icons.join("");
 }
