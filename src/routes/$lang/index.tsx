@@ -397,7 +397,7 @@ function Index() {
 					<Link
 						to="/$lang"
 						params={{ lang: other }}
-						className="ml-auto bg-fg text-bg px-3 py-1.5 rounded-sm hover:opacity-80 transition-opacity"
+						className="ml-auto bg-[#111112] text-white px-3 py-1.5 rounded-sm hover:opacity-80 transition-opacity border border-white/5 font-black text-[10px]"
 					>
 						{other.toUpperCase()}
 					</Link>
@@ -427,7 +427,7 @@ function Section({
 			onToggle={(e) => onToggle((e.target as HTMLDetailsElement).open)}
 		>
 			<summary className="list-none [&::-webkit-details-marker]:hidden flex items-center gap-2 text-xs uppercase font-black text-fg mb-4 cursor-pointer select-none">
-				<div className="w-5 h-5 bg-fg text-bg flex items-center justify-center text-[10px] font-black group-open:rotate-90 transition-transform rounded-sm">
+				<div className="w-5 h-5 bg-[#111112] text-white flex items-center justify-center text-[10px] font-black group-open:rotate-90 transition-transform rounded-sm border border-white/5">
 					▶
 				</div>
 				{title}
@@ -478,11 +478,11 @@ function StopCard({ stop, lang }: { stop: StopSummary; lang: Lang }) {
 			params={{ lang, station: slug }}
 			className="signage-frame overflow-hidden no-underline group active:scale-[0.98] transition-all"
 		>
-			<div className="bg-fg px-3 py-1.5 flex justify-between items-center border-b border-black/20">
-				<div className="text-bg text-[9px] font-black uppercase tracking-[0.2em]">
+			<div className="bg-[#111112] px-3 py-1.5 flex justify-between items-center border-b border-black/40">
+				<div className="text-white/90 text-[9px] font-black uppercase tracking-[0.2em]">
 					Station
 				</div>
-				<div className="text-bg/40 scale-75">{categoryIcons(stop.categories)}</div>
+				<div className="text-white/30 scale-75">{categoryIcons(stop.categories)}</div>
 			</div>
 			<div className="p-3 bg-surface/30">
 				<div className="text-sm font-black text-fg mb-1 leading-tight tracking-tight">
