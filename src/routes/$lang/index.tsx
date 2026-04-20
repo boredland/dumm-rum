@@ -210,7 +210,6 @@ function Index() {
 
 	return (
 		<div className="min-h-screen bg-bg">
-			<div className="platform-yellow-line sticky top-0 z-50" />
 			<main className="mx-auto max-w-5xl p-6 space-y-10">
 				<header className="space-y-1">
 					<h1 className="text-h1 font-black flex items-center gap-2 tracking-tighter">

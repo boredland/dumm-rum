@@ -135,6 +135,12 @@ const translations = {
 		"status.ok": "✅",
 		"status.on_time": "p\u00fcnktlich",
 
+		"dienststand.tracked_today": "Fahrten erfasst heute",
+		"dienststand.nominal": "Alle Systeme nominal",
+		"dienststand.lag": "Datenerfassung verzögert",
+		"dienststand.stale": "Erfassung gestört",
+		"dienststand.unknown": "Wird geladen",
+
 		"notfound.heading": "Geisterseite",
 		"notfound.subheading": "Im Fahrplan — trotzdem nie angekommen.",
 		"notfound.body":
@@ -280,6 +286,12 @@ const translations = {
 		"status.delayed": "⏳",
 		"status.ok": "✅",
 		"status.on_time": "on time",
+
+		"dienststand.tracked_today": "Journeys tracked today",
+		"dienststand.nominal": "All pollers nominal",
+		"dienststand.lag": "Ingest lagging",
+		"dienststand.stale": "Ingest stalled",
+		"dienststand.unknown": "Warming up",
 
 		"notfound.heading": "Ghost page",
 		"notfound.subheading": "Scheduled — never showed up.",
