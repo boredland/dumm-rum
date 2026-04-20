@@ -63,7 +63,7 @@ export function DaysToggleBar({
 	setActive: (f: DaysFilter) => void;
 }) {
 	const pill =
-		"px-3 py-1.5 text-xs font-medium rounded-full border border-border cursor-pointer transition-colors";
+		"px-3 py-1.5 text-meta font-bold rounded-full border border-border cursor-pointer transition-colors";
 	const on = "bg-surface-hover text-fg";
 	const off = "bg-transparent text-muted hover:text-fg";
 

@@ -210,12 +210,12 @@ export function SubscribeModal({
 	const canSubmit = line.trim().length > 0;
 
 	const pill =
-		"px-3 py-1.5 text-xs font-medium rounded-full border border-border cursor-pointer transition-colors";
+		"px-3 py-1.5 text-meta font-bold rounded-full border border-border cursor-pointer transition-colors";
 	const pillOn = "bg-accent/10 text-fg border-accent/60";
 	const pillOff = "bg-transparent text-muted hover:text-fg";
 	const field =
-		"w-full bg-surface border border-border rounded px-2 py-1.5 text-sm text-fg";
-	const label = "text-xs uppercase tracking-wide text-muted font-semibold";
+		"w-full bg-surface border border-border rounded px-2 py-1.5 text-body text-fg";
+	const label = "text-meta uppercase tracking-wide text-muted font-bold";
 
 	return (
 		<div

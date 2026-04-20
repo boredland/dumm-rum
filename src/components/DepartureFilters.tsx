@@ -209,7 +209,7 @@ function TelegramLinks({
 					href={buildSubscribeUrl({ line, direction, timeRanges })}
 					target="_blank"
 					rel="noopener noreferrer"
-					className="inline-flex items-center gap-1 px-3 py-1.5 text-meta font-medium rounded-full border border-border text-accent hover:bg-surface-hover transition-colors no-underline"
+					className="inline-flex items-center gap-1 px-3 py-1.5 text-meta font-bold rounded-full border border-border text-accent hover:bg-surface-hover transition-colors no-underline"
 				>
 					<span>📱</span> {line} → Telegram
 				</a>

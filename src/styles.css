@@ -16,6 +16,7 @@
 	--color-accent: var(--accent);
 	--color-surface: var(--surface);
 	--color-surface-hover: var(--surface-hover);
+	--color-signage: var(--signage);
 	--color-danger: var(--danger);
 	--color-warn: var(--warn);
 	--color-ok: var(--ok);
@@ -26,10 +27,13 @@
 	--color-platform-yellow: #fdb913; /* Tactile paving yellow */
 	--color-rail-blue: #003399; /* Classic rail signage blue */
 
-	/* 5-step type scale - adjusted for high-legibility signage style */
+	/* Signage type scale — the only sizes any new UI should use. */
+	--text-micro: 10px;
+	--text-micro--line-height: 1.2;
+	--text-micro--letter-spacing: 0.15em;
 	--text-meta: 11px;
 	--text-meta--line-height: 1.4;
-	--text-meta--letter-spacing: 0.05em; /* Tracking out meta for legibility */
+	--text-meta--letter-spacing: 0.05em;
 	--text-body: 14px;
 	--text-body--line-height: 1.5;
 	--text-lg: 16px;
@@ -58,6 +62,7 @@
 	--accent: #003399; /* Rail Blue */
 	--surface: #f2f2f2;
 	--surface-hover: #e8e8e8;
+	--signage: #111112; /* Dark signage panel — always dark, both themes */
 	--white: #ffffff;
 
 	/* Dark Mode: "Night Platform" (Concrete charcoal + illuminated LED) */

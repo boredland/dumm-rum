@@ -142,14 +142,14 @@ function StationDay() {
 				>
 					← {shortStationName(stopName)}
 				</Link>
-				<h1 className="text-2xl font-bold flex items-center gap-2 mt-2">
+				<h1 className="text-h1 font-black flex items-center gap-2 mt-2">
 					{categoryIcons(categories)} {shortStationName(stopName)}
 				</h1>
 				<p className="text-sm text-muted">{pretty}</p>
 			</header>
 
 			<section>
-				<h2 className="text-xs uppercase tracking-wide text-muted font-semibold mb-3">
+				<h2 className="text-meta uppercase tracking-widest text-muted font-bold mb-3">
 					{t(l, "section.all_departures")} ({filters.filtered.length}/
 					{departures.length})
 				</h2>
@@ -182,7 +182,7 @@ function StationDay() {
 										className="rounded-lg border border-border-dim p-3"
 									>
 										<div className="flex items-baseline justify-between gap-2">
-											<span className="tabular-nums font-semibold">
+											<span className="tabular-nums font-bold">
 												{formatTime(d.time)}
 												{d.rtTime && d.rtTime !== d.time && (
 													<span className="ml-1 text-dimmed font-normal">
@@ -190,7 +190,7 @@ function StationDay() {
 													</span>
 												)}
 											</span>
-											<span className="text-body font-semibold">{d.line}</span>
+											<span className="text-body font-bold">{d.line}</span>
 										</div>
 										<div
 											className="mt-1 text-body truncate"
@@ -258,7 +258,7 @@ function StationDay() {
 														</span>
 													)}
 												</td>
-												<td className="py-2 pr-3 font-semibold">{d.line}</td>
+												<td className="py-2 pr-3 font-bold">{d.line}</td>
 												<td className="py-2 pr-3 truncate" title={d.direction}>
 													{d.direction}
 												</td>

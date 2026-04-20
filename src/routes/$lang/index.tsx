@@ -228,7 +228,7 @@ function Index() {
 						</Link>
 					</p>
 					{oldestDate && (
-						<p className="text-[10px] text-dimmed uppercase font-black tracking-widest">
+						<p className="text-micro text-dimmed uppercase font-black tracking-widest">
 							{t(l, "stat.since")}{" "}
 							{new Date(`${oldestDate}T00:00:00`).toLocaleDateString(l, {
 								year: "numeric",
@@ -341,7 +341,7 @@ function Index() {
 							✕
 						</button>
 					) : (
-						<kbd className="hidden sm:inline-flex absolute right-3 top-1/2 -translate-y-1/2 text-[10px] font-black uppercase text-dimmed bg-surface-hover border border-border-dim rounded-sm px-2 py-1 pointer-events-none">
+						<kbd className="hidden sm:inline-flex absolute right-3 top-1/2 -translate-y-1/2 text-micro font-black uppercase text-dimmed bg-surface-hover border border-border-dim rounded-sm px-2 py-1 pointer-events-none">
 							{shortcutLabel}
 						</kbd>
 					)}
@@ -382,7 +382,7 @@ function Index() {
 					))}
 				</Section>
 
-				<footer className="pt-12 border-t-4 border-black flex flex-wrap items-center gap-x-8 gap-y-4 text-[10px] font-black uppercase tracking-widest text-dimmed">
+				<footer className="pt-12 border-t-4 border-black flex flex-wrap items-center gap-x-8 gap-y-4 text-micro font-black uppercase tracking-widest text-dimmed">
 					<div className="flex items-center gap-4 bg-surface px-4 py-2 rounded-sm border border-border/50">
 						<a href="https://www.rmv.de" className="inline-flex shrink-0">
 							<img
@@ -416,7 +416,7 @@ function Index() {
 					<Link
 						to="/$lang"
 						params={{ lang: other }}
-						className="ml-auto bg-[#111112] text-white px-3 py-1.5 rounded-sm hover:opacity-80 transition-opacity border border-white/5 font-black text-[10px]"
+						className="ml-auto bg-signage text-white px-3 py-1.5 rounded-sm hover:opacity-80 transition-opacity border border-white/5 font-black text-micro"
 					>
 						{other.toUpperCase()}
 					</Link>
@@ -446,7 +446,7 @@ function Section({
 			onToggle={(e) => onToggle((e.target as HTMLDetailsElement).open)}
 		>
 			<summary className="list-none [&::-webkit-details-marker]:hidden flex items-center gap-2 text-xs uppercase font-black text-fg mb-4 cursor-pointer select-none">
-				<div className="w-5 h-5 bg-[#111112] text-white flex items-center justify-center text-[10px] font-black group-open:rotate-90 transition-transform rounded-sm border border-white/5">
+				<div className="w-5 h-5 bg-signage text-white flex items-center justify-center text-micro font-black group-open:rotate-90 transition-transform rounded-sm border border-white/5">
 					▶
 				</div>
 				{title}
@@ -465,8 +465,8 @@ function LineCard({ line, lang }: { line: LineSummary; lang: Lang }) {
 			params={{ lang, line: line.slug }}
 			className="signage-frame overflow-hidden no-underline group active:scale-[0.98] transition-all"
 		>
-			<div className="bg-[#111112] px-3 py-1.5 flex justify-between items-center border-b border-black/40">
-				<div className="text-white/90 text-[9px] font-black uppercase tracking-[0.2em]">
+			<div className="bg-signage px-3 py-1.5 flex justify-between items-center border-b border-black/40">
+				<div className="text-white/90 text-micro font-black uppercase tracking-[0.2em]">
 					{line.slug.split(":")[0]} · {line.category}
 				</div>
 				<div className="text-white/30 scale-75">
@@ -478,13 +478,13 @@ function LineCard({ line, lang }: { line: LineSummary; lang: Lang }) {
 					{line.line}
 				</div>
 				<div
-					className="text-[9px] font-bold text-muted/40 uppercase truncate mb-4"
+					className="text-micro font-bold text-muted/40 uppercase truncate mb-4"
 					title={line.destinations.join(" ↔ ")}
 				>
 					{line.destinations.join(" ↔ ")}
 				</div>
 				<div className="flex justify-between items-center border-t border-black/5 pt-2">
-					<span className="text-[8px] font-black text-muted/30 uppercase tracking-widest">
+					<span className="text-micro font-black text-muted/30 uppercase tracking-widest">
 						Reliability Index
 					</span>
 					<span
@@ -509,8 +509,8 @@ function StopCard({ stop, lang }: { stop: StopSummary; lang: Lang }) {
 			params={{ lang, station: slug }}
 			className="signage-frame overflow-hidden no-underline group active:scale-[0.98] transition-all"
 		>
-			<div className="bg-[#111112] px-3 py-1.5 flex justify-between items-center border-b border-black/40">
-				<div className="text-white/90 text-[9px] font-black uppercase tracking-[0.2em]">
+			<div className="bg-signage px-3 py-1.5 flex justify-between items-center border-b border-black/40">
+				<div className="text-white/90 text-micro font-black uppercase tracking-[0.2em]">
 					Station
 				</div>
 				<div className="text-white/30 scale-75">
@@ -521,11 +521,11 @@ function StopCard({ stop, lang }: { stop: StopSummary; lang: Lang }) {
 				<div className="text-sm font-black text-fg mb-1 leading-tight tracking-tight">
 					{shortStationName(stop.stopName)}
 				</div>
-				<div className="text-[9px] font-bold text-muted/40 uppercase truncate mb-4">
+				<div className="text-micro font-bold text-muted/40 uppercase truncate mb-4">
 					{stop.lines.join(" · ")}
 				</div>
 				<div className="flex justify-between items-center border-t border-black/5 pt-2">
-					<span className="text-[8px] font-black text-muted/30 uppercase tracking-widest">
+					<span className="text-micro font-black text-muted/30 uppercase tracking-widest">
 						Reliability Index
 					</span>
 					<span
@@ -547,15 +547,15 @@ function OperatorCard({ op, lang }: { op: OperatorSummary; lang: Lang }) {
 			params={{ lang, operator: op.operator }}
 			className="signage-frame overflow-hidden no-underline group active:scale-[0.98] transition-all"
 		>
-			<div className="bg-[#111112] px-3 py-1.5 flex justify-between items-center border-b border-black/40">
-				<div className="text-white/90 text-[9px] font-black uppercase tracking-[0.2em]">
+			<div className="bg-signage px-3 py-1.5 flex justify-between items-center border-b border-black/40">
+				<div className="text-white/90 text-micro font-black uppercase tracking-[0.2em]">
 					Operator
 				</div>
 				<div className="flex gap-0.5 scale-75 origin-right opacity-30">
 					{op.categories.slice(0, 3).map((c) => (
 						<span
 							key={c}
-							className="w-3 h-3 bg-white text-black flex items-center justify-center text-[7px] font-black rounded-full"
+							className="w-3 h-3 bg-white text-black flex items-center justify-center text-micro font-black rounded-full"
 						>
 							{c[0]}
 						</span>
@@ -566,11 +566,11 @@ function OperatorCard({ op, lang }: { op: OperatorSummary; lang: Lang }) {
 				<div className="text-sm font-black text-fg mb-1 leading-tight tracking-tight">
 					{op.operator}
 				</div>
-				<div className="text-[9px] font-bold text-muted/40 uppercase truncate mb-4">
+				<div className="text-micro font-bold text-muted/40 uppercase truncate mb-4">
 					{op.lines.join(" · ")}
 				</div>
 				<div className="flex justify-between items-center border-t border-black/5 pt-2">
-					<span className="text-[8px] font-black text-muted/30 uppercase tracking-widest">
+					<span className="text-micro font-black text-muted/30 uppercase tracking-widest">
 						Reliability Index
 					</span>
 					<span
@@ -669,28 +669,28 @@ function OverviewCards({
 		<div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
 			<div className="sm:col-span-1 signage-frame p-2 flex flex-col">
 				<div className="flex justify-between items-center mb-1 px-1">
-					<span className="text-[8px] font-black text-white/20 uppercase tracking-tighter">
+					<span className="text-micro font-black text-white/20 uppercase tracking-tighter">
 						Status Monitor
 					</span>
 					<div className="w-1.5 h-1.5 rounded-full bg-green-500/30 animate-pulse" />
 				</div>
 				<div className="led-display flex-1 flex flex-col justify-center py-4">
-					<div className="text-[10px] uppercase font-black text-muted/60 tracking-widest text-center mb-2">
+					<div className="text-micro uppercase font-black text-muted/60 tracking-widest text-center mb-2">
 						{t(lang, "home.overall_score")}
 					</div>
 					<div
-						className={`text-5xl font-black text-center tabular-nums ${scoreColor}`}
+						className={`text-display font-black text-center tabular-nums ${scoreColor}`}
 					>
 						{score}
-						<span className="text-xl opacity-50">%</span>
+						<span className="text-h2 opacity-50">%</span>
 					</div>
 					{ghostAll > 0 && (
-						<div className="text-[10px] text-info text-center mt-3 font-black uppercase tracking-widest border-t border-white/10 pt-2 mx-4">
+						<div className="text-micro text-info text-center mt-3 font-black uppercase tracking-widest border-t border-white/10 pt-2 mx-4">
 							👻 {scoreWithGhosts}% Reliability
 						</div>
 					)}
 				</div>
-				<div className="text-[9px] text-center text-muted/40 uppercase font-black mt-2 py-1 bg-black/20 rounded-sm">
+				<div className="text-micro text-center text-muted/40 uppercase font-black mt-2 py-1 bg-black/20 rounded-sm">
 					{totalAll.toLocaleString(lang)} tracked
 				</div>
 			</div>
@@ -744,11 +744,11 @@ function WorstCard({
 		(line?.count ?? 0) + (station?.count ?? 0) + (op?.count ?? 0) > 0;
 	return (
 		<div className="signage-frame p-3 hover:border-muted/50 transition-colors">
-			<div className="text-[10px] uppercase font-black text-muted/50 mb-3 border-b border-white/5 pb-1 flex items-center gap-2">
+			<div className="text-micro uppercase font-black text-muted/50 mb-3 border-b border-white/5 pb-1 flex items-center gap-2">
 				<div className="w-1 h-1 bg-white/20 rounded-full" /> {title}
 			</div>
 			{!hasAny && (
-				<div className="text-xl font-black text-ok/30 tabular-nums">0.0%</div>
+				<div className="text-h2 font-black text-ok/30 tabular-nums">0.0%</div>
 			)}
 			<div className="space-y-3">
 				{line && line.count > 0 && (
@@ -765,7 +765,7 @@ function WorstCard({
 								{(line.rate * 100).toFixed(1)}%
 							</span>
 						</div>
-						<div className="text-[9px] uppercase font-bold text-muted/40 group-hover:text-muted/80 transition-colors">
+						<div className="text-micro uppercase font-bold text-muted/40 group-hover:text-muted/80 transition-colors">
 							{t(lang, "home.line")}
 						</div>
 					</Link>
@@ -784,7 +784,7 @@ function WorstCard({
 								{(station.rate * 100).toFixed(1)}%
 							</span>
 						</div>
-						<div className="text-[9px] uppercase font-bold text-muted/40 group-hover:text-muted/80 transition-colors">
+						<div className="text-micro uppercase font-bold text-muted/40 group-hover:text-muted/80 transition-colors">
 							{t(lang, "home.station")}
 						</div>
 					</Link>
@@ -803,7 +803,7 @@ function WorstCard({
 								{(op.rate * 100).toFixed(1)}%
 							</span>
 						</div>
-						<div className="text-[9px] uppercase font-bold text-muted/40 group-hover:text-muted/80 transition-colors">
+						<div className="text-micro uppercase font-bold text-muted/40 group-hover:text-muted/80 transition-colors">
 							{t(lang, "home.operator")}
 						</div>
 					</Link>

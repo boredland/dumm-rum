@@ -98,13 +98,13 @@ function LineIndex() {
 					← {t(l, "nav.back")}
 				</Link>
 				<div className="flex items-center justify-between gap-3 mt-2 flex-wrap">
-					<h1 className="text-3xl font-bold flex items-center gap-2">
+					<h1 className="text-h1 font-black flex items-center gap-2">
 						{categoryIcons(stats.categories)} {line}
 					</h1>
 					<button
 						type="button"
 						onClick={() => setSubscribeOpen(true)}
-						className="px-3 py-1.5 text-xs font-medium rounded-full border border-border text-accent hover:bg-surface-hover cursor-pointer transition-colors"
+						className="px-3 py-1.5 text-xs font-bold rounded-full border border-border text-accent hover:bg-surface-hover cursor-pointer transition-colors"
 					>
 						{t(l, "subscribe.cta.button")}
 					</button>
@@ -142,7 +142,7 @@ function LineIndex() {
 			</section>
 
 			<section>
-				<h2 className="text-xs uppercase tracking-wide text-muted font-semibold mb-3">
+				<h2 className="text-meta uppercase tracking-widest text-muted font-bold mb-3">
 					{t(l, "section.daily_breakdown")} ({daysFilter.filtered.length})
 				</h2>
 				<DaysToggleBar
@@ -203,7 +203,7 @@ function LineIndex() {
 											<td className="py-2 pr-4 text-right tabular-nums">
 												{d.delayed}
 											</td>
-											<td className="py-2 pr-4 text-right tabular-nums font-semibold">
+											<td className="py-2 pr-4 text-right tabular-nums font-bold">
 												{dayScore}%
 											</td>
 											<td className="py-2 pr-4 text-right">

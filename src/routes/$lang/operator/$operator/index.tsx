@@ -95,7 +95,7 @@ function OperatorIndex() {
 				>
 					← {t(l, "nav.back")}
 				</Link>
-				<h1 className="text-3xl font-bold flex items-center gap-2 mt-2">
+				<h1 className="text-h1 font-black flex items-center gap-2 mt-2">
 					{categoryIcons(stats.categories)} {operator}
 				</h1>
 				{stats.lines.length > 0 && (
@@ -133,7 +133,7 @@ function OperatorIndex() {
 			</section>
 
 			<section>
-				<h2 className="text-xs uppercase tracking-wide text-muted font-semibold mb-3">
+				<h2 className="text-meta uppercase tracking-widest text-muted font-bold mb-3">
 					{t(l, "section.daily_breakdown")} ({daysFilter.filtered.length})
 				</h2>
 				<DaysToggleBar
@@ -194,7 +194,7 @@ function OperatorIndex() {
 											<td className="py-2 pr-4 text-right tabular-nums">
 												{d.delayed}
 											</td>
-											<td className="py-2 pr-4 text-right tabular-nums font-semibold">
+											<td className="py-2 pr-4 text-right tabular-nums font-bold">
 												{dayScore}%
 											</td>
 											<td className="py-2 pr-4 text-right">

@@ -141,12 +141,12 @@ function LineDay() {
 				>
 					← {line}
 				</Link>
-				<h1 className="text-2xl font-bold mt-2">{line}</h1>
+				<h1 className="text-h1 font-black mt-2">{line}</h1>
 				<p className="text-sm text-muted">{pretty}</p>
 			</header>
 
 			<section>
-				<h2 className="text-xs uppercase tracking-wide text-muted font-semibold mb-3">
+				<h2 className="text-meta uppercase tracking-widest text-muted font-bold mb-3">
 					{t(l, "section.all_departures")} ({filters.filtered.length}/
 					{journeys.length})
 				</h2>

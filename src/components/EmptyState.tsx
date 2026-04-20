@@ -25,13 +25,13 @@ export function EmptyState({
 			<div aria-hidden className="text-[28px] leading-none opacity-70">
 				{icon}
 			</div>
-			<p className="text-body font-medium text-muted">{title}</p>
+			<p className="text-body font-bold text-muted">{title}</p>
 			{hint && <p className="text-meta text-dimmed">{hint}</p>}
 			{action && (
 				<button
 					type="button"
 					onClick={action.onClick}
-					className="mt-1 cursor-pointer rounded-full border border-border px-3 py-1.5 text-meta font-medium text-fg transition-colors hover:bg-surface-hover"
+					className="mt-1 cursor-pointer rounded-full border border-border px-3 py-1.5 text-meta font-bold text-fg transition-colors hover:bg-surface-hover"
 				>
 					{action.label}
 				</button>

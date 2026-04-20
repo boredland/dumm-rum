@@ -1874,14 +1874,14 @@ function MapPage() {
 				<Link
 					to="/$lang"
 					params={{ lang: l }}
-					className="text-sm font-semibold text-fg no-underline hover:text-accent shrink-0"
+					className="text-sm font-bold text-fg no-underline hover:text-accent shrink-0"
 				>
 					← DummRum
 				</Link>
 				{followName && (
 					<>
 						<span className="text-border">|</span>
-						<span className="text-xs text-fg font-medium shrink-0 flex items-center gap-1">
+						<span className="text-xs text-fg font-bold shrink-0 flex items-center gap-1">
 							Following {followName}
 							<button
 								type="button"

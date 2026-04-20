@@ -12,8 +12,8 @@ export function NotFoundPage() {
 				👻
 			</div>
 			<div>
-				<h1 className="text-display font-bold tracking-tight">404</h1>
-				<p className="mt-2 text-h2 font-semibold text-muted">
+				<h1 className="text-display font-black tracking-tight">404</h1>
+				<p className="mt-2 text-h2 font-bold text-muted">
 					{t(lang, "notfound.heading")}
 				</p>
 				<p className="mt-1 text-body text-dimmed">
@@ -46,7 +46,7 @@ export function NotFoundPage() {
 			<Link
 				to="/$lang"
 				params={{ lang }}
-				className="rounded-full border border-border bg-surface px-4 py-2 text-body font-medium text-fg no-underline transition-colors hover:bg-surface-hover"
+				className="rounded-full border border-border bg-surface px-4 py-2 text-body font-bold text-fg no-underline transition-colors hover:bg-surface-hover"
 			>
 				{t(lang, "notfound.cta")}
 			</Link>

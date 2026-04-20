@@ -11,7 +11,7 @@ function NotFound() {
 	return (
 		<main className="mx-auto max-w-md p-12 text-center space-y-4">
 			<div className="text-6xl">🚏</div>
-			<h1 className="text-2xl font-bold">404</h1>
+			<h1 className="text-h1 font-black">404</h1>
 			<p className="text-muted">
 				{l === "de"
 					? "Diese Seite existiert nicht."
