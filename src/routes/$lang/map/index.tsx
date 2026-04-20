@@ -631,6 +631,8 @@ type MapSearch = {
 	hide?: string;
 	/** "0" hides the Realtime layer group; anything else = visible. */
 	rt?: string;
+	/** "0" hides the GPS layer group. */
+	gps?: string;
 	/** "0" hides the Schedule layer group. */
 	sched?: string;
 	/** Vehicle id to auto-follow on load — restored from the URL so a
@@ -655,6 +657,7 @@ export const Route = createFileRoute("/$lang/map/")({
 		lon: typeof search.lon === "number" ? search.lon : undefined,
 		hide: typeof search.hide === "string" ? search.hide : undefined,
 		rt: typeof search.rt === "string" ? search.rt : undefined,
+		gps: typeof search.gps === "string" ? search.gps : undefined,
 		sched: typeof search.sched === "string" ? search.sched : undefined,
 		follow: typeof search.follow === "string" ? search.follow : undefined,
 		anim: typeof search.anim === "string" ? search.anim : undefined,
@@ -1071,10 +1074,12 @@ function MapPage() {
 				const rawPos = interpolateVehicle(v, nowAdj);
 				pos = clampForward(v.id, rawPos, nowAdj, renderedPosRef.current);
 			}
-			const isLive = v.hasRT || v.hasGps;
-			const layerKey = `${v.category}${isLive ? "" : " (sched)"}`;
+			const layerKey = v.hasGps
+				? `${v.category} (gps)`
+				: `${v.category}${v.hasRT ? "" : " (sched)"}`;
 			const layer = layers.get(layerKey);
 			if (!layer) continue;
+			const isLive = v.hasRT || v.hasGps;
 			const iconKey = `${size}|${showLabel}|${v.heading}|${v.category}|${v.delay}|${v.occupancy}|${isLive}|${v.stationary ? 1 : 0}|${v.hasGps ? "g" : ""}`;
 
 			const entry = existing.get(v.id);
@@ -1379,6 +1384,10 @@ function MapPage() {
 				const attribution = attrFor(cat);
 				layers.set(cat, L.layerGroup([], { attribution }).addTo(map));
 				layers.set(
+					`${cat} (gps)`,
+					L.layerGroup([], { attribution }).addTo(map),
+				);
+				layers.set(
 					`${cat} (sched)`,
 					L.layerGroup([], { attribution }).addTo(map),
 				);
@@ -1386,6 +1395,7 @@ function MapPage() {
 			categoryLayersRef.current = layers;
 
 			const allRt = CATS.map((c) => layers.get(c)!);
+			const allGps = CATS.map((c) => layers.get(`${c} (gps)`)!);
 			const allSched = CATS.map((c) => layers.get(`${c} (sched)`)!);
 
 			// Initial visibility state is derived from the search params on
@@ -1396,16 +1406,20 @@ function MapPage() {
 				(search.hide ?? "").split(",").filter(Boolean),
 			);
 			let rtVisible = search.rt !== "0";
+			let gpsVisible = search.gps !== "0";
 			let schedVisible = search.sched !== "0";
 			let animEnabled = animationsRef.current;
 
 			const applyCatVisibility = (cat: string) => {
 				const rtG = layers.get(cat);
+				const gpsG = layers.get(`${cat} (gps)`);
 				const schedG = layers.get(`${cat} (sched)`);
-				if (!rtG || !schedG) return;
+				if (!rtG || !gpsG || !schedG) return;
 				const hidden = hiddenCats.has(cat);
 				if (hidden || !rtVisible) map.removeLayer(rtG);
 				else map.addLayer(rtG);
+				if (hidden || !gpsVisible) map.removeLayer(gpsG);
+				else map.addLayer(gpsG);
 				if (hidden || !schedVisible) map.removeLayer(schedG);
 				else map.addLayer(schedG);
 			};
@@ -1419,6 +1433,7 @@ function MapPage() {
 							? Array.from(hiddenCats).join(",")
 							: undefined,
 						rt: rtVisible ? undefined : "0",
+						gps: gpsVisible ? undefined : "0",
 						sched: schedVisible ? undefined : "0",
 						anim: animEnabled ? undefined : "0",
 					}),
@@ -1540,8 +1555,20 @@ function MapPage() {
 
 					addHeading("Data");
 					addToggle(
+						'<svg width="16" height="16" viewBox="0 0 16 16" style="vertical-align:middle"><circle cx="8" cy="8" r="7" fill="#27ae60"/><path d="M5 8l2 2 4-4" stroke="#fff" stroke-width="2.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+						` ${t(l, "map.layer_gps")}`,
+						gpsVisible,
+						(next) => {
+							gpsVisible = next;
+							for (const g of allGps)
+								(next ? map.addLayer : map.removeLayer).call(map, g);
+							for (const cat of CATS) applyCatVisibility(cat);
+							syncSearch();
+						},
+					);
+					addToggle(
 						'<svg width="16" height="16" viewBox="0 0 16 16" style="vertical-align:middle"><circle cx="8" cy="8" r="7" fill="#27ae60"/><text x="8" y="11.5" text-anchor="middle" font-size="9" font-weight="bold" fill="#fff">RT</text></svg>',
-						" Realtime",
+						` ${t(l, "map.layer_realtime")}`,
 						rtVisible,
 						(next) => {
 							rtVisible = next;
@@ -1555,7 +1582,7 @@ function MapPage() {
 					);
 					addToggle(
 						'<svg width="16" height="16" viewBox="0 0 16 16" style="vertical-align:middle"><circle cx="8" cy="8" r="7" fill="#999" opacity=".45"/><text x="8" y="11" text-anchor="middle" font-size="7" font-weight="bold" fill="#fff">SCH</text></svg>',
-						" Schedule",
+						` ${t(l, "map.layer_schedule")}`,
 						schedVisible,
 						(next) => {
 							schedVisible = next;
