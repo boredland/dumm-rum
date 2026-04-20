@@ -11,7 +11,7 @@
  */
 
 /** Hardcoded on the server side too; single source kept here. */
-export const TELEGRAM_BOT = "dummrum_bot";
+export const TELEGRAM_BOT = "rumsteh_bot";
 
 export interface SubscribePayload {
 	line: string;

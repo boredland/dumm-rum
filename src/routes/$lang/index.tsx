@@ -220,217 +220,220 @@ function Index() {
 		});
 
 	return (
-		<main className="mx-auto max-w-5xl p-6 space-y-10">
-			<header className="space-y-1">
-				<h1 className="text-h1 font-bold flex items-center gap-2">
-					🚏 {t(l, "home.title")}
-				</h1>
-				<p className="text-muted text-body">
-					{t(l, "home.subtitle")}
-					{" · "}
-					<Link
-						to="/$lang/map"
-						params={{ lang: l }}
-						className="text-accent hover:underline"
-					>
-						{t(l, "map.link")} →
-					</Link>
-				</p>
-				{oldestDate && (
-					<p className="text-meta text-dimmed">
-						{t(l, "stat.since")}{" "}
-						{new Date(`${oldestDate}T00:00:00`).toLocaleDateString(l, {
-							year: "numeric",
-							month: "long",
-							day: "numeric",
-						})}
+		<div className="min-h-screen bg-bg">
+			<div className="platform-yellow-line sticky top-0 z-50" />
+			<main className="mx-auto max-w-5xl p-6 space-y-10">
+				<header className="space-y-1">
+					<h1 className="text-h1 font-bold flex items-center gap-2">
+						🚏 {t(l, "home.title")}
+					</h1>
+					<p className="text-muted text-body">
+						{t(l, "home.subtitle")}
+						{" · "}
+						<Link
+							to="/$lang/map"
+							params={{ lang: l }}
+							className="text-accent hover:underline"
+						>
+							{t(l, "map.link")} →
+						</Link>
 					</p>
-				)}
-			</header>
+					{oldestDate && (
+						<p className="text-meta text-dimmed">
+							{t(l, "stat.since")}{" "}
+							{new Date(`${oldestDate}T00:00:00`).toLocaleDateString(l, {
+								year: "numeric",
+								month: "long",
+								day: "numeric",
+							})}
+						</p>
+					)}
+				</header>
 
-			<details className="group text-body text-muted">
-				<summary className="list-none [&::-webkit-details-marker]:hidden inline-flex items-center gap-1.5 cursor-pointer select-none font-medium hover:text-fg transition-colors">
-					<svg
-						width="10"
-						height="10"
-						viewBox="0 0 12 12"
-						className="transition-transform group-open:rotate-90"
-						aria-hidden
-					>
-						<path
-							d="M4 3 L8 6 L4 9"
-							fill="none"
-							stroke="currentColor"
-							strokeWidth="1.5"
-							strokeLinecap="round"
-							strokeLinejoin="round"
-						/>
-					</svg>
-					{t(l, "home.methodology_title")}
-				</summary>
-				<ul className="mt-2 list-disc pl-5 space-y-1">
-					<li>{t(l, "home.methodology_collection")}</li>
-					<li>{t(l, "home.methodology_cancellation")}</li>
-					<li>{t(l, "home.methodology_delay")}</li>
-					<li>{t(l, "home.methodology_delayed")}</li>
-					<li>{t(l, "home.methodology_ghost")}</li>
-					<li>{t(l, "home.methodology_reliability")}</li>
-					<li>{t(l, "home.methodology_dedup")}</li>
-					<li>{t(l, "home.methodology_colors")}</li>
-				</ul>
-			</details>
-
-			<div className="flex flex-wrap gap-2">
-				{DAY_FILTERS.map((f) => (
-					<Link
-						key={f.key}
-						to="/$lang"
-						params={{ lang: l }}
-						search={f.key === "today" ? {} : { days: f.key }}
-						className={pillClass(activeDays === f.key)}
-					>
-						{t(l, f.labelKey)}
-					</Link>
-				))}
-			</div>
-
-			<div className="flex flex-wrap gap-2">
-				{[
-					{ key: "all", label: t(l, "filter.all") },
-					{ key: "U-Bahn", label: "U-Bahn" },
-					{ key: "S", label: "S-Bahn" },
-					{ key: "Tram", label: "Tram" },
-					{ key: "Bus", label: "Bus" },
-					{ key: "RE,RB", label: "RE/RB" },
-					{ key: "FV", label: "Fernverkehr" },
-				].map((f) => (
-					<Pill
-						key={f.key}
-						active={catFilter === f.key}
-						onClick={() => setCatFilter(f.key)}
-					>
-						{f.label}
-					</Pill>
-				))}
-			</div>
-
-			<OverviewCards
-				lines={filteredLines}
-				stops={filteredStops}
-				operators={filteredOps}
-				lang={l}
-			/>
-
-			<div className="relative">
-				<input
-					ref={searchRef}
-					type="search"
-					placeholder={t(l, "search.placeholder")}
-					value={query}
-					onChange={(e) => setQuery(e.target.value)}
-					className="w-full bg-surface border border-border rounded-xl px-4 py-2.5 pr-14 text-body placeholder:text-muted focus:outline-none focus:border-accent"
-				/>
-				{query ? (
-					<button
-						type="button"
-						aria-label={l === "de" ? "Suche leeren" : "Clear search"}
-						onClick={() => {
-							setQuery("");
-							searchRef.current?.focus();
-						}}
-						className="absolute right-3 top-1/2 -translate-y-1/2 inline-flex h-6 w-6 items-center justify-center rounded-full text-muted hover:bg-surface-hover hover:text-fg transition-colors cursor-pointer"
-					>
+				<details className="group text-body text-muted">
+					<summary className="list-none [&::-webkit-details-marker]:hidden inline-flex items-center gap-1.5 cursor-pointer select-none font-medium hover:text-fg transition-colors">
 						<svg
-							width="12"
-							height="12"
+							width="10"
+							height="10"
 							viewBox="0 0 12 12"
-							fill="none"
-							stroke="currentColor"
-							strokeWidth="1.5"
-							strokeLinecap="round"
+							className="transition-transform group-open:rotate-90"
 							aria-hidden
 						>
-							<path d="M3 3 L9 9 M9 3 L3 9" />
+							<path
+								d="M4 3 L8 6 L4 9"
+								fill="none"
+								stroke="currentColor"
+								strokeWidth="1.5"
+								strokeLinecap="round"
+								strokeLinejoin="round"
+							/>
 						</svg>
-					</button>
-				) : (
-					<kbd className="hidden sm:inline-flex absolute right-3 top-1/2 -translate-y-1/2 text-meta text-dimmed bg-surface-hover border border-border-dim rounded px-1.5 py-0.5 pointer-events-none">
-						{shortcutLabel}
-					</kbd>
-				)}
-			</div>
+						{t(l, "home.methodology_title")}
+					</summary>
+					<ul className="mt-2 list-disc pl-5 space-y-1">
+						<li>{t(l, "home.methodology_collection")}</li>
+						<li>{t(l, "home.methodology_cancellation")}</li>
+						<li>{t(l, "home.methodology_delay")}</li>
+						<li>{t(l, "home.methodology_delayed")}</li>
+						<li>{t(l, "home.methodology_ghost")}</li>
+						<li>{t(l, "home.methodology_reliability")}</li>
+						<li>{t(l, "home.methodology_dedup")}</li>
+						<li>{t(l, "home.methodology_colors")}</li>
+					</ul>
+				</details>
 
-			<Section
-				title={`${t(l, "home.lines")} (${filteredLines.length})`}
-				gridClass="grid grid-cols-[repeat(auto-fit,minmax(180px,1fr))] gap-3"
-				open={openSections.has("lines") || (!!q && filteredLines.length > 0)}
-				onToggle={(open) => toggleSection("lines", open)}
-			>
-				{filteredLines.map((line) => (
-					<LineCard key={line.line} line={line} lang={l} />
-				))}
-			</Section>
-
-			<Section
-				title={`${t(l, "home.stations")} (${filteredStops.length})`}
-				gridClass="grid grid-cols-[repeat(auto-fit,minmax(220px,1fr))] gap-3"
-				open={openSections.has("stops") || (!!q && filteredStops.length > 0)}
-				onToggle={(open) => toggleSection("stops", open)}
-			>
-				{filteredStops.slice(0, q ? 200 : 40).map((stop) => (
-					<StopCard key={stop.stopName} stop={stop} lang={l} />
-				))}
-			</Section>
-
-			<Section
-				title={`${t(l, "home.operators")} (${filteredOps.length})`}
-				gridClass="grid grid-cols-[repeat(auto-fit,minmax(260px,1fr))] gap-3"
-				open={openSections.has("operators") || (!!q && filteredOps.length > 0)}
-				onToggle={(open) => toggleSection("operators", open)}
-			>
-				{filteredOps.map((op) => (
-					<OperatorCard key={op.operator} op={op} lang={l} />
-				))}
-			</Section>
-
-			<footer className="pt-8 border-t border-border-dim flex flex-wrap items-center gap-x-4 gap-y-2 text-meta text-dimmed">
-				<div className="flex items-center gap-3">
-					<a href="https://www.rmv.de" className="inline-flex shrink-0">
-						<img
-							src="/rmv-logo.svg"
-							alt="RMV"
-							width={74}
-							height={15}
-							className="grayscale hover:grayscale-0 transition-[filter]"
-						/>
-					</a>
-					<span>{l === "de" ? "Datenquelle: RMV" : "Data source: RMV"}</span>
+				<div className="flex flex-wrap gap-2">
+					{DAY_FILTERS.map((f) => (
+						<Link
+							key={f.key}
+							to="/$lang"
+							params={{ lang: l }}
+							search={f.key === "today" ? {} : { days: f.key }}
+							className={pillClass(activeDays === f.key)}
+						>
+							{t(l, f.labelKey)}
+						</Link>
+					))}
 				</div>
-				<div className="flex items-center gap-3">
-					<a
-						href="https://github.com/boredland/dumm-rum"
-						className="text-dimmed hover:text-fg transition-colors"
-					>
-						{t(l, "nav.github")}
-					</a>
-					<a
-						href="https://github.com/boredland/dumm-rum/issues/new"
-						target="_blank"
-						rel="noopener noreferrer"
-						className="text-dimmed hover:text-fg transition-colors"
-					>
-						{t(l, "nav.report_bug")}
-					</a>
+
+				<div className="flex flex-wrap gap-2">
+					{[
+						{ key: "all", label: t(l, "filter.all") },
+						{ key: "U-Bahn", label: "U-Bahn" },
+						{ key: "S", label: "S-Bahn" },
+						{ key: "Tram", label: "Tram" },
+						{ key: "Bus", label: "Bus" },
+						{ key: "RE,RB", label: "RE/RB" },
+						{ key: "FV", label: "Fernverkehr" },
+					].map((f) => (
+						<Pill
+							key={f.key}
+							active={catFilter === f.key}
+							onClick={() => setCatFilter(f.key)}
+						>
+							{f.label}
+						</Pill>
+					))}
 				</div>
-				<Link
-					to="/$lang"
-					params={{ lang: other }}
-					className="ml-auto text-dimmed hover:text-fg transition-colors"
+
+				<OverviewCards
+					lines={filteredLines}
+					stops={filteredStops}
+					operators={filteredOps}
+					lang={l}
+				/>
+
+				<div className="relative">
+					<input
+						ref={searchRef}
+						type="search"
+						placeholder={t(l, "search.placeholder")}
+						value={query}
+						onChange={(e) => setQuery(e.target.value)}
+						className="w-full bg-surface border border-border rounded-xl px-4 py-2.5 pr-14 text-body placeholder:text-muted focus:outline-none focus:border-accent"
+					/>
+					{query ? (
+						<button
+							type="button"
+							aria-label={l === "de" ? "Suche leeren" : "Clear search"}
+							onClick={() => {
+								setQuery("");
+								searchRef.current?.focus();
+							}}
+							className="absolute right-3 top-1/2 -translate-y-1/2 inline-flex h-6 w-6 items-center justify-center rounded-full text-muted hover:bg-surface-hover hover:text-fg transition-colors cursor-pointer"
+						>
+							<svg
+								width="12"
+								height="12"
+								viewBox="0 0 12 12"
+								fill="none"
+								stroke="currentColor"
+								strokeWidth="1.5"
+								strokeLinecap="round"
+								aria-hidden
+							>
+								<path d="M3 3 L9 9 M9 3 L3 9" />
+							</svg>
+						</button>
+					) : (
+						<kbd className="hidden sm:inline-flex absolute right-3 top-1/2 -translate-y-1/2 text-meta text-dimmed bg-surface-hover border border-border-dim rounded px-1.5 py-0.5 pointer-events-none">
+							{shortcutLabel}
+						</kbd>
+					)}
+				</div>
+
+				<Section
+					title={`${t(l, "home.lines")} (${filteredLines.length})`}
+					gridClass="grid grid-cols-[repeat(auto-fit,minmax(180px,1fr))] gap-3"
+					open={openSections.has("lines") || (!!q && filteredLines.length > 0)}
+					onToggle={(open) => toggleSection("lines", open)}
 				>
-					{other.toUpperCase()}
-				</Link>
-			</footer>
-		</main>
+					{filteredLines.map((line) => (
+						<LineCard key={line.line} line={line} lang={l} />
+					))}
+				</Section>
+
+				<Section
+					title={`${t(l, "home.stations")} (${filteredStops.length})`}
+					gridClass="grid grid-cols-[repeat(auto-fit,minmax(220px,1fr))] gap-3"
+					open={openSections.has("stops") || (!!q && filteredStops.length > 0)}
+					onToggle={(open) => toggleSection("stops", open)}
+				>
+					{filteredStops.slice(0, q ? 200 : 40).map((stop) => (
+						<StopCard key={stop.stopName} stop={stop} lang={l} />
+					))}
+				</Section>
+
+				<Section
+					title={`${t(l, "home.operators")} (${filteredOps.length})`}
+					gridClass="grid grid-cols-[repeat(auto-fit,minmax(260px,1fr))] gap-3"
+					open={openSections.has("operators") || (!!q && filteredOps.length > 0)}
+					onToggle={(open) => toggleSection("operators", open)}
+				>
+					{filteredOps.map((op) => (
+						<OperatorCard key={op.operator} op={op} lang={l} />
+					))}
+				</Section>
+
+				<footer className="pt-8 border-t border-border-dim flex flex-wrap items-center gap-x-4 gap-y-2 text-meta text-dimmed">
+					<div className="flex items-center gap-3">
+						<a href="https://www.rmv.de" className="inline-flex shrink-0">
+							<img
+								src="/rmv-logo.svg"
+								alt="RMV"
+								width={74}
+								height={15}
+								className="grayscale hover:grayscale-0 transition-[filter]"
+							/>
+						</a>
+						<span>{l === "de" ? "Datenquelle: RMV" : "Data source: RMV"}</span>
+					</div>
+					<div className="flex items-center gap-3">
+						<a
+							href="https://github.com/boredland/dumm-rum"
+							className="text-dimmed hover:text-fg transition-colors"
+						>
+							{t(l, "nav.github")}
+						</a>
+						<a
+							href="https://github.com/boredland/dumm-rum/issues/new"
+							target="_blank"
+							rel="noopener noreferrer"
+							className="text-dimmed hover:text-fg transition-colors"
+						>
+							{t(l, "nav.report_bug")}
+						</a>
+					</div>
+					<Link
+						to="/$lang"
+						params={{ lang: other }}
+						className="ml-auto text-dimmed hover:text-fg transition-colors"
+					>
+						{other.toUpperCase()}
+					</Link>
+				</footer>
+			</main>
+		</div>
 	);
 }
 
@@ -669,8 +672,8 @@ function OverviewCards({
 
 	return (
 		<div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-			<div className="bg-surface border border-border rounded-xl p-5">
-				<div className="text-meta uppercase text-muted mb-1">
+			<div className="bg-surface border border-border rounded-xl p-5 surface-backlit hover:-translate-y-0.5 transition-transform duration-200">
+				<div className="text-meta uppercase text-muted mb-1 font-semibold tracking-wider">
 					{t(lang, "home.overall_score")}
 				</div>
 				<div
@@ -680,11 +683,11 @@ function OverviewCards({
 					<span className="text-lg text-muted">%</span>
 				</div>
 				{ghostAll > 0 && (
-					<div className="text-body text-info mt-1">
+					<div className="text-body text-info mt-1 font-medium">
 						👻 {scoreWithGhosts}%
 					</div>
 				)}
-				<div className="text-body text-muted mt-1">
+				<div className="text-body text-muted mt-1 opacity-80">
 					{totalAll.toLocaleString(lang)}{" "}
 					{t(lang, "stat.departures").toLowerCase()}
 				</div>
@@ -736,50 +739,50 @@ function WorstCard({
 	const hasAny =
 		(line?.count ?? 0) + (station?.count ?? 0) + (op?.count ?? 0) > 0;
 	return (
-		<div className="bg-surface border border-border rounded-xl p-5">
-			<div className="text-meta uppercase text-muted mb-1">
+		<div className="bg-surface border border-border rounded-xl p-5 surface-backlit hover:-translate-y-0.5 transition-transform duration-200">
+			<div className="text-meta uppercase text-muted mb-1 font-semibold tracking-wider">
 				{title}
 			</div>
-			{!hasAny && <div className="text-h2 font-bold text-ok">0</div>}
+			{!hasAny && <div className="text-h2 font-bold text-ok tabular-nums">0</div>}
 			{line && line.count > 0 && (
 				<Link
 					to="/$lang/line/$line"
 					params={{ lang, line: line.slug }}
-					className="block text-body mt-1 no-underline text-fg hover:text-accent transition-colors"
+					className="block text-body mt-1 no-underline text-fg hover:text-accent transition-colors group"
 				>
-					<span className={`${color} font-semibold`}>
+					<span className={`${color} font-bold`}>
 						{(line.rate * 100).toFixed(1)}%
 					</span>{" "}
-					<span className="text-muted">{t(lang, "home.line")}</span>{" "}
-					<span className="font-semibold">{line.name}</span>
+					<span className="text-muted group-hover:text-fg transition-colors">{t(lang, "home.line")}</span>{" "}
+					<span className="font-bold underline decoration-accent/30 group-hover:decoration-accent">{line.name}</span>
 				</Link>
 			)}
 			{station && station.count > 0 && (
 				<Link
 					to="/$lang/$station"
 					params={{ lang, station: station.slug }}
-					className="block text-body mt-1 no-underline text-fg hover:text-accent transition-colors line-clamp-2"
+					className="block text-body mt-1 no-underline text-fg hover:text-accent transition-colors line-clamp-2 group"
 					title={station.name}
 				>
-					<span className={`${color} font-semibold`}>
+					<span className={`${color} font-bold`}>
 						{(station.rate * 100).toFixed(1)}%
 					</span>{" "}
-					<span className="text-muted">{t(lang, "home.station")}</span>{" "}
-					<span className="font-semibold">{station.name}</span>
+					<span className="text-muted group-hover:text-fg transition-colors">{t(lang, "home.station")}</span>{" "}
+					<span className="font-bold underline decoration-accent/30 group-hover:decoration-accent">{station.name}</span>
 				</Link>
 			)}
 			{op && op.count > 0 && (
 				<Link
 					to="/$lang/operator/$operator"
 					params={{ lang, operator: op.slug }}
-					className="block text-body mt-1 no-underline text-fg hover:text-accent transition-colors line-clamp-2"
+					className="block text-body mt-1 no-underline text-fg hover:text-accent transition-colors line-clamp-2 group"
 					title={op.name}
 				>
-					<span className={`${color} font-semibold`}>
+					<span className={`${color} font-bold`}>
 						{(op.rate * 100).toFixed(1)}%
 					</span>{" "}
-					<span className="text-muted">{t(lang, "home.operator")}</span>{" "}
-					<span className="font-semibold">{op.name}</span>
+					<span className="text-muted group-hover:text-fg transition-colors">{t(lang, "home.operator")}</span>{" "}
+					<span className="font-bold underline decoration-accent/30 group-hover:decoration-accent">{op.name}</span>
 				</Link>
 			)}
 		</div>

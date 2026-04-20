@@ -21,8 +21,10 @@ export function StatCard({
 	const color =
 		tone === "danger" ? "text-danger" : tone === "info" ? "text-info" : "";
 	return (
-		<div className="bg-surface border border-border rounded-xl p-4">
-			<div className="text-meta uppercase text-muted mb-1">{label}</div>
+		<div className="bg-surface border border-border rounded-xl p-4 surface-backlit hover:-translate-y-0.5 transition-transform duration-200">
+			<div className="text-meta uppercase text-muted mb-1 font-semibold tracking-wider">
+				{label}
+			</div>
 			<div className={`text-h2 font-bold tabular-nums ${color}`}>{value}</div>
 		</div>
 	);

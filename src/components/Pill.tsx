@@ -12,14 +12,14 @@
 import type { ReactNode } from "react";
 
 const BASE =
-	"cursor-pointer rounded-full border border-border px-3 py-1.5 text-meta font-medium no-underline transition-colors";
+	"cursor-pointer rounded border border-border px-3 py-1.5 text-meta font-bold uppercase tracking-wider no-underline transition-all active:translate-y-0.5 select-none";
 
 /** Returns the className string for a pill in the given state. Use on
  * router `<Link>`s and other non-button triggers. */
 export function pillClass(active: boolean): string {
 	const state = active
-		? "bg-surface-hover text-fg"
-		: "bg-transparent text-muted hover:text-fg";
+		? "bg-accent text-white border-accent shadow-sm"
+		: "bg-surface-hover text-muted hover:text-fg surface-backlit";
 	return `${BASE} ${state}`;
 }
 

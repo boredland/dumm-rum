@@ -1,9 +1,11 @@
 @import "tailwindcss";
 
-/* Existing CSS vars (light-dark() based) are the source of truth;
-   Tailwind picks them up through @theme inline so utilities like
-   `bg-surface`, `text-muted`, `text-danger`, `text-h1` all resolve to
-   the right var and adapt to the OS theme without a JS toggle. */
+/* 
+   "The Digital Platform" Theme 
+   Inspired by public transit signage, station materials (concrete, steel, LED), 
+   and highly legible physical infrastructure.
+*/
+
 @theme inline {
 	--color-bg: var(--bg);
 	--color-fg: var(--fg);
@@ -19,52 +21,63 @@
 	--color-ok: var(--ok);
 	--color-info: var(--info);
 	--color-white: var(--white);
+	
+	/* Branding / Special Transit Colors */
+	--color-platform-yellow: #fdb913; /* Tactile paving yellow */
+	--color-rail-blue: #003399;     /* Classic rail signage blue */
 
-	/* 5-step type scale shared across headers / body / meta lines. The
-	   fixed-pixel values (rather than rem) keep text on the whole-pixel
-	   grid so sub-pixel aliasing from `text-[0.7rem]` style values is
-	   gone. Each class sets font-size + line-height + letter-spacing
-	   together so call sites don't have to remember three utilities. */
+	/* 5-step type scale - adjusted for high-legibility signage style */
 	--text-meta: 11px;
 	--text-meta--line-height: 1.4;
-	--text-meta--letter-spacing: 0.04em;
+	--text-meta--letter-spacing: 0.05em; /* Tracking out meta for legibility */
 	--text-body: 14px;
-	--text-body--line-height: 1.55;
+	--text-body--line-height: 1.5;
 	--text-lg: 16px;
-	--text-lg--line-height: 1.5;
-	--text-h2: 20px;
-	--text-h2--line-height: 1.3;
-	--text-h2--letter-spacing: -0.005em;
-	--text-h1: 30px;
-	--text-h1--line-height: 1.15;
-	--text-h1--letter-spacing: -0.01em;
-	--text-display: 44px;
-	--text-display--line-height: 1.05;
-	--text-display--letter-spacing: -0.02em;
+	--text-lg--line-height: 1.4;
+	--text-h2: 22px;
+	--text-h2--line-height: 1.2;
+	--text-h2--letter-spacing: -0.01em;
+	--text-h1: 32px;
+	--text-h1--line-height: 1.1;
+	--text-h1--letter-spacing: -0.02em;
+	--text-display: 48px;
+	--text-display--line-height: 1.0;
+	--text-display--letter-spacing: -0.03em;
 }
 
 :root {
 	color-scheme: light dark;
-	--bg: light-dark(#ffffff, #0d1117);
-	--fg: light-dark(#1f2328, #e6edf3);
-	--muted: light-dark(#656d76, #8b949e);
-	--dimmed: light-dark(#848d97, #6e7681);
-	--border: light-dark(#d0d7de, #30363d);
-	--border-dim: light-dark(#e4e7eb, #21262d);
-	--accent: light-dark(#0969da, #2f81f7);
-	--surface: light-dark(#f6f8fa, #161b22);
-	--surface-hover: light-dark(#eff2f5, #1f2937);
+	
+	/* Light Mode: Modern Station Signage (Clean, high-contrast) */
+	--bg: #ffffff;
+	--fg: #1a1a1b;
+	--muted: #575757;
+	--dimmed: #8e8e8e;
+	--border: #d1d1d1;
+	--border-dim: #e5e5e5;
+	--accent: #003399; /* Rail Blue */
+	--surface: #f2f2f2;
+	--surface-hover: #e8e8e8;
 	--white: #ffffff;
 
-	/* Status colours. Kept as light-dark() pairs so dark-mode uses a
-	   slightly lighter value for contrast against the dark bg without
-	   sacrificing recognisability. Tuned against the previous raw
-	   Tailwind ramp (red-500 / amber-500 / emerald-500 / purple-400)
-	   so existing mental models carry over. */
-	--danger: light-dark(#d1242f, #f85149);
-	--warn: light-dark(#bf8700, #e3b341);
-	--ok: light-dark(#1a7f37, #3fb950);
-	--info: light-dark(#8250df, #bc8cff);
+	/* Dark Mode: "Night Platform" (Concrete charcoal + illuminated LED) */
+	@media (prefers-color-scheme: dark) {
+		--bg: #121212; /* Deep matte asphalt */
+		--fg: #e1e1e1;
+		--muted: #a0a0a0;
+		--dimmed: #666666;
+		--border: #2a2a2a;
+		--border-dim: #1e1e1e;
+		--accent: #3b82f6;
+		--surface: #1a1a1b; /* Concrete block */
+		--surface-hover: #222223;
+	}
+
+	/* Transit Status Tones (Tuned for LED-style contrast) */
+	--danger: light-dark(#d1242f, #ff453a);
+	--warn: light-dark(#bf8700, #ff9f0a);
+	--ok: light-dark(#1a7f37, #30d158);
+	--info: light-dark(#003399, #5e5ce6);
 }
 
 html,
@@ -73,8 +86,19 @@ body {
 	padding: 0;
 	background: var(--bg);
 	color: var(--fg);
-	font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+	font-family: "Inter", system-ui, -apple-system, sans-serif;
 	line-height: 1.5;
+	-webkit-font-smoothing: antialiased;
+}
+
+/* Tactile Station UI: Global interactive resets */
+button, a {
+	transition: all 0.15s ease-in-out;
+	cursor: pointer;
+}
+
+button:active, a:active {
+	transform: translateY(1px) scale(0.99);
 }
 
 a {
@@ -85,60 +109,67 @@ a:hover {
 	text-decoration: underline;
 }
 
-/* WCAG 2.4.7 — visible focus for keyboard users on every interactive
-   element. Scoped to :focus-visible so mouse clicks don't draw the
-   outline. Individual components can override with their own style,
-   but the default ensures no element ships without any indicator. */
+/* Backlit Signage Effect for cards/surfaces */
+.surface-backlit {
+	box-shadow: 0 0 0 1px var(--border);
+	transition: box-shadow 0.2s ease;
+}
+.surface-backlit:hover {
+	box-shadow: 0 0 12px -2px rgba(0, 51, 153, 0.15);
+	background: var(--surface-hover);
+}
+
+/* Split-flap style numbers */
+.tabular-nums {
+	font-variant-numeric: tabular-nums;
+	letter-spacing: -0.02em;
+}
+
+/* Tactile Paving (The Yellow Line) Utility */
+.platform-yellow-line {
+	height: 4px;
+	background: repeating-linear-gradient(
+		90deg,
+		var(--color-platform-yellow),
+		var(--color-platform-yellow) 20px,
+		#000 20px,
+		#000 40px
+	);
+}
+
 *:focus-visible {
-	outline: 2px solid var(--accent);
+	outline: 2px solid var(--color-platform-yellow);
 	outline-offset: 2px;
-	border-radius: 4px;
+	border-radius: 2px;
 }
 
-/* Users who've asked the OS for reduced motion shouldn't see the
-   rAF-driven marker animations, the signal-bar pulse, or CSS transform
-   transitions — freeze everything to its resting state. */
 @media (prefers-reduced-motion: reduce) {
-	.dummrum-gps-smooth {
+	button, a {
 		transition: none;
-	}
-	.dummrum-gps-bar {
-		animation: none;
-		opacity: 1;
+		transform: none;
 	}
 }
 
-/* Real-GPS markers snap to the fresh fix on each poll (~15 s bahn.expert,
-   ~10 s HEAG) because we keep them as single-point waypoints — the
-   alternative of shifting the HAFAS polyline onto the fix introduced
-   visible off-rail motion. A transform transition smooths the snap
-   without lying about the trajectory. */
 .dummrum-gps-smooth {
 	transition: transform 800ms linear;
 }
 
-/* Three-bar signal indicator for vehicles on a live AVL feed. Bars
-   fade in sequentially (short → medium → tall) the way phone cell-
-   reception animations work, so at a glance the badge reads as
-   "actively receiving" rather than a generic highlight. */
 @keyframes dummrum-gps-bar {
-	0%,
-	100% {
-		opacity: 0.35;
-	}
-	50% {
-		opacity: 1;
-	}
+	0%, 100% { opacity: 0.35; }
+	50% { opacity: 1; }
 }
 .dummrum-gps-bar {
 	animation: dummrum-gps-bar 1.5s ease-in-out infinite;
 }
-.dummrum-gps-bar-0 {
-	animation-delay: 0s;
+.dummrum-gps-bar-0 { animation-delay: 0s; }
+.dummrum-gps-bar-1 { animation-delay: 0.2s; }
+.dummrum-gps-bar-2 { animation-delay: 0.4s; }
+
+/* Ghost Run Flickering Signage */
+@keyframes ghost-flicker {
+	0%, 19.999%, 22%, 62.999%, 64%, 64.999%, 70%, 100% { opacity: 1; }
+	20%, 21.999%, 63%, 63.999%, 65%, 69.999% { opacity: 0.4; }
 }
-.dummrum-gps-bar-1 {
-	animation-delay: 0.2s;
-}
-.dummrum-gps-bar-2 {
-	animation-delay: 0.4s;
+.ghost-departure {
+	animation: ghost-flicker 4s linear infinite;
 }

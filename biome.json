@@ -1,19 +1,10 @@
 {
 	"$schema": "https://biomejs.dev/schemas/2.4.12/schema.json",
-	"root": false,
+	"root": true,
 	"vcs": {
 		"enabled": true,
 		"clientKind": "git",
 		"useIgnoreFile": true
-	},
-	"files": {
-		"ignoreUnknown": false,
-		"includes": [
-			"src/**",
-			"!src/routeTree.gen.ts",
-			"serve.ts",
-			"vite.config.ts"
-		]
 	},
 	"formatter": {
 		"enabled": true,
@@ -28,14 +19,6 @@
 	"javascript": {
 		"formatter": {
 			"quoteStyle": "double"
-		}
-	},
-	"assist": {
-		"enabled": true,
-		"actions": {
-			"source": {
-				"organizeImports": "on"
-			}
 		}
 	},
 	"css": {
