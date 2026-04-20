@@ -11,6 +11,7 @@ import {
 	SignageHeader,
 	SubscribeButton,
 } from "../../../components/SignageHeader.tsx";
+import { LedRow } from "../../../components/LedRow.tsx";
 import { borderForCancRate, StatCard } from "../../../components/StatCard.tsx";
 import { SubscribeModal } from "../../../components/SubscribeModal.tsx";
 import { type Lang, t } from "../../../lib/i18n.ts";
@@ -219,60 +220,30 @@ function StationIndex() {
 					<h2 className="text-meta uppercase tracking-widest text-muted font-bold mb-3">
 						{t(l, "section.next_departures")} ({nextDepartures.length})
 					</h2>
-					<div className="overflow-x-auto">
-						<table className="w-full text-sm">
-							<thead>
-								<tr className="text-left text-xs uppercase text-muted border-b border-border-dim">
-									<th className="py-2 pr-3">{t(l, "table.time")}</th>
-									<th className="py-2 pr-3">{t(l, "table.line")}</th>
-									<th className="py-2 pr-3">{t(l, "table.direction")}</th>
-									<th className="py-2 pr-3">{t(l, "table.status")}</th>
-								</tr>
-							</thead>
-							<tbody>
-								{nextDepartures.map((d, i) => {
-									const delay =
-										d.rtTime && d.time
-											? Math.round(
-													(new Date(`${d.date}T${d.rtTime}`).getTime() -
-														new Date(`${d.date}T${d.time}`).getTime()) /
-														60_000,
-												)
-											: null;
-									return (
-										<tr
-											key={`${i}-${d.time}-${d.line}`}
-											className="border-b border-border-dim"
-										>
-											<td className="py-2 pr-3 whitespace-nowrap tabular-nums">
-												{d.time.slice(0, 5)}
-												{d.rtTime && d.rtTime !== d.time && (
-													<span className="ml-1 text-dimmed">
-														→ {d.rtTime.slice(0, 5)}
-													</span>
-												)}
-											</td>
-											<td className="py-2 pr-3 font-bold">{d.line}</td>
-											<td className="py-2 pr-3 truncate" title={d.direction}>
-												{d.direction}
-											</td>
-											<td className="py-2 pr-3">
-												{d.cancelled ? (
-													<span className="text-danger">❌</span>
-												) : d.ghost ? (
-													<span className="text-info">👻</span>
-												) : delay !== null && delay >= 8 ? (
-													<span className="text-warn">⏳ +{delay} min</span>
-												) : (
-													<span className="text-ok">✅</span>
-												)}
-											</td>
-										</tr>
-									);
-								})}
-							</tbody>
-						</table>
-					</div>
+					<ul className="space-y-1">
+						{nextDepartures.map((d) => {
+							const delay =
+								d.rtTime && d.time
+									? Math.round(
+											(new Date(`${d.date}T${d.rtTime}`).getTime() -
+												new Date(`${d.date}T${d.time}`).getTime()) /
+												60_000,
+										)
+									: null;
+							return (
+								<LedRow
+									key={`${d.time}-${d.line}-${d.direction}`}
+									time={d.time}
+									rtTime={d.rtTime}
+									line={d.line}
+									direction={d.direction}
+									cancelled={d.cancelled}
+									ghost={d.ghost}
+									delayMin={delay}
+								/>
+							);
+						})}
+					</ul>
 				</section>
 			)}
 
