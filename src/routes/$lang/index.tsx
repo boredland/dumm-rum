@@ -448,7 +448,7 @@ function LineCard({ line, lang }: { line: LineSummary; lang: Lang }) {
 		>
 			<div className="bg-[#003399] px-3 py-2 border-b-2 border-black/40">
 				<div className="text-white text-sm font-black tracking-tight flex items-center gap-2">
-					<span className="opacity-50 text-[10px]">L</span> {categoryIcons([line.category])} {line.line}
+					{categoryIcons([line.category])} {line.line}
 				</div>
 			</div>
 			<div className="p-3">
@@ -613,7 +613,7 @@ function OverviewCards({
 		<div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
 			<div className="sm:col-span-1 signage-frame p-2 flex flex-col">
 				<div className="flex justify-between items-center mb-1 px-1">
-					<span className="text-[8px] font-black text-white/20 uppercase tracking-tighter">Main Monitor</span>
+					<span className="text-[8px] font-black text-white/20 uppercase tracking-tighter">Status Monitor</span>
 					<div className="w-1.5 h-1.5 rounded-full bg-green-500/30 animate-pulse" />
 				</div>
 				<div className="led-display flex-1 flex flex-col justify-center py-4">
