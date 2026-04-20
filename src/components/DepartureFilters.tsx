@@ -182,7 +182,6 @@ export function DepartureFilterBar({
 			)}
 			{dirFilter !== "all" && lines && lines.length > 0 && (
 				<TelegramLinks
-					lang={lang}
 					lines={lines}
 					direction={dirFilter}
 					hoursFilter={hoursFilter}
@@ -191,14 +190,11 @@ export function DepartureFilterBar({
 		</div>
 	);
 }
-
 function TelegramLinks({
-	lang,
 	lines,
 	direction,
 	hoursFilter,
 }: {
-	lang: Lang;
 	lines: string[];
 	direction: string;
 	hoursFilter: string;

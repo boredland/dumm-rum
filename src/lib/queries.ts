@@ -151,6 +151,7 @@ export async function getOperatorSummaries(
 				journeyRuns.operator,
 				journeyRuns.line,
 				journeyRuns.category,
+				journeyRuns.journeyRef,
 				sql`CASE
 					WHEN ${journeyRuns.journeyRef} LIKE 'kvv|%' THEN 'kvv'
 					WHEN ${journeyRuns.journeyRef} LIKE 'flix|%' THEN 'flix'

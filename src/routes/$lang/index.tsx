@@ -2,6 +2,7 @@ import { createFileRoute, Link, useRouter } from "@tanstack/react-router";
 import { createServerFn } from "@tanstack/react-start";
 import { setResponseHeader } from "@tanstack/react-start/server";
 import { useEffect, useRef, useState } from "react";
+import { Pill, pillClass } from "../../components/Pill.tsx";
 import { type HomePayload, loadHomeSummaries } from "../../lib/home.ts";
 import { type Lang, t } from "../../lib/i18n.ts";
 import type {
@@ -10,9 +11,8 @@ import type {
 	OperatorSummary,
 	StopSummary,
 } from "../../lib/queries.ts";
-import { Pill, pillClass } from "../../components/Pill.tsx";
 import { categoryIcons, slugForStop } from "../../lib/stations.ts";
-import { onTimeRate, pct, shortStationName } from "../../lib/utils.ts";
+import { onTimeRate, shortStationName } from "../../lib/utils.ts";
 
 const VALID_DAYS = new Set<DaysFilter>([
 	"all",
@@ -241,7 +241,9 @@ function Index() {
 
 				<details className="group text-body text-muted">
 					<summary className="list-none [&::-webkit-details-marker]:hidden inline-flex items-center gap-1.5 cursor-pointer select-none font-bold hover:text-fg transition-colors uppercase text-xs tracking-wider">
-						<div className="w-4 h-4 bg-muted/20 flex items-center justify-center rounded-sm group-open:rotate-90 transition-transform">▶</div>
+						<div className="w-4 h-4 bg-muted/20 flex items-center justify-center rounded-sm group-open:rotate-90 transition-transform">
+							▶
+						</div>
 						{t(l, "home.methodology_title")}
 					</summary>
 					<ul className="mt-4 list-none pl-6 space-y-2 border-l-2 border-border/30">
@@ -254,11 +256,22 @@ function Index() {
 							"reliability",
 							"dedup",
 							"colors",
-						].map((key) => (
-							<li key={key} className="text-xs leading-relaxed">
-								{t(l, `home.methodology_${key}` as any)}
-							</li>
-						))}
+						].map((key) => {
+							const translationKey = `home.methodology_${key}` as
+								| "home.methodology_collection"
+								| "home.methodology_cancellation"
+								| "home.methodology_delay"
+								| "home.methodology_delayed"
+								| "home.methodology_ghost"
+								| "home.methodology_reliability"
+								| "home.methodology_dedup"
+								| "home.methodology_colors";
+							return (
+								<li key={key} className="text-xs leading-relaxed">
+									{t(l, translationKey)}
+								</li>
+							);
+						})}
 					</ul>
 				</details>
 
@@ -304,7 +317,9 @@ function Index() {
 				/>
 
 				<div className="relative">
-					<div className="absolute left-4 top-1/2 -translate-y-1/2 text-muted/40 pointer-events-none">🔍</div>
+					<div className="absolute left-4 top-1/2 -translate-y-1/2 text-muted/40 pointer-events-none">
+						🔍
+					</div>
 					<input
 						ref={searchRef}
 						type="search"
@@ -357,7 +372,9 @@ function Index() {
 				<Section
 					title={`${t(l, "home.operators")} (${filteredOps.length})`}
 					gridClass="grid grid-cols-[repeat(auto-fit,minmax(260px,1fr))] gap-3"
-					open={openSections.has("operators") || (!!q && filteredOps.length > 0)}
+					open={
+						openSections.has("operators") || (!!q && filteredOps.length > 0)
+					}
 					onToggle={(open) => toggleSection("operators", open)}
 				>
 					{filteredOps.map((op) => (
@@ -376,7 +393,9 @@ function Index() {
 								className="grayscale hover:grayscale-0 transition-[filter] opacity-50 hover:opacity-100"
 							/>
 						</a>
-						<span className="border-l border-border/50 pl-4">{l === "de" ? "Datenquelle: RMV" : "Data source: RMV"}</span>
+						<span className="border-l border-border/50 pl-4">
+							{l === "de" ? "Datenquelle: RMV" : "Data source: RMV"}
+						</span>
 					</div>
 					<div className="flex items-center gap-6">
 						<a
@@ -450,18 +469,27 @@ function LineCard({ line, lang }: { line: LineSummary; lang: Lang }) {
 				<div className="text-white/90 text-[9px] font-black uppercase tracking-[0.2em]">
 					{line.slug.split(":")[0]} · {line.category}
 				</div>
-				<div className="text-white/30 scale-75">{categoryIcons([line.category])}</div>
+				<div className="text-white/30 scale-75">
+					{categoryIcons([line.category])}
+				</div>
 			</div>
 			<div className="p-3 bg-surface/30">
 				<div className="text-sm font-black text-fg mb-1 leading-tight tracking-tight">
 					{line.line}
 				</div>
-				<div className="text-[9px] font-bold text-muted/40 uppercase truncate mb-4" title={line.destinations.join(" ↔ ")}>
+				<div
+					className="text-[9px] font-bold text-muted/40 uppercase truncate mb-4"
+					title={line.destinations.join(" ↔ ")}
+				>
 					{line.destinations.join(" ↔ ")}
 				</div>
 				<div className="flex justify-between items-center border-t border-black/5 pt-2">
-					<span className="text-[8px] font-black text-muted/30 uppercase tracking-widest">Reliability Index</span>
-					<span className={`text-xs font-black tabular-nums ${score < 90 ? 'text-danger' : 'text-ok'}`}>
+					<span className="text-[8px] font-black text-muted/30 uppercase tracking-widest">
+						Reliability Index
+					</span>
+					<span
+						className={`text-xs font-black tabular-nums ${score < 90 ? "text-danger" : "text-ok"}`}
+					>
 						{score}%
 					</span>
 				</div>
@@ -485,7 +513,9 @@ function StopCard({ stop, lang }: { stop: StopSummary; lang: Lang }) {
 				<div className="text-white/90 text-[9px] font-black uppercase tracking-[0.2em]">
 					Station
 				</div>
-				<div className="text-white/30 scale-75">{categoryIcons(stop.categories)}</div>
+				<div className="text-white/30 scale-75">
+					{categoryIcons(stop.categories)}
+				</div>
 			</div>
 			<div className="p-3 bg-surface/30">
 				<div className="text-sm font-black text-fg mb-1 leading-tight tracking-tight">
@@ -495,8 +525,12 @@ function StopCard({ stop, lang }: { stop: StopSummary; lang: Lang }) {
 					{stop.lines.join(" · ")}
 				</div>
 				<div className="flex justify-between items-center border-t border-black/5 pt-2">
-					<span className="text-[8px] font-black text-muted/30 uppercase tracking-widest">Reliability Index</span>
-					<span className={`text-xs font-black tabular-nums ${Number(score) < 90 ? 'text-danger' : 'text-ok'}`}>
+					<span className="text-[8px] font-black text-muted/30 uppercase tracking-widest">
+						Reliability Index
+					</span>
+					<span
+						className={`text-xs font-black tabular-nums ${Number(score) < 90 ? "text-danger" : "text-ok"}`}
+					>
 						{score}%
 					</span>
 				</div>
@@ -518,8 +552,13 @@ function OperatorCard({ op, lang }: { op: OperatorSummary; lang: Lang }) {
 					Operator
 				</div>
 				<div className="flex gap-0.5 scale-75 origin-right opacity-30">
-					{op.categories.slice(0,3).map(c => (
-						<span key={c} className="w-3 h-3 bg-white text-black flex items-center justify-center text-[7px] font-black rounded-full">{c[0]}</span>
+					{op.categories.slice(0, 3).map((c) => (
+						<span
+							key={c}
+							className="w-3 h-3 bg-white text-black flex items-center justify-center text-[7px] font-black rounded-full"
+						>
+							{c[0]}
+						</span>
 					))}
 				</div>
 			</div>
@@ -531,8 +570,12 @@ function OperatorCard({ op, lang }: { op: OperatorSummary; lang: Lang }) {
 					{op.lines.join(" · ")}
 				</div>
 				<div className="flex justify-between items-center border-t border-black/5 pt-2">
-					<span className="text-[8px] font-black text-muted/30 uppercase tracking-widest">Reliability Index</span>
-					<span className={`text-xs font-black tabular-nums ${score < 90 ? 'text-danger' : 'text-ok'}`}>
+					<span className="text-[8px] font-black text-muted/30 uppercase tracking-widest">
+						Reliability Index
+					</span>
+					<span
+						className={`text-xs font-black tabular-nums ${score < 90 ? "text-danger" : "text-ok"}`}
+					>
 						{score}%
 					</span>
 				</div>
@@ -594,7 +637,11 @@ function OverviewCards({
 		totalAll,
 	);
 	const scoreColor =
-		score < 80 ? "led-text-danger" : score < 90 ? "led-text-warn" : "led-text-ok";
+		score < 80
+			? "led-text-danger"
+			: score < 90
+				? "led-text-warn"
+				: "led-text-ok";
 
 	const lineItems = (key: "cancelled" | "ghost" | "delayed") =>
 		lines.map((l) => ({
@@ -622,15 +669,20 @@ function OverviewCards({
 		<div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
 			<div className="sm:col-span-1 signage-frame p-2 flex flex-col">
 				<div className="flex justify-between items-center mb-1 px-1">
-					<span className="text-[8px] font-black text-white/20 uppercase tracking-tighter">Status Monitor</span>
+					<span className="text-[8px] font-black text-white/20 uppercase tracking-tighter">
+						Status Monitor
+					</span>
 					<div className="w-1.5 h-1.5 rounded-full bg-green-500/30 animate-pulse" />
 				</div>
 				<div className="led-display flex-1 flex flex-col justify-center py-4">
 					<div className="text-[10px] uppercase font-black text-muted/60 tracking-widest text-center mb-2">
 						{t(lang, "home.overall_score")}
 					</div>
-					<div className={`text-5xl font-black text-center tabular-nums ${scoreColor}`}>
-						{score}<span className="text-xl opacity-50">%</span>
+					<div
+						className={`text-5xl font-black text-center tabular-nums ${scoreColor}`}
+					>
+						{score}
+						<span className="text-xl opacity-50">%</span>
 					</div>
 					{ghostAll > 0 && (
 						<div className="text-[10px] text-info text-center mt-3 font-black uppercase tracking-widest border-t border-white/10 pt-2 mx-4">
@@ -695,7 +747,9 @@ function WorstCard({
 			<div className="text-[10px] uppercase font-black text-muted/50 mb-3 border-b border-white/5 pb-1 flex items-center gap-2">
 				<div className="w-1 h-1 bg-white/20 rounded-full" /> {title}
 			</div>
-			{!hasAny && <div className="text-xl font-black text-ok/30 tabular-nums">0.0%</div>}
+			{!hasAny && (
+				<div className="text-xl font-black text-ok/30 tabular-nums">0.0%</div>
+			)}
 			<div className="space-y-3">
 				{line && line.count > 0 && (
 					<Link
@@ -704,8 +758,12 @@ function WorstCard({
 						className="block no-underline group"
 					>
 						<div className="flex items-baseline justify-between">
-							<span className="text-xs font-black text-fg truncate flex-1 mr-2">{line.name}</span>
-							<span className={`${color} text-sm font-black tabular-nums`}>{(line.rate * 100).toFixed(1)}%</span>
+							<span className="text-xs font-black text-fg truncate flex-1 mr-2">
+								{line.name}
+							</span>
+							<span className={`${color} text-sm font-black tabular-nums`}>
+								{(line.rate * 100).toFixed(1)}%
+							</span>
 						</div>
 						<div className="text-[9px] uppercase font-bold text-muted/40 group-hover:text-muted/80 transition-colors">
 							{t(lang, "home.line")}
@@ -719,8 +777,12 @@ function WorstCard({
 						className="block no-underline group"
 					>
 						<div className="flex items-baseline justify-between">
-							<span className="text-xs font-black text-fg truncate flex-1 mr-2">{station.name}</span>
-							<span className={`${color} text-sm font-black tabular-nums`}>{(station.rate * 100).toFixed(1)}%</span>
+							<span className="text-xs font-black text-fg truncate flex-1 mr-2">
+								{station.name}
+							</span>
+							<span className={`${color} text-sm font-black tabular-nums`}>
+								{(station.rate * 100).toFixed(1)}%
+							</span>
 						</div>
 						<div className="text-[9px] uppercase font-bold text-muted/40 group-hover:text-muted/80 transition-colors">
 							{t(lang, "home.station")}
@@ -734,8 +796,12 @@ function WorstCard({
 						className="block no-underline group"
 					>
 						<div className="flex items-baseline justify-between">
-							<span className="text-xs font-black text-fg truncate flex-1 mr-2">{op.name}</span>
-							<span className={`${color} text-sm font-black tabular-nums`}>{(op.rate * 100).toFixed(1)}%</span>
+							<span className="text-xs font-black text-fg truncate flex-1 mr-2">
+								{op.name}
+							</span>
+							<span className={`${color} text-sm font-black tabular-nums`}>
+								{(op.rate * 100).toFixed(1)}%
+							</span>
 						</div>
 						<div className="text-[9px] uppercase font-bold text-muted/40 group-hover:text-muted/80 transition-colors">
 							{t(lang, "home.operator")}

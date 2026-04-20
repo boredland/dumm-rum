@@ -12,8 +12,8 @@ const pickerCache: Partial<Record<PickerKind, string[]>> = {};
 const pickerInflight: Partial<Record<PickerKind, Promise<string[]>>> = {};
 
 async function fetchPicker(kind: PickerKind): Promise<string[]> {
-	if (pickerCache[kind]) return pickerCache[kind]!;
-	if (pickerInflight[kind]) return pickerInflight[kind]!;
+	if (pickerCache[kind]) return pickerCache[kind] ?? [];
+	if (pickerInflight[kind]) return pickerInflight[kind] ?? [];
 	const p = (async () => {
 		const resp = await fetch(`/api/picker/${kind}`);
 		if (!resp.ok) throw new Error(`picker/${kind} HTTP ${resp.status}`);

@@ -19,7 +19,11 @@ export function StatCard({
 	tone?: "danger" | "info";
 }) {
 	const ledColor =
-		tone === "danger" ? "led-text-danger" : tone === "info" ? "led-text-info" : "led-text-ok";
+		tone === "danger"
+			? "led-text-danger"
+			: tone === "info"
+				? "led-text-info"
+				: "led-text-ok";
 	return (
 		<div className="signage-frame p-1.5 active:scale-[0.98] transition-transform">
 			<div className="px-2 py-1 flex items-center justify-between">
@@ -35,7 +39,9 @@ export function StatCard({
 				<div className="text-[10px] uppercase font-bold text-muted/80 tracking-widest mb-1 border-b border-white/5 pb-1">
 					{label}
 				</div>
-				<div className={`text-2xl font-black tabular-nums ${ledColor} tracking-tighter`}>
+				<div
+					className={`text-2xl font-black tabular-nums ${ledColor} tracking-tighter`}
+				>
 					{value}
 				</div>
 			</div>

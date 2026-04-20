@@ -21,10 +21,10 @@
 	--color-ok: var(--ok);
 	--color-info: var(--info);
 	--color-white: var(--white);
-	
+
 	/* Branding / Special Transit Colors */
 	--color-platform-yellow: #fdb913; /* Tactile paving yellow */
-	--color-rail-blue: #003399;     /* Classic rail signage blue */
+	--color-rail-blue: #003399; /* Classic rail signage blue */
 
 	/* 5-step type scale - adjusted for high-legibility signage style */
 	--text-meta: 11px;
@@ -41,13 +41,13 @@
 	--text-h1--line-height: 1.1;
 	--text-h1--letter-spacing: -0.02em;
 	--text-display: 48px;
-	--text-display--line-height: 1.0;
+	--text-display--line-height: 1;
 	--text-display--letter-spacing: -0.03em;
 }
 
 :root {
 	color-scheme: light dark;
-	
+
 	/* Light Mode: Modern Station Signage (Clean, high-contrast) */
 	--bg: #ffffff;
 	--fg: #1a1a1b;
@@ -92,12 +92,14 @@ body {
 }
 
 /* Tactile Station UI: Global interactive resets */
-button, a {
+button,
+a {
 	transition: all 0.15s ease-in-out;
 	cursor: pointer;
 }
 
-button:active, a:active {
+button:active,
+a:active {
 	transform: translateY(1px) scale(0.99);
 }
 
@@ -114,17 +116,17 @@ a:hover {
 	border: 2px solid #2a2a2b;
 	border-radius: 4px;
 	background: #1a1a1b;
-	box-shadow: 
-		inset 0 1px 1px rgba(255,255,255,0.05),
-		0 2px 4px rgba(0,0,0,0.3);
+	box-shadow:
+		inset 0 1px 1px rgba(255, 255, 255, 0.05),
+		0 2px 4px rgba(0, 0, 0, 0.3);
 }
 
 .led-display {
 	background: #252526; /* Clearly grey concrete/matte material */
 	border-radius: 2px;
-	box-shadow: 
-		inset 0 4px 15px rgba(0,0,0,0.85), /* Heavier recess shadow */
-		0 0 1px rgba(255,255,255,0.1);
+	box-shadow:
+		inset 0 4px 15px rgba(0, 0, 0, 0.85), /* Heavier recess shadow */
+		0 0 1px rgba(255, 255, 255, 0.1);
 	padding: 0.5rem;
 	position: relative;
 	overflow: hidden;
@@ -135,24 +137,37 @@ a:hover {
 	content: "";
 	position: absolute;
 	inset: 0;
-	background: linear-gradient(
-		rgba(18, 16, 16, 0) 50%, 
-		rgba(0, 0, 0, 0.25) 50%
-	), linear-gradient(
-		90deg, 
-		rgba(255, 0, 0, 0.06), 
-		rgba(0, 255, 0, 0.02), 
-		rgba(0, 0, 255, 0.06)
-	);
-	background-size: 100% 2px, 3px 100%;
+	background:
+		linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.25) 50%),
+		linear-gradient(
+			90deg,
+			rgba(255, 0, 0, 0.06),
+			rgba(0, 255, 0, 0.02),
+			rgba(0, 0, 255, 0.06)
+		);
+	background-size:
+		100% 2px,
+		3px 100%;
 	pointer-events: none;
 }
 
 /* Simulated LED Glow */
-.led-text-ok { color: #30d158; text-shadow: 0 0 8px rgba(48, 209, 88, 0.4); }
-.led-text-warn { color: #ff9f0a; text-shadow: 0 0 8px rgba(255, 159, 10, 0.4); }
-.led-text-danger { color: #ff453a; text-shadow: 0 0 8px rgba(255, 69, 58, 0.4); }
-.led-text-info { color: #5e5ce6; text-shadow: 0 0 8px rgba(94, 92, 230, 0.4); }
+.led-text-ok {
+	color: #30d158;
+	text-shadow: 0 0 8px rgba(48, 209, 88, 0.4);
+}
+.led-text-warn {
+	color: #ff9f0a;
+	text-shadow: 0 0 8px rgba(255, 159, 10, 0.4);
+}
+.led-text-danger {
+	color: #ff453a;
+	text-shadow: 0 0 8px rgba(255, 69, 58, 0.4);
+}
+.led-text-info {
+	color: #5e5ce6;
+	text-shadow: 0 0 8px rgba(94, 92, 230, 0.4);
+}
 
 .platform-yellow-line {
 	height: 6px; /* Heavier paving */
@@ -172,7 +187,8 @@ a:hover {
 }
 
 @media (prefers-reduced-motion: reduce) {
-	button, a {
+	button,
+	a {
 		transition: none;
 		transform: none;
 	}
@@ -183,20 +199,47 @@ a:hover {
 }
 
 @keyframes dummrum-gps-bar {
-	0%, 100% { opacity: 0.35; }
-	50% { opacity: 1; }
+	0%,
+	100% {
+		opacity: 0.35;
+	}
+	50% {
+		opacity: 1;
+	}
 }
 .dummrum-gps-bar {
 	animation: dummrum-gps-bar 1.5s ease-in-out infinite;
 }
-.dummrum-gps-bar-0 { animation-delay: 0s; }
-.dummrum-gps-bar-1 { animation-delay: 0.2s; }
-.dummrum-gps-bar-2 { animation-delay: 0.4s; }
+.dummrum-gps-bar-0 {
+	animation-delay: 0s;
+}
+.dummrum-gps-bar-1 {
+	animation-delay: 0.2s;
+}
+.dummrum-gps-bar-2 {
+	animation-delay: 0.4s;
+}
 
 /* Ghost Run Flickering Signage */
 @keyframes ghost-flicker {
-	0%, 19.999%, 22%, 62.999%, 64%, 64.999%, 70%, 100% { opacity: 1; }
-	20%, 21.999%, 63%, 63.999%, 65%, 69.999% { opacity: 0.4; }
+	0%,
+	19.999%,
+	22%,
+	62.999%,
+	64%,
+	64.999%,
+	70%,
+	100% {
+		opacity: 1;
+	}
+	20%,
+	21.999%,
+	63%,
+	63.999%,
+	65%,
+	69.999% {
+		opacity: 0.4;
+	}
 }
 .ghost-departure {
 	animation: ghost-flicker 4s linear infinite;

@@ -12,10 +12,7 @@ import {
 	getStopDayDepartures,
 	type StopDayDeparture,
 } from "../../../../lib/queries.ts";
-import {
-	urlFilter,
-	urlStringFilter,
-} from "../../../../lib/search-state.ts";
+import { urlFilter, urlStringFilter } from "../../../../lib/search-state.ts";
 import { categoryIcons } from "../../../../lib/stations.ts";
 import { makeSwr } from "../../../../lib/swr.ts";
 import {
@@ -121,12 +118,7 @@ function StationDay() {
 		setSearch,
 		"hours",
 	);
-	const [dir, setDir] = urlStringFilter(
-		search.dir,
-		"all",
-		setSearch,
-		"dir",
-	);
+	const [dir, setDir] = urlStringFilter(search.dir, "all", setSearch, "dir");
 	const filters = useDepartureFilters(departures, {
 		status: { value: status, onChange: setStatus },
 		hours: { value: hours, onChange: setHours },
@@ -200,14 +192,15 @@ function StationDay() {
 											</span>
 											<span className="text-body font-semibold">{d.line}</span>
 										</div>
-										<div className="mt-1 text-body truncate" title={d.direction}>
+										<div
+											className="mt-1 text-body truncate"
+											title={d.direction}
+										>
 											{d.direction}
 										</div>
 										<div className="mt-1 text-meta">
 											{d.cancelled ? (
-												<span className="text-danger">
-													❌
-												</span>
+												<span className="text-danger">❌</span>
 											) : d.ghost ? (
 												<span className="text-info">👻</span>
 											) : delay !== null && delay >= 8 ? (

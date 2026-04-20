@@ -11,10 +11,7 @@ import {
 	getLineDayJourneys,
 	type LineDayJourney,
 } from "../../../../../lib/queries.ts";
-import {
-	urlFilter,
-	urlStringFilter,
-} from "../../../../../lib/search-state.ts";
+import { urlFilter, urlStringFilter } from "../../../../../lib/search-state.ts";
 import { makeSwr } from "../../../../../lib/swr.ts";
 import { delayMin, formatTime, todayBerlin } from "../../../../../lib/utils.ts";
 
@@ -111,12 +108,7 @@ function LineDay() {
 		setSearch,
 		"hours",
 	);
-	const [dir, setDir] = urlStringFilter(
-		search.dir,
-		"all",
-		setSearch,
-		"dir",
-	);
+	const [dir, setDir] = urlStringFilter(search.dir, "all", setSearch, "dir");
 	const filters = useDepartureFilters(journeys, {
 		status: { value: status, onChange: setStatus },
 		hours: { value: hours, onChange: setHours },
@@ -208,9 +200,7 @@ function LineDay() {
 												) : j.ghost ? (
 													<span className="text-info">👻</span>
 												) : delay !== null && delay >= 8 ? (
-													<span className="text-warn">
-														⏳ +{delay} min
-													</span>
+													<span className="text-warn">⏳ +{delay} min</span>
 												) : (
 													<span className="text-ok">✅</span>
 												)}

@@ -6,8 +6,6 @@
  * optional action button (typically "reset filters").
  */
 
-import type { ReactNode } from "react";
-
 export function EmptyState({
 	icon,
 	title,

@@ -11,3 +11,4 @@ dist/
 # feeds — they exceed GitHub's 100 MB per-file limit and don't belong
 # in the repo anyway.
 apks/
+src/routeTree.gen.ts

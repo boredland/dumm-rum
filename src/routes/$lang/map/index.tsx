@@ -1011,7 +1011,7 @@ function MapPage() {
 		// Listing navigate/clearFollowedPolyline would cascade-invalidate
 		// load → the polling effect on every render since TanStack's
 		// useNavigate is not stable across renders.
-		[],
+		[drawFollowedPolyline, navigate, clearFollowedPolyline],
 	);
 
 	const stopFollowing = useCallback(() => {
@@ -1030,7 +1030,7 @@ function MapPage() {
 			search: (s) => ({ ...s, follow: undefined }),
 			replace: true,
 		});
-	}, []);
+	}, [navigate, clearFollowedPolyline]);
 	const [vehicleCount, setVehicleCount] = useState(0);
 	const [loading, setLoading] = useState(true);
 	const [lastUpdate, setLastUpdate] = useState<Date | null>(null);
@@ -1125,7 +1125,8 @@ function MapPage() {
 			}
 
 			const isFollowed = v.id === followIdRef.current;
-			const entryNow = existing.get(v.id)!;
+			const entryNow = existing.get(v.id);
+			if (!entryNow) return;
 			const m = entryNow.marker;
 			const isFlix = v.category === "Flixtrain" || v.category === "Flixbus";
 			const showTracking =
@@ -1207,7 +1208,7 @@ function MapPage() {
 				renderedPosRef.current.delete(id);
 			}
 		}
-	}, []);
+	}, [stopFollowing, startFollowing, l]);
 
 	const load = useCallback(async () => {
 		if (!leafletMap.current) return;
@@ -1291,7 +1292,7 @@ function MapPage() {
 			/* network error, keep stale data */
 		}
 		setLoading(false);
-	}, []);
+	}, [syncMarkers, stopFollowing]);
 
 	loadRef.current = load;
 
@@ -1310,7 +1311,8 @@ function MapPage() {
 			const initLon = search.lon ?? FRANKFURT_CENTER.lon;
 			const initZoom = search.z ?? 13;
 
-			const map = L.map(mapRef.current!, {
+			if (!mapRef.current) return;
+			const map = L.map(mapRef.current, {
 				center: [initLat, initLon],
 				zoom: initZoom,
 				zoomControl: false,
@@ -1394,9 +1396,13 @@ function MapPage() {
 			}
 			categoryLayersRef.current = layers;
 
-			const allRt = CATS.map((c) => layers.get(c)!);
-			const allGps = CATS.map((c) => layers.get(`${c} (gps)`)!);
-			const allSched = CATS.map((c) => layers.get(`${c} (sched)`)!);
+			const allRt = CATS.map((c) => layers.get(c)).filter(Boolean) as L.Layer[];
+			const allGps = CATS.map((c) => layers.get(`${c} (gps)`)).filter(
+				Boolean,
+			) as L.Layer[];
+			const allSched = CATS.map((c) => layers.get(`${c} (sched)`)).filter(
+				Boolean,
+			) as L.Layer[];
 
 			// Initial visibility state is derived from the search params on
 			// mount; subsequent changes are driven by the control itself,
@@ -1672,7 +1678,21 @@ function MapPage() {
 				leafletMap.current = null;
 			}
 		};
-	}, []);
+	}, [
+		search.sched,
+		search.hide, // Merge into the existing search so moveend doesn't wipe
+		// hide/rt/sched/follow every time the user pans or zooms.
+		navigate,
+		syncMarkers,
+		search.rt,
+		stopFollowing,
+		search.lon,
+		load,
+		search.z,
+		search.lat,
+		search.gps,
+		l,
+	]);
 
 	useEffect(() => {
 		if (intervalRef.current) clearInterval(intervalRef.current);
