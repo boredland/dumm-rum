@@ -32,30 +32,6 @@ END`;
 
 const lineSlugSql = sql<string>`(${sourceSql} || ':' || COALESCE(${journeyRuns.category}, 'Bus') || ':' || ${journeyRuns.line})`;
 
-// Prefer departure timestamps — they're what riders wait for — but fall
-// back to arrival when the stop has no dep_time (i.e. the terminus).
-// Without this, a train that ran on time out of the origin but arrived
-// 30 min late at its terminal was invisible to the delay metrics.
-const stopDelayMinSql = sql<number>`COALESCE(
-	CASE WHEN ${journeyStops.rtDepTime} IS NOT NULL AND ${journeyStops.depTime} IS NOT NULL THEN
-		EXTRACT(EPOCH FROM (
-			(${journeyStops.dayOfOperation} || ' ' || ${journeyStops.rtDepTime})::timestamp
-			- (${journeyStops.dayOfOperation} || ' ' || ${journeyStops.depTime})::timestamp
-		)) / 60.0
-	END,
-	CASE WHEN ${journeyStops.rtArrTime} IS NOT NULL AND ${journeyStops.arrTime} IS NOT NULL THEN
-		EXTRACT(EPOCH FROM (
-			(${journeyStops.dayOfOperation} || ' ' || ${journeyStops.rtArrTime})::timestamp
-			- (${journeyStops.dayOfOperation} || ' ' || ${journeyStops.arrTime})::timestamp
-		)) / 60.0
-	END
-)`;
-
-const stopHasDelayDataSql = sql`(
-	(${journeyStops.rtDepTime} IS NOT NULL AND ${journeyStops.depTime} IS NOT NULL)
-	OR (${journeyStops.rtArrTime} IS NOT NULL AND ${journeyStops.arrTime} IS NOT NULL)
-)`;
-
 // Per-run "was delayed" signal, precomputed once across journey_stops so
 // summary queries can LEFT JOIN instead of running a correlated EXISTS per
 // row. The correlated form was ~6× slower on a 16k-run dataset — Postgres
@@ -69,9 +45,7 @@ function delayedByRunSq() {
 			dayOfOperation: journeyStops.dayOfOperation,
 		})
 		.from(journeyStops)
-		.where(
-			sql`${stopHasDelayDataSql} AND ${stopDelayMinSql} >= ${DELAY_THRESHOLD_MIN}`,
-		)
+		.where(gte(journeyStops.delayMin, DELAY_THRESHOLD_MIN))
 		.as("dbr");
 }
 
@@ -284,8 +258,7 @@ export async function getStopSummaries(): Promise<StopSummary[]> {
 				),
 			ghost: sql<number>`SUM(${ghostCaseSql})`.as("ghost"),
 			delayed: sql<number>`SUM(CASE WHEN NOT ${journeyStops.cancelled}
-				AND ${stopHasDelayDataSql}
-				AND ${stopDelayMinSql} >= ${DELAY_THRESHOLD_MIN}
+				AND ${journeyStops.delayMin} >= ${DELAY_THRESHOLD_MIN}
 			THEN 1 ELSE 0 END)`.as("delayed"),
 			lines: sql<string>`STRING_AGG(DISTINCT ${lineSlugSql}, ',')`.as("lines"),
 			categories:
@@ -700,8 +673,7 @@ export async function getStopStats(stopIds: string[]): Promise<StopStats> {
 				ghost: sql<number>`SUM(${ghostCaseSql})`.as("ghost"),
 				delayed: sql<number>`
 					SUM(CASE WHEN NOT ${journeyStops.cancelled}
-						AND ${stopHasDelayDataSql}
-						AND ${stopDelayMinSql} >= ${DELAY_THRESHOLD_MIN}
+						AND ${journeyStops.delayMin} >= ${DELAY_THRESHOLD_MIN}
 					THEN 1 ELSE 0 END)
 				`.as("delayed"),
 			})

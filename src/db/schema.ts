@@ -1,3 +1,4 @@
+import { sql } from "drizzle-orm";
 import {
 	boolean,
 	doublePrecision,
@@ -58,11 +59,29 @@ export const journeyStops = pgTable(
 		 * TripStopTimes response, so every kvv-source row carries them. */
 		lat: doublePrecision("lat"),
 		lon: doublePrecision("lon"),
+		/** Per-stop delay in minutes, precomputed at insert/update. NULL
+		 * when the stop has no real-time pair. split_part + int math is
+		 * IMMUTABLE and backs a generated column; text::timestamp is not. */
+		delayMin: doublePrecision("delay_min").generatedAlwaysAs(
+			sql`COALESCE(
+				CASE WHEN rt_dep_time IS NOT NULL AND dep_time IS NOT NULL THEN
+					(split_part(rt_dep_time, ':', 1)::int * 60 + split_part(rt_dep_time, ':', 2)::int + split_part(rt_dep_time, ':', 3)::int / 60.0)
+					- (split_part(dep_time, ':', 1)::int * 60 + split_part(dep_time, ':', 2)::int + split_part(dep_time, ':', 3)::int / 60.0)
+				END,
+				CASE WHEN rt_arr_time IS NOT NULL AND arr_time IS NOT NULL THEN
+					(split_part(rt_arr_time, ':', 1)::int * 60 + split_part(rt_arr_time, ':', 2)::int + split_part(rt_arr_time, ':', 3)::int / 60.0)
+					- (split_part(arr_time, ':', 1)::int * 60 + split_part(arr_time, ':', 2)::int + split_part(arr_time, ':', 3)::int / 60.0)
+				END
+			)`,
+		),
 	},
 	(t) => [
 		primaryKey({ columns: [t.journeyRef, t.dayOfOperation, t.routeIdx] }),
 		index("idx_journey_stops_day").on(t.dayOfOperation),
 		index("idx_journey_stops_stop_day").on(t.stopId, t.dayOfOperation),
+		index("idx_journey_stops_delay_min")
+			.on(t.journeyRef, t.dayOfOperation)
+			.where(sql`${t.delayMin} >= 7.5`),
 	],
 );
 
