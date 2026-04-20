@@ -12,7 +12,7 @@
 import type { ReactNode } from "react";
 
 const BASE =
-	"cursor-pointer rounded border border-border px-3 py-1.5 text-meta font-bold uppercase tracking-wider no-underline transition-all active:translate-y-0.5 select-none";
+	"cursor-pointer rounded border border-border px-3 py-1.5 text-meta font-bold uppercase tracking-wider no-underline transition-[transform,box-shadow,background-color] duration-150 ease-out active:translate-y-px select-none";
 
 /** Returns the className string for a pill in the given state. Use on
  * router `<Link>`s and other non-button triggers. */

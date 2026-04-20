@@ -96,16 +96,14 @@ body {
 	-webkit-font-smoothing: antialiased;
 }
 
-/* Tactile Station UI: Global interactive resets */
+/* Tactile Station UI: Global interactive resets. The press motion is
+ * scoped per-component via `active:translate-y-px` so only genuinely
+ * pressable elements bob. A global rule made every <a> and <button>
+ * twitch on click, including inline text links. */
 button,
 a {
-	transition: all 0.15s ease-in-out;
+	transition: color 0.15s ease-in-out, background-color 0.15s ease-in-out, border-color 0.15s ease-in-out, box-shadow 0.15s ease-in-out;
 	cursor: pointer;
-}
-
-button:active,
-a:active {
-	transform: translateY(1px) scale(0.99);
 }
 
 a {

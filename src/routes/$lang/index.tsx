@@ -462,7 +462,7 @@ function LineCard({ line, lang }: { line: LineSummary; lang: Lang }) {
 		<Link
 			to="/$lang/line/$line"
 			params={{ lang, line: line.slug }}
-			className="signage-frame overflow-hidden no-underline group active:scale-[0.98] transition-all"
+			className="signage-frame overflow-hidden no-underline group active:translate-y-px transition-[transform,box-shadow] duration-150 ease-out hover:shadow-[inset_0_0_0_1px_rgba(253,185,19,0.35)]"
 		>
 			<div className="bg-signage px-3 py-1.5 flex justify-between items-center border-b border-black/40">
 				<div className="text-white/90 text-micro font-black uppercase tracking-[0.2em]">
@@ -506,7 +506,7 @@ function StopCard({ stop, lang }: { stop: StopSummary; lang: Lang }) {
 		<Link
 			to="/$lang/$station"
 			params={{ lang, station: slug }}
-			className="signage-frame overflow-hidden no-underline group active:scale-[0.98] transition-all"
+			className="signage-frame overflow-hidden no-underline group active:translate-y-px transition-[transform,box-shadow] duration-150 ease-out hover:shadow-[inset_0_0_0_1px_rgba(253,185,19,0.35)]"
 		>
 			<div className="bg-signage px-3 py-1.5 flex justify-between items-center border-b border-black/40">
 				<div className="text-white/90 text-micro font-black uppercase tracking-[0.2em]">
@@ -544,7 +544,7 @@ function OperatorCard({ op, lang }: { op: OperatorSummary; lang: Lang }) {
 		<Link
 			to="/$lang/operator/$operator"
 			params={{ lang, operator: op.operator }}
-			className="signage-frame overflow-hidden no-underline group active:scale-[0.98] transition-all"
+			className="signage-frame overflow-hidden no-underline group active:translate-y-px transition-[transform,box-shadow] duration-150 ease-out hover:shadow-[inset_0_0_0_1px_rgba(253,185,19,0.35)]"
 		>
 			<div className="bg-signage px-3 py-1.5 flex justify-between items-center border-b border-black/40">
 				<div className="text-white/90 text-micro font-black uppercase tracking-[0.2em]">
