@@ -446,22 +446,24 @@ function LineCard({ line, lang }: { line: LineSummary; lang: Lang }) {
 			params={{ lang, line: line.line }}
 			className="signage-frame overflow-hidden no-underline group active:scale-[0.98] transition-all"
 		>
-			<div className="bg-[#003399] px-3 py-2 border-b-2 border-black/40">
-				<div className="text-white text-sm font-black tracking-tight flex items-center gap-2">
-					{categoryIcons([line.category])} {line.line}
+			<div className="bg-[#111112] px-3 py-1.5 flex justify-between items-center border-b border-black/40">
+				<div className="text-white/90 text-[9px] font-black uppercase tracking-[0.2em]">
+					Line
 				</div>
+				<div className="text-white/30 scale-75">{categoryIcons([line.category])}</div>
 			</div>
-			<div className="p-3">
-				<div className="text-[10px] font-black text-muted/60 truncate mb-3 uppercase tracking-tighter" title={line.destinations.join(" ↔ ")}>
+			<div className="p-3 bg-surface/30">
+				<div className="text-sm font-black text-fg mb-1 leading-tight tracking-tight">
+					{line.line}
+				</div>
+				<div className="text-[9px] font-bold text-muted/40 uppercase truncate mb-4" title={line.destinations.join(" ↔ ")}>
 					{line.destinations.join(" ↔ ")}
 				</div>
-				<div className="flex justify-between items-end">
-					<div className="text-[10px] font-black text-muted/40 uppercase">
-						<span className="text-danger">{pct(line.cancelled, line.total)}%</span> Canc
-					</div>
-					<div className="text-xl font-black tabular-nums text-fg leading-none flex items-baseline gap-0.5">
-						{score}<span className="text-[10px] text-muted/30">%</span>
-					</div>
+				<div className="flex justify-between items-center border-t border-black/5 pt-2">
+					<span className="text-[8px] font-black text-muted/30 uppercase tracking-widest">Reliability Index</span>
+					<span className={`text-xs font-black tabular-nums ${score < 90 ? 'text-danger' : 'text-ok'}`}>
+						{score}%
+					</span>
 				</div>
 			</div>
 		</Link>
@@ -472,6 +474,7 @@ function StopCard({ stop, lang }: { stop: StopSummary; lang: Lang }) {
 	const cancRate =
 		stop.journeyCount > 0 ? stop.cancelled / stop.journeyCount : 0;
 	const slug = slugForStop(stop.stopIds, stop.stopName);
+	const score = ((1 - cancRate) * 100).toFixed(0);
 	return (
 		<Link
 			to="/$lang/$station"
@@ -493,8 +496,8 @@ function StopCard({ stop, lang }: { stop: StopSummary; lang: Lang }) {
 				</div>
 				<div className="flex justify-between items-center border-t border-black/5 pt-2">
 					<span className="text-[8px] font-black text-muted/30 uppercase tracking-widest">Reliability Index</span>
-					<span className={`text-xs font-black tabular-nums ${cancRate > 0.1 ? 'text-danger' : 'text-ok'}`}>
-						{((1 - cancRate) * 100).toFixed(0)}%
+					<span className={`text-xs font-black tabular-nums ${Number(score) < 90 ? 'text-danger' : 'text-ok'}`}>
+						{score}%
 					</span>
 				</div>
 			</div>
@@ -508,24 +511,30 @@ function OperatorCard({ op, lang }: { op: OperatorSummary; lang: Lang }) {
 		<Link
 			to="/$lang/operator/$operator"
 			params={{ lang, operator: op.operator }}
-			className="signage-frame p-4 no-underline group active:scale-[0.98] transition-all flex flex-col justify-between min-h-[90px]"
+			className="signage-frame overflow-hidden no-underline group active:scale-[0.98] transition-all"
 		>
-			<div>
-				<div className="text-[8px] font-black text-muted/30 uppercase tracking-[0.3em] mb-2">
-					Service Provider
+			<div className="bg-[#111112] px-3 py-1.5 flex justify-between items-center border-b border-black/40">
+				<div className="text-white/90 text-[9px] font-black uppercase tracking-[0.2em]">
+					Operator
 				</div>
-				<div className="text-sm font-black text-fg leading-tight tracking-tight">
-					{op.operator}
-				</div>
-			</div>
-			<div className="flex justify-between items-center mt-4 border-t border-black/5 pt-3">
-				<div className="flex gap-1.5">
+				<div className="flex gap-0.5 scale-75 origin-right opacity-30">
 					{op.categories.slice(0,3).map(c => (
-						<span key={c} className="w-4 h-4 bg-muted/10 border border-border/20 rounded-sm flex items-center justify-center text-[8px] font-black text-muted">{c[0]}</span>
+						<span key={c} className="w-3 h-3 bg-white text-black flex items-center justify-center text-[7px] font-black rounded-full">{c[0]}</span>
 					))}
 				</div>
-				<div className="text-xs font-black tabular-nums text-fg/60 bg-black/5 px-2 py-0.5 rounded-sm">
-					{score}%
+			</div>
+			<div className="p-3 bg-surface/30">
+				<div className="text-sm font-black text-fg mb-1 leading-tight tracking-tight">
+					{op.operator}
+				</div>
+				<div className="text-[9px] font-bold text-muted/40 uppercase truncate mb-4">
+					{op.lines.join(" · ")}
+				</div>
+				<div className="flex justify-between items-center border-t border-black/5 pt-2">
+					<span className="text-[8px] font-black text-muted/30 uppercase tracking-widest">Reliability Index</span>
+					<span className={`text-xs font-black tabular-nums ${score < 90 ? 'text-danger' : 'text-ok'}`}>
+						{score}%
+					</span>
 				</div>
 			</div>
 		</Link>
