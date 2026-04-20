@@ -92,13 +92,15 @@ export interface QueryFilter {
 	days?: DaysFilter;
 }
 
+const last30DaysSql = sql`${journeyRuns.dayOfOperation} >= to_char(CURRENT_DATE - INTERVAL '30 days', 'YYYY-MM-DD')`;
+
 function daysCondition(filter: DaysFilter = "today") {
 	if (filter === "today") return eq(journeyRuns.dayOfOperation, todayBerlin());
 	if (filter === "weekdays")
-		return sql`EXTRACT(DOW FROM ${journeyRuns.dayOfOperation}::date)::int NOT IN (0, 6)`;
+		return sql`${last30DaysSql} AND EXTRACT(DOW FROM ${journeyRuns.dayOfOperation}::date)::int NOT IN (0, 6)`;
 	if (filter === "weekends")
-		return sql`EXTRACT(DOW FROM ${journeyRuns.dayOfOperation}::date)::int IN (0, 6)`;
-	return undefined;
+		return sql`${last30DaysSql} AND EXTRACT(DOW FROM ${journeyRuns.dayOfOperation}::date)::int IN (0, 6)`;
+	return last30DaysSql;
 }
 
 // ─── Operator summaries ────────────────────────────────────────────────
