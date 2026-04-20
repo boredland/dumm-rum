@@ -6,6 +6,10 @@ import {
 	useDepartureFilters,
 } from "../../../../components/DepartureFilters.tsx";
 import { EmptyState } from "../../../../components/EmptyState.tsx";
+import {
+	BackLink,
+	SignageHeader,
+} from "../../../../components/SignageHeader.tsx";
 import { type Lang, t } from "../../../../lib/i18n.ts";
 import {
 	findStopBySlug,
@@ -134,19 +138,20 @@ function StationDay() {
 
 	return (
 		<main className="mx-auto max-w-4xl p-6 space-y-6">
-			<header className="space-y-1">
-				<Link
-					to="/$lang/$station"
-					params={{ lang: l, station }}
-					className="text-sm text-muted hover:text-fg"
-				>
-					← {shortStationName(stopName)}
-				</Link>
-				<h1 className="text-h1 font-black flex items-center gap-2 mt-2">
-					{categoryIcons(categories)} {shortStationName(stopName)}
-				</h1>
-				<p className="text-sm text-muted">{pretty}</p>
-			</header>
+			<SignageHeader
+				backLink={
+					<Link to="/$lang/$station" params={{ lang: l, station }}>
+						<BackLink>{shortStationName(stopName)}</BackLink>
+					</Link>
+				}
+				title={
+					<>
+						{categoryIcons(categories)} {shortStationName(stopName)}
+					</>
+				}
+			>
+				<p>{pretty}</p>
+			</SignageHeader>
 
 			<section>
 				<h2 className="text-meta uppercase tracking-widest text-muted font-bold mb-3">

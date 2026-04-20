@@ -6,6 +6,11 @@ import {
 	DaysToggleBar,
 	useDaysFilter,
 } from "../../../components/DaysToggle.tsx";
+import {
+	BackLink,
+	SignageHeader,
+	SubscribeButton,
+} from "../../../components/SignageHeader.tsx";
 import { borderForCancRate, StatCard } from "../../../components/StatCard.tsx";
 import { SubscribeModal } from "../../../components/SubscribeModal.tsx";
 import { type Lang, t } from "../../../lib/i18n.ts";
@@ -153,33 +158,31 @@ function StationIndex() {
 
 	return (
 		<main className="mx-auto max-w-4xl p-6 space-y-6">
-			<header className="space-y-1">
-				<Link
-					to="/$lang"
-					params={{ lang: l }}
-					className="text-sm text-muted hover:text-fg"
-				>
-					← {t(l, "nav.back")}
-				</Link>
-				<div className="flex items-center justify-between gap-3 mt-2 flex-wrap">
-					<h1 className="text-h1 font-black flex items-center gap-2">
+			<SignageHeader
+				backLink={
+					<Link to="/$lang" params={{ lang: l }}>
+						<BackLink>{t(l, "nav.back")}</BackLink>
+					</Link>
+				}
+				title={
+					<>
 						{categoryIcons(categories)} {shortStationName(stopName)}
-					</h1>
-					<button
-						type="button"
+					</>
+				}
+				action={
+					<SubscribeButton
+						label={t(l, "subscribe.cta.button")}
 						onClick={() => setSubscribeOpen(true)}
-						className="px-3 py-1.5 text-xs font-bold rounded-full border border-border text-accent hover:bg-surface-hover cursor-pointer transition-colors"
-					>
-						{t(l, "subscribe.cta.button")}
-					</button>
-				</div>
+					/>
+				}
+			>
 				{lastChange && (
-					<p className="text-xs text-dimmed">
+					<p>
 						{t(l, "station.last_updated")}:{" "}
 						{new Date(lastChange).toLocaleString(l)}
 					</p>
 				)}
-			</header>
+			</SignageHeader>
 
 			{subscribeOpen && (
 				<SubscribeModal

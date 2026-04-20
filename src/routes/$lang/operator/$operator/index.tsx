@@ -6,6 +6,10 @@ import {
 	useDaysFilter,
 } from "../../../../components/DaysToggle.tsx";
 import {
+	BackLink,
+	SignageHeader,
+} from "../../../../components/SignageHeader.tsx";
+import {
 	borderForCancRate,
 	StatCard,
 } from "../../../../components/StatCard.tsx";
@@ -87,19 +91,20 @@ function OperatorIndex() {
 
 	return (
 		<main className="mx-auto max-w-4xl p-6 space-y-6">
-			<header className="space-y-1">
-				<Link
-					to="/$lang"
-					params={{ lang: l }}
-					className="text-sm text-muted hover:text-fg"
-				>
-					← {t(l, "nav.back")}
-				</Link>
-				<h1 className="text-h1 font-black flex items-center gap-2 mt-2">
-					{categoryIcons(stats.categories)} {operator}
-				</h1>
+			<SignageHeader
+				backLink={
+					<Link to="/$lang" params={{ lang: l }}>
+						<BackLink>{t(l, "nav.back")}</BackLink>
+					</Link>
+				}
+				title={
+					<>
+						{categoryIcons(stats.categories)} {operator}
+					</>
+				}
+			>
 				{stats.lines.length > 0 && (
-					<p className="text-sm text-muted">
+					<p>
 						{t(l, "operator.lines")}:{" "}
 						{stats.lines.map((ln, i) => (
 							<span key={ln}>
@@ -115,7 +120,7 @@ function OperatorIndex() {
 						))}
 					</p>
 				)}
-			</header>
+			</SignageHeader>
 
 			<section className="grid grid-cols-2 sm:grid-cols-4 gap-3">
 				<StatCard label={t(l, "stat.departures")} value={String(total)} />

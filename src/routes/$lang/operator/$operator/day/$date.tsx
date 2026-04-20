@@ -5,6 +5,10 @@ import {
 	DepartureFilterBar,
 	useDepartureFilters,
 } from "../../../../../components/DepartureFilters.tsx";
+import {
+	BackLink,
+	SignageHeader,
+} from "../../../../../components/SignageHeader.tsx";
 import { type Lang, t } from "../../../../../lib/i18n.ts";
 import {
 	getOperatorDayJourneys,
@@ -118,17 +122,16 @@ function OperatorDay() {
 
 	return (
 		<main className="mx-auto max-w-4xl p-6 space-y-6">
-			<header className="space-y-1">
-				<Link
-					to="/$lang/operator/$operator"
-					params={{ lang: l, operator }}
-					className="text-sm text-muted hover:text-fg"
-				>
-					← {operator}
-				</Link>
-				<h1 className="text-h1 font-black mt-2">{operator}</h1>
-				<p className="text-sm text-muted">{pretty}</p>
-			</header>
+			<SignageHeader
+				backLink={
+					<Link to="/$lang/operator/$operator" params={{ lang: l, operator }}>
+						<BackLink>{operator}</BackLink>
+					</Link>
+				}
+				title={operator}
+			>
+				<p>{pretty}</p>
+			</SignageHeader>
 
 			<section>
 				<h2 className="text-meta uppercase tracking-widest text-muted font-bold mb-3">

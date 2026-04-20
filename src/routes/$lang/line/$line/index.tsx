@@ -7,6 +7,11 @@ import {
 	useDaysFilter,
 } from "../../../../components/DaysToggle.tsx";
 import {
+	BackLink,
+	SignageHeader,
+	SubscribeButton,
+} from "../../../../components/SignageHeader.tsx";
+import {
 	borderForCancRate,
 	StatCard,
 } from "../../../../components/StatCard.tsx";
@@ -89,33 +94,31 @@ function LineIndex() {
 
 	return (
 		<main className="mx-auto max-w-4xl p-6 space-y-6">
-			<header className="space-y-1">
-				<Link
-					to="/$lang"
-					params={{ lang: l }}
-					className="text-sm text-muted hover:text-fg"
-				>
-					← {t(l, "nav.back")}
-				</Link>
-				<div className="flex items-center justify-between gap-3 mt-2 flex-wrap">
-					<h1 className="text-h1 font-black flex items-center gap-2">
+			<SignageHeader
+				backLink={
+					<Link to="/$lang" params={{ lang: l }}>
+						<BackLink>{t(l, "nav.back")}</BackLink>
+					</Link>
+				}
+				title={
+					<>
 						{categoryIcons(stats.categories)} {line}
-					</h1>
-					<button
-						type="button"
+					</>
+				}
+				action={
+					<SubscribeButton
+						label={t(l, "subscribe.cta.button")}
 						onClick={() => setSubscribeOpen(true)}
-						className="px-3 py-1.5 text-xs font-bold rounded-full border border-border text-accent hover:bg-surface-hover cursor-pointer transition-colors"
-					>
-						{t(l, "subscribe.cta.button")}
-					</button>
-				</div>
+					/>
+				}
+			>
 				{stats.destinations.length > 0 && (
-					<p className="text-sm text-muted">{stats.destinations.join(" ↔ ")}</p>
+					<p>{stats.destinations.join(" ↔ ")}</p>
 				)}
 				{stats.operators.length > 0 && (
-					<p className="text-xs text-dimmed">{stats.operators.join(", ")}</p>
+					<p className="text-dimmed">{stats.operators.join(", ")}</p>
 				)}
-			</header>
+			</SignageHeader>
 
 			{subscribeOpen && (
 				<SubscribeModal
