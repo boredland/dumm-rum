@@ -31,3 +31,22 @@ export function textForScore(score: number): string {
 	if (score < 90) return "text-warn";
 	return "text-ok";
 }
+
+/** LED-glow variant of textForScore. Reserved for numeric cells that
+ * represent live/anomaly data on a signage surface. */
+export function ledForScore(score: number): string {
+	if (score < 80) return "led-text-danger";
+	if (score < 90) return "led-text-warn";
+	return "led-text-ok";
+}
+
+/** LED colour for an anomaly-count cell: dimmed when 0, coloured when >0.
+ * Use on ledger tables where most rows are quiet and the exception lights
+ * up. `tone` selects the semantic colour for the non-zero state. */
+export function ledForCount(
+	count: number,
+	tone: "danger" | "warn" | "info",
+): string {
+	if (count === 0) return "text-dimmed";
+	return `led-text-${tone}`;
+}

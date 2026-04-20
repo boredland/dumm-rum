@@ -13,6 +13,7 @@ import {
 } from "../../../components/SignageHeader.tsx";
 import { LedRow } from "../../../components/LedRow.tsx";
 import { borderForCancRate, StatCard } from "../../../components/StatCard.tsx";
+import { ledForCount, ledForScore } from "../../../lib/status.ts";
 import { SubscribeModal } from "../../../components/SubscribeModal.tsx";
 import { type Lang, t } from "../../../lib/i18n.ts";
 import {
@@ -300,16 +301,24 @@ function StationIndex() {
 											<td className="py-2 pr-4 text-right tabular-nums">
 												{d.total}
 											</td>
-											<td className="py-2 pr-4 text-right tabular-nums">
-												{d.cancelled}
+											<td
+												className={`py-2 pr-4 text-right tabular-nums ${ledForCount(d.cancelled, "danger")}`}
+											>
+												{d.cancelled || "—"}
 											</td>
-											<td className="py-2 pr-4 text-right tabular-nums text-info">
+											<td
+												className={`py-2 pr-4 text-right tabular-nums ${ledForCount(d.ghost, "info")}`}
+											>
 												{d.ghost || "—"}
 											</td>
-											<td className="py-2 pr-4 text-right tabular-nums">
-												{d.delayed}
+											<td
+												className={`py-2 pr-4 text-right tabular-nums ${ledForCount(d.delayed, "warn")}`}
+											>
+												{d.delayed || "—"}
 											</td>
-											<td className="py-2 pr-4 text-right tabular-nums font-bold">
+											<td
+												className={`py-2 pr-4 text-right tabular-nums font-bold ${ledForScore(score)}`}
+											>
 												{score}%
 											</td>
 											<td className="py-2 pr-4 text-right">
