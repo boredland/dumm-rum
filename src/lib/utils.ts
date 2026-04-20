@@ -84,3 +84,11 @@ export function providerFromRef(ref: string): string {
 	if (/^[12]\|/.test(ref)) return "rmv";
 	return "unknown";
 }
+
+export function lineSlug(
+	source: string,
+	category: string | null,
+	line: string,
+): string {
+	return `${source}:${category ?? "Bus"}:${line}`;
+}
