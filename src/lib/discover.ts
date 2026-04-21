@@ -63,6 +63,11 @@ async function discoverStationJourneys(
 		});
 	}
 
+	rows.sort(
+		(a, b) =>
+			a.journeyRef.localeCompare(b.journeyRef) ||
+			a.dayOfOperation.localeCompare(b.dayOfOperation),
+	);
 	await db.insert(journeyRuns).values(rows).onConflictDoNothing();
 	return rows.length;
 }
