@@ -79,11 +79,43 @@ export const Route = createFileRoute("/$lang/")({
 	}),
 	validateSearch: (search: Record<string, unknown>): SearchParams => {
 		let cats: string[] | undefined;
+		// Handle both array and single string (backward compatibility)
 		if (Array.isArray(search.cat)) {
-			cats = search.cat.filter((c): c is string => typeof c === "string");
-			if (cats.length === 0) cats = undefined;
+			// Check if it's an array of strings already
+			const filteredCats = search.cat.filter((c): c is string => typeof c === "string");
+			// But also check if there's a single JSON string in the array
+			if (filteredCats.length === 1 && filteredCats[0].startsWith('[')) {
+				try {
+					const parsed = JSON.parse(filteredCats[0]);
+					if (Array.isArray(parsed)) {
+						cats = parsed.filter((c): c is string => typeof c === "string");
+						if (cats.length === 0) cats = undefined;
+					} else {
+						cats = filteredCats.length > 0 ? filteredCats : undefined;
+					}
+				} catch {
+					cats = filteredCats.length > 0 ? filteredCats : undefined;
+				}
+			} else {
+				cats = filteredCats.length > 0 ? filteredCats : undefined;
+			}
 		} else if (typeof search.cat === "string") {
-			cats = [search.cat];
+			// Try to parse as JSON array first
+			if (search.cat.startsWith('[')) {
+				try {
+					const parsed = JSON.parse(search.cat);
+					if (Array.isArray(parsed)) {
+						cats = parsed.filter((c): c is string => typeof c === "string");
+						if (cats.length === 0) cats = undefined;
+					} else {
+						cats = search.cat.length > 0 ? [search.cat] : undefined;
+					}
+				} catch {
+					cats = search.cat.length > 0 ? [search.cat] : undefined;
+				}
+			} else {
+				cats = search.cat.length > 0 ? [search.cat] : undefined;
+			}
 		}
 		return {
 			days:
