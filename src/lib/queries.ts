@@ -30,7 +30,12 @@ const sourceSql = sql<string>`CASE
 	ELSE 'unknown'
 END`;
 
-const lineSlugSql = sql<string>`(${sourceSql} || ':' || COALESCE(${journeyRuns.category}, 'Bus') || ':' || ${journeyRuns.line})`;
+const normalizedCategorySql = sql<string>`CASE
+	WHEN ${journeyRuns.category} IN ('ICE', 'ICE-Sprinter', 'IC', 'EC', 'ECE', 'NJ', 'EN', 'RJ', 'RJX', 'TGV', 'EST') THEN 'Fernverkehr'
+	ELSE COALESCE(${journeyRuns.category}, 'Bus')
+END`;
+
+const lineSlugSql = sql<string>`(${sourceSql} || ':' || ${normalizedCategorySql} || ':' || ${journeyRuns.line})`;
 
 // Per-run "was delayed" signal, precomputed once across journey_stops so
 // summary queries can LEFT JOIN instead of running a correlated EXISTS per
@@ -126,7 +131,7 @@ export async function getOperatorSummaries(
 			.select({
 				operator: journeyRuns.operator,
 				line: journeyRuns.line,
-				category: journeyRuns.category,
+				category: normalizedCategorySql.as("category"),
 				source: sourceSql.as("source"),
 			})
 			.from(journeyRuns)
@@ -134,10 +139,10 @@ export async function getOperatorSummaries(
 			.groupBy(
 				journeyRuns.operator,
 				journeyRuns.line,
-				journeyRuns.category,
+				normalizedCategorySql,
 				sourceSql,
 			)
-			.orderBy(journeyRuns.operator, journeyRuns.category, journeyRuns.line),
+			.orderBy(journeyRuns.operator, normalizedCategorySql, journeyRuns.line),
 	]);
 
 	const lineMap = new Map<string, string[]>();
@@ -189,7 +194,7 @@ export async function getLineSummaries(
 	const rows = await db
 		.select({
 			line: journeyRuns.line,
-			category: journeyRuns.category,
+			category: normalizedCategorySql.as("category"),
 			source: sourceSql.as("source"),
 			total: count().as("total"),
 			cancelled:
@@ -210,12 +215,12 @@ export async function getLineSummaries(
 		.from(journeyRuns)
 		.leftJoin(dbr, delayedJoinCondition(dbr))
 		.where(daysCond)
-		.groupBy(journeyRuns.line, journeyRuns.category, sourceSql)
-		.orderBy(journeyRuns.category, journeyRuns.line);
+		.groupBy(journeyRuns.line, normalizedCategorySql, sourceSql)
+		.orderBy(normalizedCategorySql, journeyRuns.line);
 
 	return rows.map((r) => ({
 		line: r.line,
-		category: r.category ?? "Bus",
+		category: r.category,
 		slug: lineSlug(r.source, r.category, r.line),
 		operators: r.operators ? dedupeCsv(r.operators) : [],
 		destinations: r.destinations ? dedupeCsv(r.destinations) : [],

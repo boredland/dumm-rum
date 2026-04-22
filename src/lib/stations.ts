@@ -126,6 +126,7 @@ const LONG_DISTANCE_CATEGORIES = new Set([
 	"RJX",
 	"TGV",
 	"EST",
+	"Fernverkehr",
 ]);
 
 export function categoryIcons(categories: string[]): string {
