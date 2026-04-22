@@ -68,7 +68,7 @@ const getHomeSummaries = createServerFn({ method: "GET" })
 		return loadHomeSummaries(data.days, until);
 	});
 
-type SearchParams = { days?: DaysFilter; cat?: string };
+type SearchParams = { days?: DaysFilter; cat?: string[] };
 
 const STALE_TIME = 5 * 60 * 1000;
 
@@ -77,14 +77,23 @@ export const Route = createFileRoute("/$lang/")({
 	head: () => ({
 		meta: [{ title: "DummRum" }],
 	}),
-	validateSearch: (search: Record<string, unknown>): SearchParams => ({
-		days:
-			typeof search.days === "string" &&
-			VALID_DAYS.has(search.days as DaysFilter)
-				? (search.days as DaysFilter)
-				: undefined,
-		cat: typeof search.cat === "string" ? search.cat : undefined,
-	}),
+	validateSearch: (search: Record<string, unknown>): SearchParams => {
+		let cats: string[] | undefined;
+		if (Array.isArray(search.cat)) {
+			cats = search.cat.filter((c): c is string => typeof c === "string");
+			if (cats.length === 0) cats = undefined;
+		} else if (typeof search.cat === "string") {
+			cats = [search.cat];
+		}
+		return {
+			days:
+				typeof search.days === "string" &&
+				VALID_DAYS.has(search.days as DaysFilter)
+					? (search.days as DaysFilter)
+					: undefined,
+			cat: cats,
+		};
+	},
 	loaderDeps: ({ search }) => ({ days: search.days }),
 	loader: async ({ deps }) =>
 		await getHomeSummaries({ data: { days: deps.days ?? "today" } }),
@@ -129,12 +138,23 @@ function Index() {
 	const navigate = Route.useNavigate();
 	const [query, setQuery] = useState("");
 	const q = query.toLowerCase().trim();
-	const catFilter = search.cat ?? "all";
-	const setCatFilter = (v: string) =>
+	const catFilter = search.cat ?? [];
+	const toggleCatFilter = (key: string) => {
 		navigate({
-			search: (s) => ({ ...s, cat: v === "all" ? undefined : v }),
+			search: (s) => {
+				const current = s.cat ?? [];
+				const next = Array.isArray(current) ? current : [];
+				if (next.includes(key)) {
+					// Remove category
+					return { ...s, cat: next.filter((c) => c !== key) || undefined };
+				} else {
+					// Add category
+					return { ...s, cat: [...next, key] };
+				}
+			},
 			replace: true,
 		});
+	};
 	const searchRef = useRef<HTMLInputElement>(null);
 	useEffect(() => {
 		const handler = (e: KeyboardEvent) => {
@@ -164,7 +184,8 @@ function Index() {
 	};
 
 	const matchesCat = (categories: string | string[]) => {
-		if (catFilter === "all") return true;
+		// If no filter is selected, show all categories
+		if (catFilter.length === 0) return true;
 		const cats = Array.isArray(categories) ? categories : [categories];
 		const normalize = (c: string): string => {
 			if (c === "S") return "S-Bahn";
@@ -173,26 +194,28 @@ function Index() {
 			return c;
 		};
 		const normalized = cats.map(normalize);
-		if (catFilter === "RE,RB")
-			return normalized.some((c) => c === "RE" || c === "RB");
-		if (catFilter === "S") return normalized.some((c) => c === "S-Bahn");
-		if (catFilter === "FV")
-			return normalized.some((c) =>
-				[
-					"ICE",
-					"ICE-Sprinter",
-					"IC",
-					"EC",
-					"ECE",
-					"NJ",
-					"EN",
-					"RJ",
-					"RJX",
-					"TGV",
-					"EST",
-				].includes(c),
-			);
-		return normalized.includes(catFilter);
+		return catFilter.some((filter) => {
+			if (filter === "RE,RB")
+				return normalized.some((c) => c === "RE" || c === "RB");
+			if (filter === "S") return normalized.some((c) => c === "S-Bahn");
+			if (filter === "FV")
+				return normalized.some((c) =>
+					[
+						"ICE",
+						"ICE-Sprinter",
+						"IC",
+						"EC",
+						"ECE",
+						"NJ",
+						"EN",
+						"RJ",
+						"RJX",
+						"TGV",
+						"EST",
+					].includes(c),
+				);
+			return normalized.includes(filter);
+		});
 	};
 
 	const filteredLines = [...lines]
@@ -322,7 +345,6 @@ function Index() {
 
 				<div className="flex flex-wrap gap-2">
 					{[
-						{ key: "all", label: t(l, "filter.all") },
 						{ key: "U-Bahn", label: "U-Bahn" },
 						{ key: "S", label: "S-Bahn" },
 						{ key: "Tram", label: "Tram" },
@@ -332,12 +354,25 @@ function Index() {
 					].map((f) => (
 						<Pill
 							key={f.key}
-							active={catFilter === f.key}
-							onClick={() => setCatFilter(f.key)}
+							active={catFilter.includes(f.key)}
+							onClick={() => toggleCatFilter(f.key)}
 						>
 							{f.label}
 						</Pill>
 					))}
+					{catFilter.length > 0 && (
+						<Pill
+							active={false}
+							onClick={() =>
+								navigate({
+									search: (s) => ({ ...s, cat: undefined }),
+									replace: true,
+								})
+							}
+						>
+							{t(l, "filter.all")}
+						</Pill>
+					)}
 				</div>
 
 				<OverviewCards
