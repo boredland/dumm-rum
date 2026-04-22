@@ -6,6 +6,7 @@ import {
 	getStopSummaries,
 	type LineSummary,
 	type OperatorSummary,
+	type QueryFilter,
 	type StopSummary,
 } from "./queries.ts";
 import { makeSwr } from "./swr.ts";
@@ -15,12 +16,17 @@ export interface HomePayload {
 	operators: OperatorSummary[];
 	stops: StopSummary[];
 	days: DaysFilter;
+	until?: string;
 	oldestDate: string | null;
 }
 
 const homeSwr = makeSwr<HomePayload>(
-	async (days) => {
-		const filter = { days: days as DaysFilter };
+	async (key: string) => {
+		// Parse cache key format: "days:until"
+		const [days, until] = key.split(":");
+		const filter: QueryFilter = { days: days as DaysFilter };
+		if (until) filter.until = until;
+
 		const [lines, operators, stops, oldestDate] = await Promise.all([
 			getLineSummaries(filter),
 			getOperatorSummaries(filter),
@@ -32,14 +38,19 @@ const homeSwr = makeSwr<HomePayload>(
 			operators,
 			stops,
 			days: days as DaysFilter,
+			until,
 			oldestDate,
 		};
 	},
 	{ freshMs: 60_000, staleMs: 15 * 60_000 },
 );
 
-export function loadHomeSummaries(days: DaysFilter): Promise<HomePayload> {
-	return homeSwr.get(days);
+export function loadHomeSummaries(
+	days: DaysFilter,
+	until?: string,
+): Promise<HomePayload> {
+	const key = until ? `${days}:${until}` : days;
+	return homeSwr.get(key);
 }
 
 /** Preload "today" summaries at server startup so the first user after

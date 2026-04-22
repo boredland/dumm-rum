@@ -64,17 +64,24 @@ export type DaysFilter = "all" | "today" | "weekdays" | "weekends";
 
 export interface QueryFilter {
 	days?: DaysFilter;
+	until?: string; // ISO date string (YYYY-MM-DD), used for cacheable "until" queries
 }
 
-const last30DaysSql = sql`${journeyRuns.dayOfOperation} >= to_char(CURRENT_DATE - INTERVAL '30 days', 'YYYY-MM-DD')`;
+function last30DaysSql(until?: string): SQL {
+	if (until) {
+		return sql`${journeyRuns.dayOfOperation} >= to_char(cast(${until} as date) - INTERVAL '30 days', 'YYYY-MM-DD')`;
+	}
+	return sql`${journeyRuns.dayOfOperation} >= to_char(CURRENT_DATE - INTERVAL '30 days', 'YYYY-MM-DD')`;
+}
 
-function daysCondition(filter: DaysFilter = "today") {
+function daysCondition(filter: DaysFilter = "today", until?: string) {
 	if (filter === "today") return eq(journeyRuns.dayOfOperation, todayBerlin());
+	const last30 = last30DaysSql(until);
 	if (filter === "weekdays")
-		return sql`${last30DaysSql} AND EXTRACT(DOW FROM ${journeyRuns.dayOfOperation}::date)::int NOT IN (0, 6)`;
+		return sql`${last30} AND EXTRACT(DOW FROM ${journeyRuns.dayOfOperation}::date)::int NOT IN (0, 6)`;
 	if (filter === "weekends")
-		return sql`${last30DaysSql} AND EXTRACT(DOW FROM ${journeyRuns.dayOfOperation}::date)::int IN (0, 6)`;
-	return last30DaysSql;
+		return sql`${last30} AND EXTRACT(DOW FROM ${journeyRuns.dayOfOperation}::date)::int IN (0, 6)`;
+	return last30;
 }
 
 // ─── Operator summaries ────────────────────────────────────────────────
@@ -92,7 +99,7 @@ export interface OperatorSummary {
 export async function getOperatorSummaries(
 	filter: QueryFilter = {},
 ): Promise<OperatorSummary[]> {
-	const daysCond = daysCondition(filter.days);
+	const daysCond = daysCondition(filter.days, filter.until);
 	const hasOperator = and(
 		isNotNull(journeyRuns.operator),
 		ne(journeyRuns.operator, ""),
@@ -123,15 +130,7 @@ export async function getOperatorSummaries(
 				source: sourceSql.as("source"),
 			})
 			.from(journeyRuns)
-			.where(
-				and(
-					hasOperator,
-					gte(
-						journeyRuns.dayOfOperation,
-						sql`to_char(CURRENT_DATE - INTERVAL '30 days', 'YYYY-MM-DD')`,
-					),
-				),
-			)
+			.where(and(hasOperator, daysCond))
 			.groupBy(
 				journeyRuns.operator,
 				journeyRuns.line,
@@ -185,7 +184,7 @@ export interface LineSummary {
 export async function getLineSummaries(
 	filter: QueryFilter = {},
 ): Promise<LineSummary[]> {
-	const daysCond = daysCondition(filter.days);
+	const daysCond = daysCondition(filter.days, filter.until);
 	const dbr = delayedByRunSq();
 	const rows = await db
 		.select({

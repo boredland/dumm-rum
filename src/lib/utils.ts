@@ -19,6 +19,10 @@ export function todayBerlin(): string {
 	return nowBerlin().format("YYYY-MM-DD");
 }
 
+export function yesterdayBerlin(): string {
+	return nowBerlin().subtract(1, "day").format("YYYY-MM-DD");
+}
+
 // Stats thresholds. Planned frequency is the assumed wait between
 // departures — used as the "wait time" contribution when a departure is
 // cancelled, so avg_delay for a 100%-cancelled day isn't NaN. Delay

@@ -12,7 +12,7 @@ import type {
 	StopSummary,
 } from "../../lib/queries.ts";
 import { categoryIcons, slugForStop } from "../../lib/stations.ts";
-import { onTimeRate, shortStationName } from "../../lib/utils.ts";
+import { onTimeRate, shortStationName, yesterdayBerlin } from "../../lib/utils.ts";
 
 const VALID_DAYS = new Set<DaysFilter>([
 	"all",
@@ -21,19 +21,51 @@ const VALID_DAYS = new Set<DaysFilter>([
 	"weekends",
 ]);
 
+interface HomeSummariesInput {
+	days: DaysFilter;
+	until?: string;
+}
+
+const isValidIsoDate = (str: string): boolean => {
+	if (!/^\d{4}-\d{2}-\d{2}$/.test(str)) return false;
+	const date = new Date(str);
+	return !isNaN(date.getTime());
+};
+
 const getHomeSummaries = createServerFn({ method: "GET" })
-	.inputValidator((days: unknown): DaysFilter => {
-		if (typeof days === "string" && VALID_DAYS.has(days as DaysFilter)) {
-			return days as DaysFilter;
+	.inputValidator((input: unknown): HomeSummariesInput => {
+		if (typeof input === "object" && input !== null && "days" in input) {
+			const days = (input as Record<string, unknown>).days;
+			const until = (input as Record<string, unknown>).until;
+			if (typeof days === "string" && VALID_DAYS.has(days as DaysFilter)) {
+				return {
+					days: days as DaysFilter,
+					until: typeof until === "string" && isValidIsoDate(until) ? until : undefined,
+				};
+			}
 		}
-		return "today";
+		return { days: "today" };
 	})
-	.handler(async ({ data: days }): Promise<HomePayload> => {
-		setResponseHeader(
-			"Cache-Control",
-			"public, max-age=30, s-maxage=60, stale-while-revalidate=600",
-		);
-		return loadHomeSummaries(days);
+	.handler(async ({ data }): Promise<HomePayload> => {
+		// For non-"today" queries, use yesterday as the "until" date for cacheability
+		const until =
+			data.days !== "today" ? data.until ?? yesterdayBerlin() : undefined;
+
+		// For "today", use default cache (changes at midnight)
+		// For date-based queries, extend cache duration since the result won't change
+		if (data.days !== "today") {
+			setResponseHeader(
+				"Cache-Control",
+				"public, max-age=3600, s-maxage=86400, stale-while-revalidate=604800",
+			);
+		} else {
+			setResponseHeader(
+				"Cache-Control",
+				"public, max-age=30, s-maxage=60, stale-while-revalidate=600",
+			);
+		}
+
+		return loadHomeSummaries(data.days, until);
 	});
 
 type SearchParams = { days?: DaysFilter; cat?: string };
@@ -55,7 +87,7 @@ export const Route = createFileRoute("/$lang/")({
 	}),
 	loaderDeps: ({ search }) => ({ days: search.days }),
 	loader: async ({ deps }) =>
-		await getHomeSummaries({ data: deps.days ?? "today" }),
+		await getHomeSummaries({ data: { days: deps.days ?? "today" } }),
 	component: Index,
 });
 
