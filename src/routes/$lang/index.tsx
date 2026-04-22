@@ -146,7 +146,8 @@ function Index() {
 				const next = Array.isArray(current) ? current : [];
 				if (next.includes(key)) {
 					// Remove category
-					return { ...s, cat: next.filter((c) => c !== key) || undefined };
+					const filtered = next.filter((c) => c !== key);
+					return { ...s, cat: filtered.length > 0 ? filtered : undefined };
 				} else {
 					// Add category
 					return { ...s, cat: [...next, key] };
@@ -201,6 +202,7 @@ function Index() {
 			if (filter === "FV")
 				return normalized.some((c) =>
 					[
+						"Fernverkehr",
 						"ICE",
 						"ICE-Sprinter",
 						"IC",

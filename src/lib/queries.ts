@@ -289,7 +289,10 @@ export async function getStopSummaries(): Promise<StopSummary[]> {
 				SELECT DISTINCT
 					${journeyStops.stopId} AS stop_id,
 					${journeyRuns.line} AS line,
-					${journeyRuns.category} AS category,
+					CASE
+						WHEN ${journeyRuns.category} IN ('ICE', 'ICE-Sprinter', 'IC', 'EC', 'ECE', 'NJ', 'EN', 'RJ', 'RJX', 'TGV', 'EST') THEN 'Fernverkehr'
+						ELSE COALESCE(${journeyRuns.category}, 'Bus')
+					END AS category,
 					${sourceSql} AS source
 				FROM ${journeyStops}
 				LEFT JOIN ${journeyRuns}
@@ -299,7 +302,7 @@ export async function getStopSummaries(): Promise<StopSummary[]> {
 			)
 			SELECT
 				stop_id,
-				STRING_AGG(source || ':' || COALESCE(category, 'Bus') || ':' || line, ',') AS lines,
+				STRING_AGG(source || ':' || category || ':' || line, ',') AS lines,
 				STRING_AGG(DISTINCT category, ',') AS categories
 			FROM distinct_stop_lines
 			GROUP BY stop_id
