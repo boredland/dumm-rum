@@ -127,6 +127,14 @@ const LONG_DISTANCE_CATEGORIES = new Set([
 	"TGV",
 	"EST",
 	"Fernverkehr",
+	"Intercity-Express",
+	"Intercity",
+	"Eurocity",
+	"Nightjet",
+	"Railjet",
+	"Railjet Xpress",
+	"D-Zug",
+	"Fernzug",
 ]);
 
 export function categoryIcons(categories: string[]): string {

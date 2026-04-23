@@ -98,7 +98,7 @@ export function decodeTripRef(
  * full route code depending on the operator — so we also match on
  * substring prefixes. Unknown strings fall back to "Other" rather than
  * passthrough, which would leave them uncoloured on the livemap. */
-function mapCategory(raw: string | undefined): string | null {
+export function normalizeEfaCategory(raw: string | undefined): string | null {
 	if (!raw) return null;
 	const p = raw.trim();
 	if (p === "Straßenbahn" || p === "Einsatzwagen" || p === "Tram")
@@ -120,7 +120,18 @@ function mapCategory(raw: string | undefined): string | null {
 		/^(RB|RE|IRE)\b/.test(p)
 	)
 		return "Regionalverkehr";
-	if (p === "ICE" || p === "IC" || p === "EC" || p === "Fernverkehr")
+	if (
+		p === "Fernverkehr" ||
+		p === "Intercity-Express" ||
+		p === "Intercity" ||
+		p === "Eurocity" ||
+		p === "Nightjet" ||
+		p === "Railjet" ||
+		p === "Railjet Xpress" ||
+		p === "D-Zug" ||
+		p === "Fernzug" ||
+		/^(ICE|ICE-Sprinter|IC|EC|ECE|NJ|EN|RJ|RJX|TGV|EST)\b/.test(p)
+	)
 		return "Fernverkehr";
 	if (p === "AST") return "AST";
 	if (p === "Schiff" || p === "Fähre") return "Ferry";
@@ -274,7 +285,7 @@ export async function efaStationBoard(
 			tripRef: encodeTripRef(sl.stateless, sl.key, yyyymmdd),
 			dayOfOperation: when.date,
 			line: sl.number ?? sl.symbol ?? "",
-			category: mapCategory(sl.name),
+			category: normalizeEfaCategory(sl.name),
 			operator: dep.operator?.publicCode ?? dep.operator?.name ?? null,
 			depTime: when.time,
 			destName: sl.direction ?? "",
@@ -348,7 +359,7 @@ export async function efaTripDetail(tripRef: string): Promise<EfaResult> {
 		? {
 				name: mode.name,
 				line: mode.number ?? mode.symbol,
-				catOut: mapCategory(mode.product) ?? undefined,
+				catOut: normalizeEfaCategory(mode.product) ?? undefined,
 				operator: mode.diva?.opPublicCode ?? mode.diva?.operator,
 			}
 		: undefined;

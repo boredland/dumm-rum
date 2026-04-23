@@ -31,7 +31,10 @@ const sourceSql = sql<string>`CASE
 END`;
 
 const normalizedCategorySql = sql<string>`CASE
-	WHEN ${journeyRuns.category} IN ('ICE', 'ICE-Sprinter', 'IC', 'EC', 'ECE', 'NJ', 'EN', 'RJ', 'RJX', 'TGV', 'EST') THEN 'Fernverkehr'
+	WHEN ${journeyRuns.category} IN ('ICE', 'ICE-Sprinter', 'IC', 'EC', 'ECE', 'NJ', 'EN', 'RJ', 'RJX', 'TGV', 'EST', 'Fernverkehr', 'Intercity-Express', 'Intercity', 'Eurocity', 'Nightjet', 'Railjet', 'Railjet Xpress', 'D-Zug', 'Fernzug') THEN 'Fernverkehr'
+	WHEN ${journeyRuns.category} IN ('Regional-Bahn', 'Regionalbahn', 'R-Bahn', 'R', 'Regionalverkehr') OR ${journeyRuns.category} ~ '^(RB|RE|IRE)\\b' THEN 'Regionalverkehr'
+	WHEN ${journeyRuns.category} IN ('Stadtbus', 'Regionalbus', 'Schnellbus', 'Niederflurbus') THEN 'Bus'
+	WHEN ${journeyRuns.category} IN ('Straßenbahn', 'Hochflurstraßenbahn', 'Niederflurstraßenbahn', 'Str') THEN 'Tram'
 	ELSE COALESCE(${journeyRuns.category}, 'Bus')
 END`;
 

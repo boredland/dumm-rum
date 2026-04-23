@@ -24,6 +24,7 @@ import {
 	type EfaTripDetail,
 	efaTripDetail,
 	efaTripShape,
+	normalizeEfaCategory,
 	shapeCacheKey,
 	shapeFromL1,
 	shapeToL1,
@@ -283,7 +284,10 @@ async function upsertRunFromEfa(
 			journeyRef: ref,
 			dayOfOperation,
 			line,
-			category: detail.product?.catOut ?? null,
+			category:
+				normalizeEfaCategory(detail.product?.catOut ?? detail.product?.name) ??
+				detail.product?.catOut ??
+				null,
 			operator: detail.product?.operator ?? null,
 			originStopId: origin.extId,
 			originName: origin.name,

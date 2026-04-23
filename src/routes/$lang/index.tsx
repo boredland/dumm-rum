@@ -145,12 +145,41 @@ const LONG_DISTANCE_CATEGORIES = new Set([
 	"RJX",
 	"TGV",
 	"EST",
+	"Intercity-Express",
+	"Intercity",
+	"Eurocity",
+	"Nightjet",
+	"Railjet",
+	"Railjet Xpress",
+	"D-Zug",
+	"Fernzug",
 ]);
 
 function normalizeCategory(category: string): string {
 	if (category === "S") return "S-Bahn";
+	if (
+		category === "Regional-Bahn" ||
+		category === "Regionalbahn" ||
+		category === "R-Bahn" ||
+		category === "R" ||
+		/^(RB|RE|IRE)\b/.test(category)
+	)
+		return "Regionalverkehr";
 	if (/bus$/i.test(category) || category === "AST") return "Bus";
 	if (/stra(ß|ss)enbahn/i.test(category) || category === "Str") return "Tram";
+	if (
+		category === "Fernverkehr" ||
+		category === "Intercity-Express" ||
+		category === "Intercity" ||
+		category === "Eurocity" ||
+		category === "Nightjet" ||
+		category === "Railjet" ||
+		category === "Railjet Xpress" ||
+		category === "D-Zug" ||
+		category === "Fernzug" ||
+		/^(ICE|ICE-Sprinter|IC|EC|ECE|NJ|EN|RJ|RJX|TGV|EST)\b/.test(category)
+	)
+		return "Fernverkehr";
 	return category;
 }
 
@@ -165,7 +194,10 @@ function matchesCategoryFilters(
 	return selectedFilters.some((filter) => {
 		if (filter === "RE,RB") {
 			return normalized.some(
-				(category) => category === "RE" || category === "RB",
+				(category) =>
+					category === "RE" ||
+					category === "RB" ||
+					category === "Regionalverkehr",
 			);
 		}
 		if (filter === "S") return normalized.includes("S-Bahn");
