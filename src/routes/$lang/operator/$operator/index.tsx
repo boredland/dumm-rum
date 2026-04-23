@@ -14,7 +14,6 @@ import {
 	borderForCancRate,
 	StatCard,
 } from "../../../../components/StatCard.tsx";
-import { ledForCount, ledForScore } from "../../../../lib/status.ts";
 import { type Lang, t } from "../../../../lib/i18n.ts";
 import {
 	getOperatorStats,
@@ -22,6 +21,7 @@ import {
 } from "../../../../lib/queries.ts";
 import { urlFilter } from "../../../../lib/search-state.ts";
 import { categoryIcons } from "../../../../lib/stations.ts";
+import { ledForCount, ledForScore } from "../../../../lib/status.ts";
 import { makeSwr } from "../../../../lib/swr.ts";
 import { onTimeRate } from "../../../../lib/utils.ts";
 

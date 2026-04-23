@@ -48,9 +48,7 @@ export function StatusGlyph({
 }) {
 	const status = deriveStatus(cancelled, ghost, delayMin, threshold);
 	const label =
-		status === "delayed" && delayMin !== null
-			? `+${delayMin}`
-			: GLYPH[status];
+		status === "delayed" && delayMin !== null ? `+${delayMin}` : GLYPH[status];
 	return (
 		<span
 			className={`inline-flex items-center justify-center w-12 h-6 text-meta font-black tabular-nums ${TONE[status]}`}
@@ -88,9 +86,7 @@ export function LedRow({
 			<span className="shrink-0 w-20 text-white">
 				{time.slice(0, 5)}
 				{rtDelta && (
-					<span className={`ml-1 ${TONE[status]}`}>
-						→{rtTime.slice(0, 5)}
-					</span>
+					<span className={`ml-1 ${TONE[status]}`}>→{rtTime.slice(0, 5)}</span>
 				)}
 			</span>
 			<span className="shrink-0 w-20 text-meta uppercase tracking-widest text-white/80">

@@ -12,7 +12,11 @@ import type {
 	StopSummary,
 } from "../../lib/queries.ts";
 import { categoryIcons, slugForStop } from "../../lib/stations.ts";
-import { onTimeRate, shortStationName, yesterdayBerlin } from "../../lib/utils.ts";
+import {
+	onTimeRate,
+	shortStationName,
+	yesterdayBerlin,
+} from "../../lib/utils.ts";
 
 const VALID_DAYS = new Set<DaysFilter>([
 	"all",
@@ -40,7 +44,10 @@ const getHomeSummaries = createServerFn({ method: "GET" })
 			if (typeof days === "string" && VALID_DAYS.has(days as DaysFilter)) {
 				return {
 					days: days as DaysFilter,
-					until: typeof until === "string" && isValidIsoDate(until) ? until : undefined,
+					until:
+						typeof until === "string" && isValidIsoDate(until)
+							? until
+							: undefined,
 				};
 			}
 		}
@@ -49,7 +56,7 @@ const getHomeSummaries = createServerFn({ method: "GET" })
 	.handler(async ({ data }): Promise<HomePayload> => {
 		// For non-"today" queries, use yesterday as the "until" date for cacheability
 		const until =
-			data.days !== "today" ? data.until ?? yesterdayBerlin() : undefined;
+			data.days !== "today" ? (data.until ?? yesterdayBerlin()) : undefined;
 
 		// For "today", use default cache (changes at midnight)
 		// For date-based queries, extend cache duration since the result won't change
@@ -72,60 +79,30 @@ type SearchParams = { days?: DaysFilter; cat?: string[] };
 
 const STALE_TIME = 5 * 60 * 1000;
 
+function parseCatFilter(input: unknown): string[] | undefined {
+	if (typeof input === "string") {
+		return input.length > 0 ? [input] : undefined;
+	}
+	if (Array.isArray(input)) {
+		const cats = input.filter((c): c is string => typeof c === "string");
+		return cats.length > 0 ? cats : undefined;
+	}
+	return undefined;
+}
+
 export const Route = createFileRoute("/$lang/")({
 	staleTime: STALE_TIME,
 	head: () => ({
 		meta: [{ title: "DummRum" }],
 	}),
-	validateSearch: (search: Record<string, unknown>): SearchParams => {
-		let cats: string[] | undefined;
-		// Handle both array and single string (backward compatibility)
-		if (Array.isArray(search.cat)) {
-			// Check if it's an array of strings already
-			const filteredCats = search.cat.filter((c): c is string => typeof c === "string");
-			// But also check if there's a single JSON string in the array
-			if (filteredCats.length === 1 && filteredCats[0].startsWith('[')) {
-				try {
-					const parsed = JSON.parse(filteredCats[0]);
-					if (Array.isArray(parsed)) {
-						cats = parsed.filter((c): c is string => typeof c === "string");
-						if (cats.length === 0) cats = undefined;
-					} else {
-						cats = filteredCats.length > 0 ? filteredCats : undefined;
-					}
-				} catch {
-					cats = filteredCats.length > 0 ? filteredCats : undefined;
-				}
-			} else {
-				cats = filteredCats.length > 0 ? filteredCats : undefined;
-			}
-		} else if (typeof search.cat === "string") {
-			// Try to parse as JSON array first
-			if (search.cat.startsWith('[')) {
-				try {
-					const parsed = JSON.parse(search.cat);
-					if (Array.isArray(parsed)) {
-						cats = parsed.filter((c): c is string => typeof c === "string");
-						if (cats.length === 0) cats = undefined;
-					} else {
-						cats = search.cat.length > 0 ? [search.cat] : undefined;
-					}
-				} catch {
-					cats = search.cat.length > 0 ? [search.cat] : undefined;
-				}
-			} else {
-				cats = search.cat.length > 0 ? [search.cat] : undefined;
-			}
-		}
-		return {
-			days:
-				typeof search.days === "string" &&
-				VALID_DAYS.has(search.days as DaysFilter)
-					? (search.days as DaysFilter)
-					: undefined,
-			cat: cats,
-		};
-	},
+	validateSearch: (search: Record<string, unknown>): SearchParams => ({
+		days:
+			typeof search.days === "string" &&
+			VALID_DAYS.has(search.days as DaysFilter)
+				? (search.days as DaysFilter)
+				: undefined,
+		cat: parseCatFilter(search.cat),
+	}),
 	loaderDeps: ({ search }) => ({ days: search.days }),
 	loader: async ({ deps }) =>
 		await getHomeSummaries({ data: { days: deps.days ?? "today" } }),
