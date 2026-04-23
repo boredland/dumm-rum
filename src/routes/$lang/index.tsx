@@ -2,7 +2,7 @@ import { createFileRoute, Link, useRouter } from "@tanstack/react-router";
 import { createServerFn } from "@tanstack/react-start";
 import { setResponseHeader } from "@tanstack/react-start/server";
 import { useEffect, useRef, useState } from "react";
-import { Pill, pillClass } from "../../components/Pill.tsx";
+import { FilterGroup } from "../../components/FilterGroup.tsx";
 import { type HomePayload, loadHomeSummaries } from "../../lib/home.ts";
 import { type Lang, t } from "../../lib/i18n.ts";
 import type {
@@ -33,7 +33,7 @@ interface HomeSummariesInput {
 const isValidIsoDate = (str: string): boolean => {
 	if (!/^\d{4}-\d{2}-\d{2}$/.test(str)) return false;
 	const date = new Date(str);
-	return !isNaN(date.getTime());
+	return !Number.isNaN(date.getTime());
 };
 
 const getHomeSummaries = createServerFn({ method: "GET" })
@@ -123,6 +123,15 @@ const DAY_FILTERS: {
 	{ key: "weekends", labelKey: "days.weekends" },
 ];
 
+const CATEGORY_OPTIONS: Array<{ key: string; label: string }> = [
+	{ key: "U-Bahn", label: "U-Bahn" },
+	{ key: "S", label: "S-Bahn" },
+	{ key: "Tram", label: "Tram" },
+	{ key: "Bus", label: "Bus" },
+	{ key: "RE,RB", label: "RE/RB" },
+	{ key: "FV", label: "Fernverkehr" },
+];
+
 const REFETCH_INTERVAL = 5 * 60 * 1000;
 
 function Index() {
@@ -148,6 +157,9 @@ function Index() {
 	const [query, setQuery] = useState("");
 	const q = query.toLowerCase().trim();
 	const catFilter = search.cat ?? [];
+	const activeCategoryLabels = CATEGORY_OPTIONS.filter((option) =>
+		catFilter.includes(option.key),
+	).map((option) => option.label);
 	const toggleCatFilter = (key: string) => {
 		navigate({
 			search: (s) => {
@@ -273,6 +285,10 @@ function Index() {
 			const sb = onTimeRate(b.cancelled, b.delayed, b.total);
 			return sa - sb || a.operator.localeCompare(b.operator);
 		});
+	const sectionTitle = (label: string, filtered: number, total: number) =>
+		filtered !== total
+			? `${label} (${filtered}/${total})`
+			: `${label} (${filtered})`;
 
 	return (
 		<div className="min-h-screen bg-bg">
@@ -340,51 +356,42 @@ function Index() {
 					</ul>
 				</details>
 
-				<div className="flex flex-wrap gap-2">
-					{DAY_FILTERS.map((f) => (
-						<Link
-							key={f.key}
-							to="/$lang"
-							params={{ lang: l }}
-							search={f.key === "today" ? {} : { days: f.key }}
-							className={pillClass(activeDays === f.key)}
-						>
-							{t(l, f.labelKey)}
-						</Link>
-					))}
-				</div>
+				<FilterGroup
+					options={DAY_FILTERS.map((f) => ({
+						key: f.key,
+						label: t(l, f.labelKey),
+					}))}
+					selected={activeDays}
+					linkProps={(key) => ({
+						to: "/$lang",
+						params: { lang: l },
+						search: (prev) => ({
+							...prev,
+							days: key === "today" ? undefined : key,
+						}),
+					})}
+				/>
 
-				<div className="flex flex-wrap gap-2">
-					{[
-						{ key: "U-Bahn", label: "U-Bahn" },
-						{ key: "S", label: "S-Bahn" },
-						{ key: "Tram", label: "Tram" },
-						{ key: "Bus", label: "Bus" },
-						{ key: "RE,RB", label: "RE/RB" },
-						{ key: "FV", label: "Fernverkehr" },
-					].map((f) => (
-						<Pill
-							key={f.key}
-							active={catFilter.includes(f.key)}
-							onClick={() => toggleCatFilter(f.key)}
-						>
-							{f.label}
-						</Pill>
-					))}
-					{catFilter.length > 0 && (
-						<Pill
-							active={false}
-							onClick={() =>
-								navigate({
-									search: (s) => ({ ...s, cat: undefined }),
-									replace: true,
-								})
-							}
-						>
-							{t(l, "filter.all")}
-						</Pill>
-					)}
-				</div>
+				<FilterGroup
+					options={CATEGORY_OPTIONS}
+					selected={catFilter}
+					onToggle={toggleCatFilter}
+					showClearButton={catFilter.length > 0}
+					clearLabel={t(l, "filter.all")}
+					onClear={() =>
+						navigate({
+							search: (s) => ({ ...s, cat: undefined }),
+							replace: true,
+						})
+					}
+				/>
+				{activeCategoryLabels.length > 0 && (
+					<p className="text-meta font-bold uppercase tracking-wider text-muted">
+						{t(l, "home.filtered_by", {
+							filters: activeCategoryLabels.join(" + "),
+						})}
+					</p>
+				)}
 
 				<OverviewCards
 					lines={filteredLines}
@@ -425,7 +432,11 @@ function Index() {
 				</div>
 
 				<Section
-					title={`${t(l, "home.lines")} (${filteredLines.length})`}
+					title={sectionTitle(
+						t(l, "home.lines"),
+						filteredLines.length,
+						lines.length,
+					)}
 					gridClass="grid grid-cols-[repeat(auto-fit,minmax(180px,1fr))] gap-3"
 					open={openSections.has("lines") || (!!q && filteredLines.length > 0)}
 					onToggle={(open) => toggleSection("lines", open)}
@@ -436,7 +447,11 @@ function Index() {
 				</Section>
 
 				<Section
-					title={`${t(l, "home.stations")} (${filteredStops.length})`}
+					title={sectionTitle(
+						t(l, "home.stations"),
+						filteredStops.length,
+						stops.length,
+					)}
 					gridClass="grid grid-cols-[repeat(auto-fit,minmax(220px,1fr))] gap-3"
 					open={openSections.has("stops") || (!!q && filteredStops.length > 0)}
 					onToggle={(open) => toggleSection("stops", open)}
@@ -447,7 +462,11 @@ function Index() {
 				</Section>
 
 				<Section
-					title={`${t(l, "home.operators")} (${filteredOps.length})`}
+					title={sectionTitle(
+						t(l, "home.operators"),
+						filteredOps.length,
+						operators.length,
+					)}
 					gridClass="grid grid-cols-[repeat(auto-fit,minmax(260px,1fr))] gap-3"
 					open={
 						openSections.has("operators") || (!!q && filteredOps.length > 0)
