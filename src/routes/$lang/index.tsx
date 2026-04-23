@@ -132,6 +132,63 @@ const CATEGORY_OPTIONS: Array<{ key: string; label: string }> = [
 	{ key: "FV", label: "Fernverkehr" },
 ];
 
+const LONG_DISTANCE_CATEGORIES = new Set([
+	"Fernverkehr",
+	"ICE",
+	"ICE-Sprinter",
+	"IC",
+	"EC",
+	"ECE",
+	"NJ",
+	"EN",
+	"RJ",
+	"RJX",
+	"TGV",
+	"EST",
+]);
+
+function normalizeCategory(category: string): string {
+	if (category === "S") return "S-Bahn";
+	if (/bus$/i.test(category) || category === "AST") return "Bus";
+	if (/stra(ß|ss)enbahn/i.test(category) || category === "Str") return "Tram";
+	return category;
+}
+
+function matchesCategoryFilters(
+	selectedFilters: string[],
+	categories: string | string[],
+): boolean {
+	if (selectedFilters.length === 0) return true;
+	const normalized = (
+		Array.isArray(categories) ? categories : [categories]
+	).map(normalizeCategory);
+	return selectedFilters.some((filter) => {
+		if (filter === "RE,RB") {
+			return normalized.some(
+				(category) => category === "RE" || category === "RB",
+			);
+		}
+		if (filter === "S") return normalized.includes("S-Bahn");
+		if (filter === "FV") {
+			return normalized.some((category) =>
+				LONG_DISTANCE_CATEGORIES.has(category),
+			);
+		}
+		return normalized.includes(filter);
+	});
+}
+
+function categoriesForActiveFilter(
+	categories: string[],
+	selectedFilters: string[],
+): string[] {
+	if (selectedFilters.length === 0) return categories;
+	const filteredCategories = categories.filter((category) =>
+		matchesCategoryFilters(selectedFilters, category),
+	);
+	return filteredCategories.length > 0 ? filteredCategories : categories;
+}
+
 const REFETCH_INTERVAL = 5 * 60 * 1000;
 
 function Index() {
@@ -205,46 +262,10 @@ function Index() {
 		});
 	};
 
-	const matchesCat = (categories: string | string[]) => {
-		// If no filter is selected, show all categories
-		if (catFilter.length === 0) return true;
-		const cats = Array.isArray(categories) ? categories : [categories];
-		const normalize = (c: string): string => {
-			if (c === "S") return "S-Bahn";
-			if (/bus$/i.test(c) || c === "AST") return "Bus";
-			if (/stra(ß|ss)enbahn/i.test(c) || c === "Str") return "Tram";
-			return c;
-		};
-		const normalized = cats.map(normalize);
-		return catFilter.some((filter) => {
-			if (filter === "RE,RB")
-				return normalized.some((c) => c === "RE" || c === "RB");
-			if (filter === "S") return normalized.some((c) => c === "S-Bahn");
-			if (filter === "FV")
-				return normalized.some((c) =>
-					[
-						"Fernverkehr",
-						"ICE",
-						"ICE-Sprinter",
-						"IC",
-						"EC",
-						"ECE",
-						"NJ",
-						"EN",
-						"RJ",
-						"RJX",
-						"TGV",
-						"EST",
-					].includes(c),
-				);
-			return normalized.includes(filter);
-		});
-	};
-
 	const filteredLines = [...lines]
 		.filter(
 			(line) =>
-				matchesCat(line.category) &&
+				matchesCategoryFilters(catFilter, line.category) &&
 				(!q ||
 					matchesQuery(
 						q,
@@ -264,7 +285,7 @@ function Index() {
 
 	const filteredStops = stops.filter(
 		(stop) =>
-			matchesCat(stop.categories) &&
+			matchesCategoryFilters(catFilter, stop.categories) &&
 			(!q ||
 				matchesQuery(
 					q,
@@ -277,7 +298,7 @@ function Index() {
 	const filteredOps = [...operators]
 		.filter(
 			(op) =>
-				matchesCat(op.categories) &&
+				matchesCategoryFilters(catFilter, op.categories) &&
 				(!q || matchesQuery(q, op.operator, op.lines.join(" "))),
 		)
 		.sort((a, b) => {
@@ -457,7 +478,12 @@ function Index() {
 					onToggle={(open) => toggleSection("stops", open)}
 				>
 					{filteredStops.slice(0, q ? 200 : 40).map((stop) => (
-						<StopCard key={stop.stopName} stop={stop} lang={l} />
+						<StopCard
+							key={stop.stopName}
+							stop={stop}
+							lang={l}
+							activeFilters={catFilter}
+						/>
 					))}
 				</Section>
 
@@ -474,7 +500,12 @@ function Index() {
 					onToggle={(open) => toggleSection("operators", open)}
 				>
 					{filteredOps.map((op) => (
-						<OperatorCard key={op.operator} op={op} lang={l} />
+						<OperatorCard
+							key={op.operator}
+							op={op}
+							lang={l}
+							activeFilters={catFilter}
+						/>
 					))}
 				</Section>
 
@@ -555,6 +586,7 @@ function Section({
 
 function LineCard({ line, lang }: { line: LineSummary; lang: Lang }) {
 	const score = onTimeRate(line.cancelled, line.delayed, line.total);
+	const visibleCategory = normalizeCategory(line.category);
 	return (
 		<Link
 			to="/$lang/line/$line"
@@ -563,10 +595,10 @@ function LineCard({ line, lang }: { line: LineSummary; lang: Lang }) {
 		>
 			<div className="bg-signage px-3 py-1.5 flex justify-between items-center border-b border-black/40">
 				<div className="text-white/90 text-micro font-black uppercase tracking-[0.2em]">
-					{line.slug.split(":")[0]} · {line.category}
+					{line.slug.split(":")[0]} · {visibleCategory}
 				</div>
 				<div className="text-white/30 scale-75">
-					{categoryIcons([line.category])}
+					{categoryIcons([visibleCategory])}
 				</div>
 			</div>
 			<div className="p-3 bg-surface/30">
@@ -594,11 +626,23 @@ function LineCard({ line, lang }: { line: LineSummary; lang: Lang }) {
 	);
 }
 
-function StopCard({ stop, lang }: { stop: StopSummary; lang: Lang }) {
+function StopCard({
+	stop,
+	lang,
+	activeFilters,
+}: {
+	stop: StopSummary;
+	lang: Lang;
+	activeFilters: string[];
+}) {
 	const cancRate =
 		stop.journeyCount > 0 ? stop.cancelled / stop.journeyCount : 0;
 	const slug = slugForStop(stop.stopIds, stop.stopName);
 	const score = ((1 - cancRate) * 100).toFixed(0);
+	const visibleCategories = categoriesForActiveFilter(
+		stop.categories,
+		activeFilters,
+	);
 	return (
 		<Link
 			to="/$lang/$station"
@@ -610,7 +654,7 @@ function StopCard({ stop, lang }: { stop: StopSummary; lang: Lang }) {
 					{t(lang, "board.station_label")}
 				</div>
 				<div className="text-white/30 scale-75">
-					{categoryIcons(stop.categories)}
+					{categoryIcons(visibleCategories)}
 				</div>
 			</div>
 			<div className="p-3 bg-surface/30">
@@ -635,8 +679,20 @@ function StopCard({ stop, lang }: { stop: StopSummary; lang: Lang }) {
 	);
 }
 
-function OperatorCard({ op, lang }: { op: OperatorSummary; lang: Lang }) {
+function OperatorCard({
+	op,
+	lang,
+	activeFilters,
+}: {
+	op: OperatorSummary;
+	lang: Lang;
+	activeFilters: string[];
+}) {
 	const score = onTimeRate(op.cancelled, op.delayed, op.total);
+	const visibleCategories = categoriesForActiveFilter(
+		op.categories,
+		activeFilters,
+	);
 	return (
 		<Link
 			to="/$lang/operator/$operator"
@@ -648,7 +704,7 @@ function OperatorCard({ op, lang }: { op: OperatorSummary; lang: Lang }) {
 					{t(lang, "board.operator_label")}
 				</div>
 				<div className="flex gap-0.5 scale-75 origin-right opacity-30">
-					{op.categories.slice(0, 3).map((c) => (
+					{visibleCategories.slice(0, 3).map((c) => (
 						<span
 							key={c}
 							className="w-3 h-3 bg-white text-black flex items-center justify-center text-micro font-black rounded-full"
