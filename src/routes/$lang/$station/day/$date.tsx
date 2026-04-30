@@ -155,7 +155,7 @@ function StationDay() {
 			</SignageHeader>
 
 			<section>
-				<h2 className="text-meta uppercase tracking-widest text-muted font-bold mb-3">
+				<h2 className="signage-label mb-3 block">
 					{t(l, "section.all_departures")} ({filters.filtered.length}/
 					{departures.length})
 				</h2>

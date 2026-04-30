@@ -151,7 +151,7 @@ function LineDay() {
 			</SignageHeader>
 
 			<section>
-				<h2 className="text-meta uppercase tracking-widest text-muted font-bold mb-3">
+				<h2 className="signage-label mb-3 block">
 					{t(l, "section.all_departures")} ({filters.filtered.length}/
 					{journeys.length})
 				</h2>
@@ -164,7 +164,7 @@ function LineDay() {
 					<div className="overflow-x-auto">
 						<table className="w-full text-sm">
 							<thead>
-								<tr className="text-left text-xs uppercase text-muted border-b border-border-dim">
+								<tr className="text-left signage-label border-b border-border">
 									<th className="py-2 pr-3">{t(l, "table.time")}</th>
 									<th className="py-2 pr-3">{t(l, "table.station")}</th>
 									<th className="py-2 pr-3">{t(l, "table.direction")}</th>

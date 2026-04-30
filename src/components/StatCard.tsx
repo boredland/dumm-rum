@@ -9,6 +9,10 @@ export {
 	textForScore,
 } from "../lib/status.ts";
 
+/** Quiet hairline stat. Reliability tone is conveyed through the
+ * value's colour, not a full LED panel — four LEDs in a row drowned
+ * the actual numbers. The hero score on landing keeps the LED
+ * treatment because it earns the signage moment. */
 export function StatCard({
 	label,
 	value,
@@ -18,23 +22,19 @@ export function StatCard({
 	value: string;
 	tone?: "danger" | "info";
 }) {
-	const ledColor =
+	const valueColor =
 		tone === "danger"
-			? "led-text-danger"
+			? "text-danger"
 			: tone === "info"
-				? "led-text-info"
-				: "led-text-ok";
+				? "text-info"
+				: "text-fg";
 	return (
-		<div className="signage-frame p-1.5 active:translate-y-px transition-transform">
-			<div className="led-display">
-				<div className="text-micro uppercase font-black text-muted/80 mb-1 border-b border-white/5 pb-1">
-					{label}
-				</div>
-				<div
-					className={`text-h2 font-black tabular-nums ${ledColor} tracking-tighter`}
-				>
-					{value}
-				</div>
+		<div className="card p-3 flex flex-col gap-1">
+			<div className="signage-label">{label}</div>
+			<div
+				className={`text-h2 font-black tabular-nums tracking-tighter ${valueColor}`}
+			>
+				{value}
 			</div>
 		</div>
 	);

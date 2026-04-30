@@ -9,10 +9,8 @@ interface Props {
 
 export function SignageHeader({ backLink, title, action, children }: Props) {
 	return (
-		<header className="signage-frame p-3 space-y-2">
-			<div className="text-meta uppercase font-black tracking-widest text-muted">
-				{backLink}
-			</div>
+		<header className="signage-frame px-4 py-4 space-y-3">
+			<div className="signage-label">{backLink}</div>
 			<div className="flex items-center justify-between gap-3 flex-wrap">
 				<h1 className="text-h1 font-black tracking-tighter flex items-center gap-2 text-white">
 					{title}
@@ -20,7 +18,7 @@ export function SignageHeader({ backLink, title, action, children }: Props) {
 				{action}
 			</div>
 			{children && (
-				<div className="text-meta text-muted space-y-0.5">{children}</div>
+				<div className="text-meta text-white/60 space-y-0.5">{children}</div>
 			)}
 		</header>
 	);
@@ -35,11 +33,11 @@ export function BackLink({
 }) {
 	return (
 		<span
-			className={`inline-flex items-center gap-1 hover:text-white transition-colors ${className}`}
+			className={`inline-flex items-center gap-1.5 hover:text-white transition-colors ${className}`}
 		>
 			<svg
 				aria-hidden
-				className="h-3 w-3"
+				className="h-2.5 w-2.5"
 				viewBox="0 0 24 24"
 				fill="none"
 				stroke="currentColor"
