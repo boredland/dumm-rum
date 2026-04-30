@@ -246,9 +246,6 @@ function Index() {
 	const [query, setQuery] = useState("");
 	const q = query.toLowerCase().trim();
 	const catFilter = search.cat ?? [];
-	const activeCategoryLabels = CATEGORY_OPTIONS.filter((option) =>
-		catFilter.includes(option.key),
-	).map((option) => option.label);
 	const toggleCatFilter = (key: string) => {
 		navigate({
 			search: (s) => {
@@ -345,42 +342,115 @@ function Index() {
 
 	return (
 		<div className="min-h-screen bg-bg">
-			<main className="mx-auto max-w-5xl p-6 space-y-10">
-				<header className="space-y-1">
-					<h1 className="text-h1 font-black flex items-center gap-2 tracking-tighter">
-						🚏 {t(l, "home.title")}
-					</h1>
-					<p className="text-muted text-body font-bold">
-						{t(l, "home.subtitle")}
-						{" · "}
-						<Link
-							to="/$lang/map"
-							params={{ lang: l }}
-							className="text-accent hover:underline"
-						>
-							{t(l, "map.link")} →
-						</Link>
-					</p>
+			<main className="mx-auto max-w-5xl p-6 space-y-8">
+				<header className="flex flex-wrap items-end justify-between gap-x-6 gap-y-2">
+					<div>
+						<h1 className="text-h1 font-black tracking-tighter">
+							{t(l, "home.title")}
+						</h1>
+						<p className="text-muted text-body">
+							{t(l, "home.subtitle")}
+							{" · "}
+							<Link
+								to="/$lang/map"
+								params={{ lang: l }}
+								className="text-accent hover:underline"
+							>
+								{t(l, "map.link")} →
+							</Link>
+						</p>
+					</div>
 					{oldestDate && (
-						<p className="text-micro text-dimmed uppercase font-black tracking-widest">
+						<p className="text-meta text-dimmed tabular-nums">
 							{t(l, "stat.since")}{" "}
-							{new Date(`${oldestDate}T00:00:00`).toLocaleDateString(l, {
-								year: "numeric",
-								month: "long",
-								day: "numeric",
-							})}
+							<time className="text-fg/70">
+								{new Date(`${oldestDate}T00:00:00`).toLocaleDateString(l, {
+									year: "numeric",
+									month: "long",
+									day: "numeric",
+								})}
+							</time>
 						</p>
 					)}
 				</header>
 
-				<details className="group text-body text-muted">
-					<summary className="list-none [&::-webkit-details-marker]:hidden inline-flex items-center gap-1.5 cursor-pointer select-none font-bold hover:text-fg transition-colors uppercase text-xs tracking-wider">
-						<div className="w-4 h-4 bg-muted/20 flex items-center justify-center rounded-sm group-open:rotate-90 transition-transform">
-							▶
-						</div>
-						{t(l, "home.methodology_title")}
+				<div className="relative">
+					<input
+						ref={searchRef}
+						type="search"
+						placeholder={t(l, "search.placeholder")}
+						value={query}
+						onChange={(e) => setQuery(e.target.value)}
+						className="w-full bg-transparent border-b border-border focus:border-fg px-0 py-3 text-lg placeholder:text-muted/60 focus:outline-none transition-colors"
+					/>
+					{query ? (
+						<button
+							type="button"
+							aria-label={l === "de" ? "Suche leeren" : "Clear search"}
+							onClick={() => {
+								setQuery("");
+								searchRef.current?.focus();
+							}}
+							className="absolute right-0 top-1/2 -translate-y-1/2 inline-flex h-8 w-8 items-center justify-center text-muted hover:text-fg transition-colors"
+						>
+							✕
+						</button>
+					) : (
+						<kbd className="hidden sm:inline-flex absolute right-0 top-1/2 -translate-y-1/2 text-micro font-bold uppercase text-dimmed border border-border-dim rounded-sm px-1.5 py-0.5 pointer-events-none">
+							{shortcutLabel}
+						</kbd>
+					)}
+				</div>
+
+				<div className="flex flex-wrap items-center gap-x-6 gap-y-3">
+					<FilterGroup
+						options={DAY_FILTERS.map((f) => ({
+							key: f.key,
+							label: t(l, f.labelKey),
+						}))}
+						selected={activeDays}
+						linkProps={(key) => ({
+							to: "/$lang",
+							params: { lang: l },
+							search: (prev) => ({
+								...prev,
+								days: key === "today" ? undefined : key,
+							}),
+						})}
+					/>
+					<div className="hidden sm:block h-6 w-px bg-border" />
+					<FilterGroup
+						options={CATEGORY_OPTIONS}
+						selected={catFilter}
+						onToggle={toggleCatFilter}
+						showClearButton={catFilter.length > 0}
+						clearLabel={t(l, "filter.all")}
+						onClear={() =>
+							navigate({
+								search: (s) => ({ ...s, cat: undefined }),
+								replace: true,
+							})
+						}
+					/>
+				</div>
+
+				<OverviewCards
+					lines={filteredLines}
+					stops={filteredStops}
+					operators={filteredOps}
+					lang={l}
+				/>
+
+				<details className="group text-meta text-muted -mt-2">
+					<summary className="list-none [&::-webkit-details-marker]:hidden inline-flex items-center gap-2 cursor-pointer select-none hover:text-fg transition-colors">
+						<span className="text-dimmed group-open:rotate-90 transition-transform inline-block w-3">
+							›
+						</span>
+						<span className="signage-label">
+							{t(l, "home.methodology_title")}
+						</span>
 					</summary>
-					<ul className="mt-4 list-none pl-6 space-y-2 border-l-2 border-border/30">
+					<ul className="mt-3 ml-5 list-none space-y-1.5 border-l border-border pl-4 max-w-2xl">
 						{[
 							"collection",
 							"cancellation",
@@ -401,88 +471,13 @@ function Index() {
 								| "home.methodology_dedup"
 								| "home.methodology_colors";
 							return (
-								<li key={key} className="text-xs leading-relaxed">
+								<li key={key} className="text-meta leading-relaxed">
 									{t(l, translationKey)}
 								</li>
 							);
 						})}
 					</ul>
 				</details>
-
-				<FilterGroup
-					options={DAY_FILTERS.map((f) => ({
-						key: f.key,
-						label: t(l, f.labelKey),
-					}))}
-					selected={activeDays}
-					linkProps={(key) => ({
-						to: "/$lang",
-						params: { lang: l },
-						search: (prev) => ({
-							...prev,
-							days: key === "today" ? undefined : key,
-						}),
-					})}
-				/>
-
-				<FilterGroup
-					options={CATEGORY_OPTIONS}
-					selected={catFilter}
-					onToggle={toggleCatFilter}
-					showClearButton={catFilter.length > 0}
-					clearLabel={t(l, "filter.all")}
-					onClear={() =>
-						navigate({
-							search: (s) => ({ ...s, cat: undefined }),
-							replace: true,
-						})
-					}
-				/>
-				{activeCategoryLabels.length > 0 && (
-					<p className="text-meta font-bold uppercase tracking-wider text-muted">
-						{t(l, "home.filtered_by", {
-							filters: activeCategoryLabels.join(" + "),
-						})}
-					</p>
-				)}
-
-				<OverviewCards
-					lines={filteredLines}
-					stops={filteredStops}
-					operators={filteredOps}
-					lang={l}
-				/>
-
-				<div className="relative">
-					<div className="absolute left-4 top-1/2 -translate-y-1/2 text-muted/40 pointer-events-none">
-						🔍
-					</div>
-					<input
-						ref={searchRef}
-						type="search"
-						placeholder={t(l, "search.placeholder")}
-						value={query}
-						onChange={(e) => setQuery(e.target.value)}
-						className="w-full bg-surface border-2 border-border/50 rounded-sm px-10 py-3 text-body font-bold placeholder:text-muted/40 focus:outline-none focus:border-accent transition-colors"
-					/>
-					{query ? (
-						<button
-							type="button"
-							aria-label={l === "de" ? "Suche leeren" : "Clear search"}
-							onClick={() => {
-								setQuery("");
-								searchRef.current?.focus();
-							}}
-							className="absolute right-3 top-1/2 -translate-y-1/2 inline-flex h-8 w-8 items-center justify-center rounded-sm text-muted hover:bg-surface-hover hover:text-fg transition-colors cursor-pointer"
-						>
-							✕
-						</button>
-					) : (
-						<kbd className="hidden sm:inline-flex absolute right-3 top-1/2 -translate-y-1/2 text-micro font-black uppercase text-dimmed bg-surface-hover border border-border-dim rounded-sm px-2 py-1 pointer-events-none">
-							{shortcutLabel}
-						</kbd>
-					)}
-				</div>
 
 				<Section
 					title={sectionTitle(
@@ -541,43 +536,40 @@ function Index() {
 					))}
 				</Section>
 
-				<footer className="pt-12 border-t-4 border-black flex flex-wrap items-center gap-x-8 gap-y-4 text-micro font-black uppercase tracking-widest text-dimmed">
-					<div className="flex items-center gap-4 bg-surface px-4 py-2 rounded-sm border border-border/50">
-						<a href="https://www.rmv.de" className="inline-flex shrink-0">
-							<img
-								src="/rmv-logo.svg"
-								alt="RMV"
-								width={74}
-								height={15}
-								className="grayscale hover:grayscale-0 transition-[filter] opacity-50 hover:opacity-100"
-							/>
-						</a>
-						<span className="border-l border-border/50 pl-4">
-							{l === "de" ? "Datenquelle: RMV" : "Data source: RMV"}
-						</span>
-					</div>
-					<div className="flex items-center gap-6">
-						<a
-							href="https://github.com/boredland/dumm-rum"
-							className="hover:text-fg transition-colors"
-						>
-							{t(l, "nav.github")}
-						</a>
-						<a
-							href="https://github.com/boredland/dumm-rum/issues/new"
-							target="_blank"
-							rel="noopener noreferrer"
-							className="hover:text-fg transition-colors"
-						>
-							{t(l, "nav.report_bug")}
-						</a>
-					</div>
+				<footer className="mt-8 pt-6 border-t border-border flex flex-wrap items-center gap-x-6 gap-y-3 text-meta text-muted">
+					<a
+						href="https://www.rmv.de"
+						className="inline-flex items-center gap-2 hover:text-fg transition-colors"
+					>
+						<img
+							src="/rmv-logo.svg"
+							alt="RMV"
+							width={56}
+							height={11}
+							className="grayscale opacity-60 group-hover:opacity-100"
+						/>
+						<span>{l === "de" ? "Datenquelle: RMV" : "Data source: RMV"}</span>
+					</a>
+					<a
+						href="https://github.com/boredland/dumm-rum"
+						className="hover:text-fg transition-colors"
+					>
+						{t(l, "nav.github")}
+					</a>
+					<a
+						href="https://github.com/boredland/dumm-rum/issues/new"
+						target="_blank"
+						rel="noopener noreferrer"
+						className="hover:text-fg transition-colors"
+					>
+						{t(l, "nav.report_bug")}
+					</a>
 					<Link
 						to="/$lang"
 						params={{ lang: other }}
-						className="ml-auto bg-signage text-white px-3 py-1.5 rounded-sm hover:opacity-80 transition-opacity border border-white/5 font-black text-micro"
+						className="ml-auto signage-label hover:text-fg transition-colors"
 					>
-						{other.toUpperCase()}
+						{other.toUpperCase()} →
 					</Link>
 				</footer>
 			</main>
@@ -604,15 +596,66 @@ function Section({
 			open={open}
 			onToggle={(e) => onToggle((e.target as HTMLDetailsElement).open)}
 		>
-			<summary className="list-none [&::-webkit-details-marker]:hidden flex items-center gap-2 text-xs uppercase font-black text-fg mb-4 cursor-pointer select-none">
-				<div className="w-5 h-5 bg-signage text-white flex items-center justify-center text-micro font-black group-open:rotate-90 transition-transform rounded-sm border border-white/5">
-					▶
-				</div>
-				{title}
-				<div className="h-0.5 bg-border flex-1 ml-3 opacity-30" />
+			<summary className="list-none [&::-webkit-details-marker]:hidden flex items-baseline gap-3 mb-4 cursor-pointer select-none">
+				<span className="text-dimmed group-open:rotate-90 transition-transform inline-block w-3">
+					›
+				</span>
+				<span className="signage-label text-fg">{title}</span>
+				<div className="h-px bg-border flex-1" />
 			</summary>
-			<div className={`${gridClass} mt-3`}>{children}</div>
+			<div className={gridClass}>{children}</div>
 		</details>
+	);
+}
+
+/** Quiet aggregate card. The card type (line/station/operator) is conveyed by
+ * the section heading above; the reliability percent is the only numeric
+ * anchor — colour-coded so the label is implicit. */
+function AggregateCard({
+	to,
+	params,
+	score,
+	icon,
+	name,
+	subtitle,
+	subtitleTitle,
+}: {
+	to: "/$lang/line/$line" | "/$lang/$station" | "/$lang/operator/$operator";
+	params: Record<string, string>;
+	score: number;
+	icon?: React.ReactNode;
+	name: string;
+	subtitle: string;
+	subtitleTitle?: string;
+}) {
+	const tone =
+		score < 80 ? "text-danger" : score < 90 ? "text-warn" : "text-ok";
+	return (
+		<Link
+			// biome-ignore lint/suspicious/noExplicitAny: route is union-typed
+			to={to as any}
+			// biome-ignore lint/suspicious/noExplicitAny: params shape varies per route
+			params={params as any}
+			className="card no-underline group p-3 hover:border-fg/40 hover:bg-surface-hover transition-colors flex flex-col gap-1"
+		>
+			<div className="flex items-start justify-between gap-2">
+				<div className="text-body font-bold text-fg leading-tight tracking-tight truncate">
+					{name}
+				</div>
+				<span className={`text-body font-black tabular-nums ${tone}`}>
+					{score}%
+				</span>
+			</div>
+			<div
+				className="text-meta text-muted truncate flex items-center gap-1.5"
+				title={subtitleTitle ?? subtitle}
+			>
+				{icon && (
+					<span className="text-dimmed shrink-0 inline-flex">{icon}</span>
+				)}
+				<span className="truncate">{subtitle}</span>
+			</div>
+		</Link>
 	);
 }
 
@@ -620,41 +663,15 @@ function LineCard({ line, lang }: { line: LineSummary; lang: Lang }) {
 	const score = onTimeRate(line.cancelled, line.delayed, line.total);
 	const visibleCategory = normalizeCategory(line.category);
 	return (
-		<Link
+		<AggregateCard
 			to="/$lang/line/$line"
 			params={{ lang, line: line.slug }}
-			className="signage-frame overflow-hidden no-underline group active:translate-y-px transition-[transform,box-shadow] duration-150 ease-out hover:shadow-[inset_0_0_0_1px_rgba(253,185,19,0.35)]"
-		>
-			<div className="bg-signage px-3 py-1.5 flex justify-between items-center border-b border-black/40">
-				<div className="text-white/90 text-micro font-black uppercase tracking-[0.2em]">
-					{line.slug.split(":")[0]} · {visibleCategory}
-				</div>
-				<div className="text-white/30 scale-75">
-					{categoryIcons([visibleCategory])}
-				</div>
-			</div>
-			<div className="p-3 bg-surface/30">
-				<div className="text-sm font-black text-fg mb-1 leading-tight tracking-tight">
-					{line.line}
-				</div>
-				<div
-					className="text-micro font-bold text-muted/40 uppercase truncate mb-4"
-					title={line.destinations.join(" ↔ ")}
-				>
-					{line.destinations.join(" ↔ ")}
-				</div>
-				<div className="flex justify-between items-center border-t border-black/5 pt-2">
-					<span className="text-micro font-black text-muted/30 uppercase tracking-widest">
-						{t(lang, "board.reliability_index")}
-					</span>
-					<span
-						className={`text-xs font-black tabular-nums ${score < 90 ? "text-danger" : "text-ok"}`}
-					>
-						{score}%
-					</span>
-				</div>
-			</div>
-		</Link>
+			score={score}
+			icon={categoryIcons([visibleCategory])}
+			name={line.line}
+			subtitle={line.destinations.join(" ↔ ")}
+			subtitleTitle={line.destinations.join(" ↔ ")}
+		/>
 	);
 }
 
@@ -670,44 +687,20 @@ function StopCard({
 	const cancRate =
 		stop.journeyCount > 0 ? stop.cancelled / stop.journeyCount : 0;
 	const slug = slugForStop(stop.stopIds, stop.stopName);
-	const score = ((1 - cancRate) * 100).toFixed(0);
+	const score = Math.round((1 - cancRate) * 100);
 	const visibleCategories = categoriesForActiveFilter(
 		stop.categories,
 		activeFilters,
 	);
 	return (
-		<Link
+		<AggregateCard
 			to="/$lang/$station"
 			params={{ lang, station: slug }}
-			className="signage-frame overflow-hidden no-underline group active:translate-y-px transition-[transform,box-shadow] duration-150 ease-out hover:shadow-[inset_0_0_0_1px_rgba(253,185,19,0.35)]"
-		>
-			<div className="bg-signage px-3 py-1.5 flex justify-between items-center border-b border-black/40">
-				<div className="text-white/90 text-micro font-black uppercase tracking-[0.2em]">
-					{t(lang, "board.station_label")}
-				</div>
-				<div className="text-white/30 scale-75">
-					{categoryIcons(visibleCategories)}
-				</div>
-			</div>
-			<div className="p-3 bg-surface/30">
-				<div className="text-sm font-black text-fg mb-1 leading-tight tracking-tight">
-					{shortStationName(stop.stopName)}
-				</div>
-				<div className="text-micro font-bold text-muted/40 uppercase truncate mb-4">
-					{stop.lines.join(" · ")}
-				</div>
-				<div className="flex justify-between items-center border-t border-black/5 pt-2">
-					<span className="text-micro font-black text-muted/30 uppercase tracking-widest">
-						{t(lang, "board.reliability_index")}
-					</span>
-					<span
-						className={`text-xs font-black tabular-nums ${Number(score) < 90 ? "text-danger" : "text-ok"}`}
-					>
-						{score}%
-					</span>
-				</div>
-			</div>
-		</Link>
+			score={score}
+			icon={categoryIcons(visibleCategories)}
+			name={shortStationName(stop.stopName)}
+			subtitle={stop.lines.join(" · ")}
+		/>
 	);
 }
 
@@ -726,45 +719,14 @@ function OperatorCard({
 		activeFilters,
 	);
 	return (
-		<Link
+		<AggregateCard
 			to="/$lang/operator/$operator"
 			params={{ lang, operator: op.operator }}
-			className="signage-frame overflow-hidden no-underline group active:translate-y-px transition-[transform,box-shadow] duration-150 ease-out hover:shadow-[inset_0_0_0_1px_rgba(253,185,19,0.35)]"
-		>
-			<div className="bg-signage px-3 py-1.5 flex justify-between items-center border-b border-black/40">
-				<div className="text-white/90 text-micro font-black uppercase tracking-[0.2em]">
-					{t(lang, "board.operator_label")}
-				</div>
-				<div className="flex gap-0.5 scale-75 origin-right opacity-30">
-					{visibleCategories.slice(0, 3).map((c) => (
-						<span
-							key={c}
-							className="w-3 h-3 bg-white text-black flex items-center justify-center text-micro font-black rounded-full"
-						>
-							{c[0]}
-						</span>
-					))}
-				</div>
-			</div>
-			<div className="p-3 bg-surface/30">
-				<div className="text-sm font-black text-fg mb-1 leading-tight tracking-tight">
-					{op.operator}
-				</div>
-				<div className="text-micro font-bold text-muted/40 uppercase truncate mb-4">
-					{op.lines.join(" · ")}
-				</div>
-				<div className="flex justify-between items-center border-t border-black/5 pt-2">
-					<span className="text-micro font-black text-muted/30 uppercase tracking-widest">
-						{t(lang, "board.reliability_index")}
-					</span>
-					<span
-						className={`text-xs font-black tabular-nums ${score < 90 ? "text-danger" : "text-ok"}`}
-					>
-						{score}%
-					</span>
-				</div>
-			</div>
-		</Link>
+			score={score}
+			icon={categoryIcons(visibleCategories)}
+			name={op.operator}
+			subtitle={op.lines.join(" · ")}
+		/>
 	);
 }
 
@@ -853,13 +815,13 @@ function OverviewCards({
 		<div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
 			<div className="sm:col-span-1 signage-frame p-2 flex flex-col">
 				<div className="flex justify-between items-center mb-1 px-1">
-					<span className="text-micro font-black text-white/20 uppercase tracking-tighter">
+					<span className="signage-label !text-white/30">
 						{t(lang, "board.status_monitor")}
 					</span>
-					<div className="w-1.5 h-1.5 rounded-full bg-green-500/30 animate-pulse" />
+					<div className="w-1.5 h-1.5 rounded-full bg-green-500/40 animate-pulse" />
 				</div>
 				<div className="led-display flex-1 flex flex-col justify-center py-4">
-					<div className="text-micro uppercase font-black text-muted/60 tracking-widest text-center mb-2">
+					<div className="signage-label !text-white/40 text-center mb-2">
 						{t(lang, "home.overall_score")}
 					</div>
 					<div
@@ -869,12 +831,12 @@ function OverviewCards({
 						<span className="text-h2 opacity-50">%</span>
 					</div>
 					{ghostAll > 0 && (
-						<div className="text-micro text-info text-center mt-3 font-black uppercase tracking-widest border-t border-white/10 pt-2 mx-4">
-							👻 {scoreWithGhosts}% Reliability
+						<div className="signage-label !text-info text-center mt-3 border-t border-white/10 pt-2 mx-4">
+							{scoreWithGhosts}% reliability incl. ghosts
 						</div>
 					)}
 				</div>
-				<div className="text-micro text-center text-muted/40 uppercase font-black mt-2 py-1 bg-black/20 rounded-sm">
+				<div className="signage-label !text-white/40 text-center mt-2 py-1 bg-black/20 rounded-sm">
 					{totalAll.toLocaleString(lang)} {t(lang, "board.tracked")}
 				</div>
 			</div>
@@ -927,72 +889,79 @@ function WorstCard({
 	const hasAny =
 		(line?.count ?? 0) + (station?.count ?? 0) + (op?.count ?? 0) > 0;
 	return (
-		<div className="signage-frame p-3 hover:border-muted/50 transition-colors">
-			<div className="text-micro uppercase font-black text-muted/50 mb-3 border-b border-white/5 pb-1 flex items-center gap-2">
-				<div className="w-1 h-1 bg-white/20 rounded-full" /> {title}
-			</div>
+		<div className="card p-3 hover:border-fg/40 transition-colors">
+			<div className="signage-label mb-3">{title}</div>
 			{!hasAny && (
 				<div className="text-h2 font-black text-ok/30 tabular-nums">0.0%</div>
 			)}
-			<div className="space-y-3">
+			<div className="space-y-2.5">
 				{line && line.count > 0 && (
-					<Link
+					<WorstRow
 						to="/$lang/line/$line"
 						params={{ lang, line: line.slug }}
-						className="block no-underline group"
-					>
-						<div className="flex items-baseline justify-between">
-							<span className="text-xs font-black text-fg truncate flex-1 mr-2">
-								{line.name}
-							</span>
-							<span className={`${color} text-sm font-black tabular-nums`}>
-								{(line.rate * 100).toFixed(1)}%
-							</span>
-						</div>
-						<div className="text-micro uppercase font-bold text-muted/40 group-hover:text-muted/80 transition-colors">
-							{t(lang, "home.line")}
-						</div>
-					</Link>
+						label={t(lang, "home.line")}
+						name={line.name}
+						rate={line.rate}
+						color={color}
+					/>
 				)}
 				{station && station.count > 0 && (
-					<Link
+					<WorstRow
 						to="/$lang/$station"
 						params={{ lang, station: station.slug }}
-						className="block no-underline group"
-					>
-						<div className="flex items-baseline justify-between">
-							<span className="text-xs font-black text-fg truncate flex-1 mr-2">
-								{station.name}
-							</span>
-							<span className={`${color} text-sm font-black tabular-nums`}>
-								{(station.rate * 100).toFixed(1)}%
-							</span>
-						</div>
-						<div className="text-micro uppercase font-bold text-muted/40 group-hover:text-muted/80 transition-colors">
-							{t(lang, "home.station")}
-						</div>
-					</Link>
+						label={t(lang, "home.station")}
+						name={station.name}
+						rate={station.rate}
+						color={color}
+					/>
 				)}
 				{op && op.count > 0 && (
-					<Link
+					<WorstRow
 						to="/$lang/operator/$operator"
 						params={{ lang, operator: op.slug }}
-						className="block no-underline group"
-					>
-						<div className="flex items-baseline justify-between">
-							<span className="text-xs font-black text-fg truncate flex-1 mr-2">
-								{op.name}
-							</span>
-							<span className={`${color} text-sm font-black tabular-nums`}>
-								{(op.rate * 100).toFixed(1)}%
-							</span>
-						</div>
-						<div className="text-micro uppercase font-bold text-muted/40 group-hover:text-muted/80 transition-colors">
-							{t(lang, "home.operator")}
-						</div>
-					</Link>
+						label={t(lang, "home.operator")}
+						name={op.name}
+						rate={op.rate}
+						color={color}
+					/>
 				)}
 			</div>
 		</div>
+	);
+}
+
+function WorstRow({
+	to,
+	params,
+	label,
+	name,
+	rate,
+	color,
+}: {
+	to: "/$lang/line/$line" | "/$lang/$station" | "/$lang/operator/$operator";
+	params: Record<string, string>;
+	label: string;
+	name: string;
+	rate: number;
+	color: string;
+}) {
+	return (
+		<Link
+			// biome-ignore lint/suspicious/noExplicitAny: route is union-typed
+			to={to as any}
+			// biome-ignore lint/suspicious/noExplicitAny: params shape varies per route
+			params={params as any}
+			className="block no-underline group"
+		>
+			<div className="text-micro text-dimmed uppercase tracking-wider group-hover:text-muted transition-colors">
+				{label}
+			</div>
+			<div className="flex items-baseline justify-between gap-2">
+				<span className="text-body font-bold text-fg truncate">{name}</span>
+				<span className={`${color} text-body font-black tabular-nums shrink-0`}>
+					{(rate * 100).toFixed(1)}%
+				</span>
+			</div>
+		</Link>
 	);
 }
