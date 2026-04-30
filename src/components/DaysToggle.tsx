@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import type { Lang } from "../lib/i18n.ts";
 import { t } from "../lib/i18n.ts";
 import { todayBerlin } from "../lib/utils.ts";
+import { FilterGroup } from "./FilterGroup.tsx";
 
 export type DaysFilter = "today" | "all" | "weekdays" | "weekends";
 
@@ -62,23 +63,11 @@ export function DaysToggleBar({
 	active: DaysFilter;
 	setActive: (f: DaysFilter) => void;
 }) {
-	const pill =
-		"px-3 py-1.5 text-meta font-bold rounded-full border border-border cursor-pointer transition-colors";
-	const on = "bg-surface-hover text-fg";
-	const off = "bg-transparent text-muted hover:text-fg";
-
 	return (
-		<div className="flex flex-wrap gap-2">
-			{FILTERS.map((f) => (
-				<button
-					key={f.key}
-					type="button"
-					onClick={() => setActive(f.key)}
-					className={`${pill} ${active === f.key ? on : off}`}
-				>
-					{t(lang, f.labelKey)}
-				</button>
-			))}
-		</div>
+		<FilterGroup
+			options={FILTERS.map((f) => ({ key: f.key, label: t(lang, f.labelKey) }))}
+			selected={active}
+			onToggle={setActive}
+		/>
 	);
 }
