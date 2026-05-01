@@ -23,7 +23,6 @@ import {
 const ghostCaseSql = sql<number>`CASE WHEN NOT ${journeyRuns.wasTracked} AND NOT ${journeyRuns.cancelled} THEN 1 ELSE 0 END`;
 
 const sourceSql = sql<string>`CASE
-	WHEN ${journeyRuns.journeyRef} LIKE 'kvv|%' THEN 'kvv'
 	WHEN ${journeyRuns.journeyRef} LIKE 'flix|%' THEN 'flix'
 	WHEN ${journeyRuns.journeyRef} LIKE 'ferry|%' THEN 'ferry'
 	WHEN ${journeyRuns.journeyRef} ~ '^[12]\|' THEN 'rmv'

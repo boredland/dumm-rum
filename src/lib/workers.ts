@@ -2,14 +2,10 @@ import { migrate } from "drizzle-orm/postgres-js/migrator";
 import PgBoss from "pg-boss";
 import { db, sql as pg } from "../db/client.ts";
 import { runDiscovery } from "./discover.ts";
-import { KVV_POLL_QUEUE, runKvvDiscovery } from "./kvv-discover.ts";
-import { type KvvPollJob, processKvvPollBatch } from "./kvv-poll.ts";
 import { POLL_QUEUE, type PollJob, processPollBatch } from "./poll.ts";
 
 const DISCOVER_QUEUE = "discover";
-const KVV_DISCOVER_QUEUE = "kvv-discover";
 const DISCOVER_CRON = process.env.DISCOVER_CRON ?? "*/5 * * * *";
-const KVV_DISCOVER_CRON = process.env.KVV_DISCOVER_CRON ?? "*/5 * * * *";
 const TZ = "Europe/Berlin";
 const POLL_BATCH_SIZE = 10;
 
@@ -39,22 +35,13 @@ export async function startIngest(): Promise<StartedIngest> {
 
 	await boss.createQueue(DISCOVER_QUEUE);
 	await boss.createQueue(POLL_QUEUE);
-	await boss.createQueue(KVV_DISCOVER_QUEUE);
-	await boss.createQueue(KVV_POLL_QUEUE);
 
 	await boss.schedule(DISCOVER_QUEUE, DISCOVER_CRON, {}, { tz: TZ });
-	await boss.schedule(KVV_DISCOVER_QUEUE, KVV_DISCOVER_CRON, {}, { tz: TZ });
 
 	await boss.work(DISCOVER_QUEUE, async () => {
 		console.log("discover: start");
 		await runDiscovery(db, boss);
 		console.log("discover: done");
-	});
-
-	await boss.work(KVV_DISCOVER_QUEUE, async () => {
-		console.log("kvv discover: start");
-		await runKvvDiscovery(db, boss);
-		console.log("kvv discover: done");
 	});
 
 	await boss.work<PollJob>(
@@ -65,22 +52,13 @@ export async function startIngest(): Promise<StartedIngest> {
 		},
 	);
 
-	await boss.work<KvvPollJob>(
-		KVV_POLL_QUEUE,
-		{ batchSize: POLL_BATCH_SIZE },
-		async (jobs) => {
-			await processKvvPollBatch(db, boss, jobs);
-		},
-	);
-
 	console.log(
-		`ingest up — discovery cron "${DISCOVER_CRON}" + kvv "${KVV_DISCOVER_CRON}" (${TZ}), poll batch ${POLL_BATCH_SIZE}`,
+		`ingest up — discovery cron "${DISCOVER_CRON}" (${TZ}), poll batch ${POLL_BATCH_SIZE}`,
 	);
 
-	// Fire one of each on boot so we don't wait up to a full cron
-	// interval for the first signal of life. Cron continues from there.
+	// Fire one on boot so we don't wait up to a full cron interval for
+	// the first signal of life. Cron continues from there.
 	await boss.send(DISCOVER_QUEUE, {});
-	await boss.send(KVV_DISCOVER_QUEUE, {});
 
 	const shutdown = async (): Promise<void> => {
 		try {

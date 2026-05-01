@@ -77,10 +77,6 @@ async function enqueueNewJourneys(
 	boss: PgBoss,
 	today: string,
 ): Promise<number> {
-	// KVV refs (prefixed `kvv|…`) share the same `journey_runs` table
-	// but belong to a separate discover/poll pipeline; excluding them
-	// here keeps the RMV poller from trying to interpret an EFA
-	// `stateless:tripCode` as a HAFAS jid and burning its retry budget.
 	const candidates = await db
 		.select({
 			journeyRef: journeyRuns.journeyRef,
@@ -91,7 +87,6 @@ async function enqueueNewJourneys(
 			and(
 				eq(journeyRuns.dayOfOperation, today),
 				sql`${journeyRuns.pollState} IS NULL`,
-				sql`${journeyRuns.journeyRef} NOT LIKE 'kvv|%'`,
 			),
 		);
 
@@ -105,7 +100,6 @@ async function enqueueNewJourneys(
 			and(
 				eq(journeyRuns.dayOfOperation, today),
 				sql`${journeyRuns.pollState} IS NULL`,
-				sql`${journeyRuns.journeyRef} NOT LIKE 'kvv|%'`,
 			),
 		);
 

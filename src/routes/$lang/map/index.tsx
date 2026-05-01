@@ -588,23 +588,6 @@ async function fetchFlixVehicles(): Promise<{
 	return (await resp.json()) as { vehicles: Vehicle[]; serverTime: number };
 }
 
-async function fetchKvvVehicles(bbox: {
-	swLat: number;
-	swLon: number;
-	neLat: number;
-	neLon: number;
-}): Promise<{ vehicles: Vehicle[]; serverTime: number }> {
-	const q = new URLSearchParams({
-		swLat: String(bbox.swLat),
-		swLon: String(bbox.swLon),
-		neLat: String(bbox.neLat),
-		neLon: String(bbox.neLon),
-	});
-	const resp = await fetch(`/api/kvv/vehicles?${q.toString()}`);
-	if (!resp.ok) throw new Error(`kvv vehicles HTTP ${resp.status}`);
-	return (await resp.json()) as { vehicles: Vehicle[]; serverTime: number };
-}
-
 async function fetchFerryVehicles(): Promise<{
 	vehicles: Vehicle[];
 	serverTime: number;
@@ -1216,7 +1199,7 @@ function MapPage() {
 		const sw = bounds.getSouthWest();
 		const ne = bounds.getNorthEast();
 		try {
-			const [rmvRes, flixRes, ferryRes, kvvRes] = await Promise.allSettled([
+			const [rmvRes, flixRes, ferryRes] = await Promise.allSettled([
 				fetchVehicles({
 					data: {
 						swLat: sw.lat,
@@ -1228,12 +1211,6 @@ function MapPage() {
 				}),
 				fetchFlixVehicles(),
 				fetchFerryVehicles(),
-				fetchKvvVehicles({
-					swLat: sw.lat,
-					swLon: sw.lng,
-					neLat: ne.lat,
-					neLon: ne.lng,
-				}),
 			]);
 
 			const vehicles: Vehicle[] = [];
@@ -1251,11 +1228,6 @@ function MapPage() {
 				vehicles.push(...ferryRes.value.vehicles);
 			} else {
 				console.warn("ferry fetch failed:", ferryRes.reason);
-			}
-			if (kvvRes.status === "fulfilled") {
-				vehicles.push(...kvvRes.value.vehicles);
-			} else {
-				console.warn("kvv fetch failed:", kvvRes.reason);
 			}
 
 			timeDeltaRef.current = serverTime - Date.now();

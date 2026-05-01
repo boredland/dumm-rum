@@ -53,12 +53,6 @@ export const journeyStops = pgTable(
 		rtDepTime: text("rt_dep_time"),
 		rtArrTime: text("rt_arr_time"),
 		cancelled: boolean().notNull().default(false),
-		/** Stop coordinates — WGS84 degrees. Nullable because the RMV
-		 * ingest doesn't populate them (HAFAS delivers positions via a
-		 * separate live-map feed). KVV's EFA includes coords in every
-		 * TripStopTimes response, so every kvv-source row carries them. */
-		lat: doublePrecision("lat"),
-		lon: doublePrecision("lon"),
 		/** Per-stop delay in minutes, precomputed at insert/update. NULL
 		 * when the stop has no real-time pair. split_part + int math is
 		 * IMMUTABLE and backs a generated column; text::timestamp is not. */
