@@ -1,0 +1,1 @@
+CREATE INDEX "idx_journey_stops_day_name" ON "journey_stops" ("day_of_operation","stop_name");

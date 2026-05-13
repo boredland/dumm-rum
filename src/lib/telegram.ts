@@ -3,7 +3,6 @@ import { db } from "../db/client.ts";
 import {
 	journeyRuns,
 	journeyStops,
-	knownStops,
 	telegramSubscriptions,
 } from "../db/schema.ts";
 import {
@@ -310,13 +309,20 @@ export async function handleTelegramWebhook(
 		let resolvedStopName = "";
 		if (stopFilter) {
 			const stopRows = await db
-				.select({
-					stopId: knownStops.stopId,
-					stopName: knownStops.stopName,
-				})
-				.from(knownStops)
-				.where(
-					sql`LOWER(${knownStops.stopName}) LIKE ${`%${stopFilter.toLowerCase()}%`}`,
+				.execute<{
+					stop_id: string;
+					stop_name: string;
+				}>(sql`
+				SELECT DISTINCT ON (stop_id) stop_id, stop_name
+				FROM journey_stops
+				WHERE day_of_operation >= to_char(CURRENT_DATE - INTERVAL '30 days', 'YYYY-MM-DD')
+					AND LOWER(stop_name) LIKE ${`%${stopFilter.toLowerCase()}%`}
+				ORDER BY stop_id, stop_name
+			`)
+				.then((rs) =>
+					(rs as unknown as { stop_id: string; stop_name: string }[]).map(
+						(r) => ({ stopId: r.stop_id, stopName: r.stop_name }),
+					),
 				);
 			if (stopRows.length === 0) {
 				await reply(

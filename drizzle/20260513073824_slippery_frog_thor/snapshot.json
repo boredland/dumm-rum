@@ -1,0 +1,995 @@
+{
+	"version": "8",
+	"dialect": "postgres",
+	"id": "d47d3a66-27f0-4c68-83fc-fbd2b60404c1",
+	"prevIds": ["dd95bcc9-8360-4492-839d-646cbededc1b"],
+	"ddl": [
+		{
+			"isRlsEnabled": false,
+			"name": "journey_runs",
+			"entityType": "tables",
+			"schema": "public"
+		},
+		{
+			"isRlsEnabled": false,
+			"name": "journey_stops",
+			"entityType": "tables",
+			"schema": "public"
+		},
+		{
+			"isRlsEnabled": false,
+			"name": "known_stops",
+			"entityType": "tables",
+			"schema": "public"
+		},
+		{
+			"isRlsEnabled": false,
+			"name": "telegram_subscriptions",
+			"entityType": "tables",
+			"schema": "public"
+		},
+		{
+			"isRlsEnabled": false,
+			"name": "unlogged_cache",
+			"entityType": "tables",
+			"schema": "public"
+		},
+		{
+			"type": "text",
+			"typeSchema": null,
+			"notNull": true,
+			"dimensions": 0,
+			"default": null,
+			"generated": null,
+			"identity": null,
+			"name": "journey_ref",
+			"entityType": "columns",
+			"schema": "public",
+			"table": "journey_runs"
+		},
+		{
+			"type": "text",
+			"typeSchema": null,
+			"notNull": true,
+			"dimensions": 0,
+			"default": null,
+			"generated": null,
+			"identity": null,
+			"name": "day_of_operation",
+			"entityType": "columns",
+			"schema": "public",
+			"table": "journey_runs"
+		},
+		{
+			"type": "text",
+			"typeSchema": null,
+			"notNull": true,
+			"dimensions": 0,
+			"default": null,
+			"generated": null,
+			"identity": null,
+			"name": "line",
+			"entityType": "columns",
+			"schema": "public",
+			"table": "journey_runs"
+		},
+		{
+			"type": "text",
+			"typeSchema": null,
+			"notNull": false,
+			"dimensions": 0,
+			"default": null,
+			"generated": null,
+			"identity": null,
+			"name": "category",
+			"entityType": "columns",
+			"schema": "public",
+			"table": "journey_runs"
+		},
+		{
+			"type": "text",
+			"typeSchema": null,
+			"notNull": false,
+			"dimensions": 0,
+			"default": null,
+			"generated": null,
+			"identity": null,
+			"name": "operator",
+			"entityType": "columns",
+			"schema": "public",
+			"table": "journey_runs"
+		},
+		{
+			"type": "text",
+			"typeSchema": null,
+			"notNull": true,
+			"dimensions": 0,
+			"default": null,
+			"generated": null,
+			"identity": null,
+			"name": "origin_stop_id",
+			"entityType": "columns",
+			"schema": "public",
+			"table": "journey_runs"
+		},
+		{
+			"type": "text",
+			"typeSchema": null,
+			"notNull": true,
+			"dimensions": 0,
+			"default": null,
+			"generated": null,
+			"identity": null,
+			"name": "origin_name",
+			"entityType": "columns",
+			"schema": "public",
+			"table": "journey_runs"
+		},
+		{
+			"type": "text",
+			"typeSchema": null,
+			"notNull": true,
+			"dimensions": 0,
+			"default": null,
+			"generated": null,
+			"identity": null,
+			"name": "origin_dep_time",
+			"entityType": "columns",
+			"schema": "public",
+			"table": "journey_runs"
+		},
+		{
+			"type": "text",
+			"typeSchema": null,
+			"notNull": true,
+			"dimensions": 0,
+			"default": null,
+			"generated": null,
+			"identity": null,
+			"name": "dest_stop_id",
+			"entityType": "columns",
+			"schema": "public",
+			"table": "journey_runs"
+		},
+		{
+			"type": "text",
+			"typeSchema": null,
+			"notNull": true,
+			"dimensions": 0,
+			"default": null,
+			"generated": null,
+			"identity": null,
+			"name": "dest_name",
+			"entityType": "columns",
+			"schema": "public",
+			"table": "journey_runs"
+		},
+		{
+			"type": "text",
+			"typeSchema": null,
+			"notNull": true,
+			"dimensions": 0,
+			"default": null,
+			"generated": null,
+			"identity": null,
+			"name": "dest_arr_time",
+			"entityType": "columns",
+			"schema": "public",
+			"table": "journey_runs"
+		},
+		{
+			"type": "boolean",
+			"typeSchema": null,
+			"notNull": true,
+			"dimensions": 0,
+			"default": "false",
+			"generated": null,
+			"identity": null,
+			"name": "cancelled",
+			"entityType": "columns",
+			"schema": "public",
+			"table": "journey_runs"
+		},
+		{
+			"type": "boolean",
+			"typeSchema": null,
+			"notNull": true,
+			"dimensions": 0,
+			"default": "false",
+			"generated": null,
+			"identity": null,
+			"name": "was_tracked",
+			"entityType": "columns",
+			"schema": "public",
+			"table": "journey_runs"
+		},
+		{
+			"type": "text",
+			"typeSchema": null,
+			"notNull": false,
+			"dimensions": 0,
+			"default": null,
+			"generated": null,
+			"identity": null,
+			"name": "poll_state",
+			"entityType": "columns",
+			"schema": "public",
+			"table": "journey_runs"
+		},
+		{
+			"type": "text",
+			"typeSchema": null,
+			"notNull": true,
+			"dimensions": 0,
+			"default": null,
+			"generated": null,
+			"identity": null,
+			"name": "snapshot_at",
+			"entityType": "columns",
+			"schema": "public",
+			"table": "journey_runs"
+		},
+		{
+			"type": "text",
+			"typeSchema": null,
+			"notNull": true,
+			"dimensions": 0,
+			"default": null,
+			"generated": null,
+			"identity": null,
+			"name": "journey_ref",
+			"entityType": "columns",
+			"schema": "public",
+			"table": "journey_stops"
+		},
+		{
+			"type": "text",
+			"typeSchema": null,
+			"notNull": true,
+			"dimensions": 0,
+			"default": null,
+			"generated": null,
+			"identity": null,
+			"name": "day_of_operation",
+			"entityType": "columns",
+			"schema": "public",
+			"table": "journey_stops"
+		},
+		{
+			"type": "integer",
+			"typeSchema": null,
+			"notNull": true,
+			"dimensions": 0,
+			"default": null,
+			"generated": null,
+			"identity": null,
+			"name": "route_idx",
+			"entityType": "columns",
+			"schema": "public",
+			"table": "journey_stops"
+		},
+		{
+			"type": "text",
+			"typeSchema": null,
+			"notNull": true,
+			"dimensions": 0,
+			"default": null,
+			"generated": null,
+			"identity": null,
+			"name": "stop_id",
+			"entityType": "columns",
+			"schema": "public",
+			"table": "journey_stops"
+		},
+		{
+			"type": "text",
+			"typeSchema": null,
+			"notNull": true,
+			"dimensions": 0,
+			"default": null,
+			"generated": null,
+			"identity": null,
+			"name": "stop_name",
+			"entityType": "columns",
+			"schema": "public",
+			"table": "journey_stops"
+		},
+		{
+			"type": "text",
+			"typeSchema": null,
+			"notNull": false,
+			"dimensions": 0,
+			"default": null,
+			"generated": null,
+			"identity": null,
+			"name": "dep_time",
+			"entityType": "columns",
+			"schema": "public",
+			"table": "journey_stops"
+		},
+		{
+			"type": "text",
+			"typeSchema": null,
+			"notNull": false,
+			"dimensions": 0,
+			"default": null,
+			"generated": null,
+			"identity": null,
+			"name": "arr_time",
+			"entityType": "columns",
+			"schema": "public",
+			"table": "journey_stops"
+		},
+		{
+			"type": "text",
+			"typeSchema": null,
+			"notNull": false,
+			"dimensions": 0,
+			"default": null,
+			"generated": null,
+			"identity": null,
+			"name": "rt_dep_time",
+			"entityType": "columns",
+			"schema": "public",
+			"table": "journey_stops"
+		},
+		{
+			"type": "text",
+			"typeSchema": null,
+			"notNull": false,
+			"dimensions": 0,
+			"default": null,
+			"generated": null,
+			"identity": null,
+			"name": "rt_arr_time",
+			"entityType": "columns",
+			"schema": "public",
+			"table": "journey_stops"
+		},
+		{
+			"type": "boolean",
+			"typeSchema": null,
+			"notNull": true,
+			"dimensions": 0,
+			"default": "false",
+			"generated": null,
+			"identity": null,
+			"name": "cancelled",
+			"entityType": "columns",
+			"schema": "public",
+			"table": "journey_stops"
+		},
+		{
+			"type": "double precision",
+			"typeSchema": null,
+			"notNull": false,
+			"dimensions": 0,
+			"default": null,
+			"generated": {
+				"as": "COALESCE(\n\t\t\t\tCASE WHEN rt_dep_time IS NOT NULL AND dep_time IS NOT NULL THEN\n\t\t\t\t\t(split_part(rt_dep_time, ':', 1)::int * 60 + split_part(rt_dep_time, ':', 2)::int + split_part(rt_dep_time, ':', 3)::int / 60.0)\n\t\t\t\t\t- (split_part(dep_time, ':', 1)::int * 60 + split_part(dep_time, ':', 2)::int + split_part(dep_time, ':', 3)::int / 60.0)\n\t\t\t\tEND,\n\t\t\t\tCASE WHEN rt_arr_time IS NOT NULL AND arr_time IS NOT NULL THEN\n\t\t\t\t\t(split_part(rt_arr_time, ':', 1)::int * 60 + split_part(rt_arr_time, ':', 2)::int + split_part(rt_arr_time, ':', 3)::int / 60.0)\n\t\t\t\t\t- (split_part(arr_time, ':', 1)::int * 60 + split_part(arr_time, ':', 2)::int + split_part(arr_time, ':', 3)::int / 60.0)\n\t\t\t\tEND\n\t\t\t)",
+				"type": "stored"
+			},
+			"identity": null,
+			"name": "delay_min",
+			"entityType": "columns",
+			"schema": "public",
+			"table": "journey_stops"
+		},
+		{
+			"type": "text",
+			"typeSchema": null,
+			"notNull": true,
+			"dimensions": 0,
+			"default": null,
+			"generated": null,
+			"identity": null,
+			"name": "stop_id",
+			"entityType": "columns",
+			"schema": "public",
+			"table": "known_stops"
+		},
+		{
+			"type": "text",
+			"typeSchema": null,
+			"notNull": true,
+			"dimensions": 0,
+			"default": null,
+			"generated": null,
+			"identity": null,
+			"name": "stop_name",
+			"entityType": "columns",
+			"schema": "public",
+			"table": "known_stops"
+		},
+		{
+			"type": "text",
+			"typeSchema": null,
+			"notNull": false,
+			"dimensions": 0,
+			"default": null,
+			"generated": null,
+			"identity": null,
+			"name": "slug",
+			"entityType": "columns",
+			"schema": "public",
+			"table": "known_stops"
+		},
+		{
+			"type": "text",
+			"typeSchema": null,
+			"notNull": false,
+			"dimensions": 0,
+			"default": null,
+			"generated": null,
+			"identity": null,
+			"name": "lines",
+			"entityType": "columns",
+			"schema": "public",
+			"table": "known_stops"
+		},
+		{
+			"type": "text",
+			"typeSchema": null,
+			"notNull": false,
+			"dimensions": 0,
+			"default": null,
+			"generated": null,
+			"identity": null,
+			"name": "categories",
+			"entityType": "columns",
+			"schema": "public",
+			"table": "known_stops"
+		},
+		{
+			"type": "integer",
+			"typeSchema": null,
+			"notNull": true,
+			"dimensions": 0,
+			"default": "0",
+			"generated": null,
+			"identity": null,
+			"name": "journey_count",
+			"entityType": "columns",
+			"schema": "public",
+			"table": "known_stops"
+		},
+		{
+			"type": "integer",
+			"typeSchema": null,
+			"notNull": true,
+			"dimensions": 0,
+			"default": "0",
+			"generated": null,
+			"identity": null,
+			"name": "cancelled",
+			"entityType": "columns",
+			"schema": "public",
+			"table": "known_stops"
+		},
+		{
+			"type": "integer",
+			"typeSchema": null,
+			"notNull": true,
+			"dimensions": 0,
+			"default": "0",
+			"generated": null,
+			"identity": null,
+			"name": "ghost",
+			"entityType": "columns",
+			"schema": "public",
+			"table": "known_stops"
+		},
+		{
+			"type": "integer",
+			"typeSchema": null,
+			"notNull": true,
+			"dimensions": 0,
+			"default": "0",
+			"generated": null,
+			"identity": null,
+			"name": "delayed",
+			"entityType": "columns",
+			"schema": "public",
+			"table": "known_stops"
+		},
+		{
+			"type": "serial",
+			"typeSchema": null,
+			"notNull": true,
+			"dimensions": 0,
+			"default": null,
+			"generated": null,
+			"identity": null,
+			"name": "id",
+			"entityType": "columns",
+			"schema": "public",
+			"table": "telegram_subscriptions"
+		},
+		{
+			"type": "text",
+			"typeSchema": null,
+			"notNull": true,
+			"dimensions": 0,
+			"default": null,
+			"generated": null,
+			"identity": null,
+			"name": "chat_id",
+			"entityType": "columns",
+			"schema": "public",
+			"table": "telegram_subscriptions"
+		},
+		{
+			"type": "text",
+			"typeSchema": null,
+			"notNull": true,
+			"dimensions": 0,
+			"default": "'de'",
+			"generated": null,
+			"identity": null,
+			"name": "lang",
+			"entityType": "columns",
+			"schema": "public",
+			"table": "telegram_subscriptions"
+		},
+		{
+			"type": "text",
+			"typeSchema": null,
+			"notNull": true,
+			"dimensions": 0,
+			"default": null,
+			"generated": null,
+			"identity": null,
+			"name": "line",
+			"entityType": "columns",
+			"schema": "public",
+			"table": "telegram_subscriptions"
+		},
+		{
+			"type": "text",
+			"typeSchema": null,
+			"notNull": true,
+			"dimensions": 0,
+			"default": null,
+			"generated": null,
+			"identity": null,
+			"name": "direction",
+			"entityType": "columns",
+			"schema": "public",
+			"table": "telegram_subscriptions"
+		},
+		{
+			"type": "text",
+			"typeSchema": null,
+			"notNull": true,
+			"dimensions": 0,
+			"default": "''",
+			"generated": null,
+			"identity": null,
+			"name": "stop_id",
+			"entityType": "columns",
+			"schema": "public",
+			"table": "telegram_subscriptions"
+		},
+		{
+			"type": "text",
+			"typeSchema": null,
+			"notNull": false,
+			"dimensions": 0,
+			"default": null,
+			"generated": null,
+			"identity": null,
+			"name": "time_ranges",
+			"entityType": "columns",
+			"schema": "public",
+			"table": "telegram_subscriptions"
+		},
+		{
+			"type": "text",
+			"typeSchema": null,
+			"notNull": false,
+			"dimensions": 0,
+			"default": null,
+			"generated": null,
+			"identity": null,
+			"name": "weekdays",
+			"entityType": "columns",
+			"schema": "public",
+			"table": "telegram_subscriptions"
+		},
+		{
+			"type": "text",
+			"typeSchema": null,
+			"notNull": true,
+			"dimensions": 0,
+			"default": null,
+			"generated": null,
+			"identity": null,
+			"name": "created_at",
+			"entityType": "columns",
+			"schema": "public",
+			"table": "telegram_subscriptions"
+		},
+		{
+			"type": "text",
+			"typeSchema": null,
+			"notNull": true,
+			"dimensions": 0,
+			"default": null,
+			"generated": null,
+			"identity": null,
+			"name": "key",
+			"entityType": "columns",
+			"schema": "public",
+			"table": "unlogged_cache"
+		},
+		{
+			"type": "text",
+			"typeSchema": null,
+			"notNull": true,
+			"dimensions": 0,
+			"default": null,
+			"generated": null,
+			"identity": null,
+			"name": "value",
+			"entityType": "columns",
+			"schema": "public",
+			"table": "unlogged_cache"
+		},
+		{
+			"type": "timestamp with time zone",
+			"typeSchema": null,
+			"notNull": false,
+			"dimensions": 0,
+			"default": null,
+			"generated": null,
+			"identity": null,
+			"name": "expires_at",
+			"entityType": "columns",
+			"schema": "public",
+			"table": "unlogged_cache"
+		},
+		{
+			"type": "timestamp with time zone",
+			"typeSchema": null,
+			"notNull": true,
+			"dimensions": 0,
+			"default": "now()",
+			"generated": null,
+			"identity": null,
+			"name": "updated_at",
+			"entityType": "columns",
+			"schema": "public",
+			"table": "unlogged_cache"
+		},
+		{
+			"nameExplicit": true,
+			"columns": [
+				{
+					"value": "day_of_operation",
+					"isExpression": false,
+					"asc": true,
+					"nullsFirst": false,
+					"opclass": null
+				}
+			],
+			"isUnique": false,
+			"where": null,
+			"with": "",
+			"method": "btree",
+			"concurrently": false,
+			"name": "idx_journey_runs_day",
+			"entityType": "indexes",
+			"schema": "public",
+			"table": "journey_runs"
+		},
+		{
+			"nameExplicit": true,
+			"columns": [
+				{
+					"value": "poll_state",
+					"isExpression": false,
+					"asc": true,
+					"nullsFirst": false,
+					"opclass": null
+				},
+				{
+					"value": "day_of_operation",
+					"isExpression": false,
+					"asc": true,
+					"nullsFirst": false,
+					"opclass": null
+				}
+			],
+			"isUnique": false,
+			"where": null,
+			"with": "",
+			"method": "btree",
+			"concurrently": false,
+			"name": "idx_journey_runs_poll_state",
+			"entityType": "indexes",
+			"schema": "public",
+			"table": "journey_runs"
+		},
+		{
+			"nameExplicit": true,
+			"columns": [
+				{
+					"value": "line",
+					"isExpression": false,
+					"asc": true,
+					"nullsFirst": false,
+					"opclass": null
+				},
+				{
+					"value": "day_of_operation",
+					"isExpression": false,
+					"asc": true,
+					"nullsFirst": false,
+					"opclass": null
+				}
+			],
+			"isUnique": false,
+			"where": null,
+			"with": "",
+			"method": "btree",
+			"concurrently": false,
+			"name": "idx_journey_runs_line",
+			"entityType": "indexes",
+			"schema": "public",
+			"table": "journey_runs"
+		},
+		{
+			"nameExplicit": true,
+			"columns": [
+				{
+					"value": "operator",
+					"isExpression": false,
+					"asc": true,
+					"nullsFirst": false,
+					"opclass": null
+				},
+				{
+					"value": "day_of_operation",
+					"isExpression": false,
+					"asc": true,
+					"nullsFirst": false,
+					"opclass": null
+				}
+			],
+			"isUnique": false,
+			"where": null,
+			"with": "",
+			"method": "btree",
+			"concurrently": false,
+			"name": "idx_journey_runs_operator",
+			"entityType": "indexes",
+			"schema": "public",
+			"table": "journey_runs"
+		},
+		{
+			"nameExplicit": true,
+			"columns": [
+				{
+					"value": "day_of_operation",
+					"isExpression": false,
+					"asc": true,
+					"nullsFirst": false,
+					"opclass": null
+				}
+			],
+			"isUnique": false,
+			"where": null,
+			"with": "",
+			"method": "btree",
+			"concurrently": false,
+			"name": "idx_journey_stops_day",
+			"entityType": "indexes",
+			"schema": "public",
+			"table": "journey_stops"
+		},
+		{
+			"nameExplicit": true,
+			"columns": [
+				{
+					"value": "stop_id",
+					"isExpression": false,
+					"asc": true,
+					"nullsFirst": false,
+					"opclass": null
+				},
+				{
+					"value": "day_of_operation",
+					"isExpression": false,
+					"asc": true,
+					"nullsFirst": false,
+					"opclass": null
+				}
+			],
+			"isUnique": false,
+			"where": null,
+			"with": "",
+			"method": "btree",
+			"concurrently": false,
+			"name": "idx_journey_stops_stop_day",
+			"entityType": "indexes",
+			"schema": "public",
+			"table": "journey_stops"
+		},
+		{
+			"nameExplicit": true,
+			"columns": [
+				{
+					"value": "day_of_operation",
+					"isExpression": false,
+					"asc": true,
+					"nullsFirst": false,
+					"opclass": null
+				},
+				{
+					"value": "stop_name",
+					"isExpression": false,
+					"asc": true,
+					"nullsFirst": false,
+					"opclass": null
+				}
+			],
+			"isUnique": false,
+			"where": null,
+			"with": "",
+			"method": "btree",
+			"concurrently": false,
+			"name": "idx_journey_stops_day_name",
+			"entityType": "indexes",
+			"schema": "public",
+			"table": "journey_stops"
+		},
+		{
+			"nameExplicit": true,
+			"columns": [
+				{
+					"value": "journey_ref",
+					"isExpression": false,
+					"asc": true,
+					"nullsFirst": false,
+					"opclass": null
+				},
+				{
+					"value": "day_of_operation",
+					"isExpression": false,
+					"asc": true,
+					"nullsFirst": false,
+					"opclass": null
+				}
+			],
+			"isUnique": false,
+			"where": "\"delay_min\" >= 7.5",
+			"with": "",
+			"method": "btree",
+			"concurrently": false,
+			"name": "idx_journey_stops_delay_min",
+			"entityType": "indexes",
+			"schema": "public",
+			"table": "journey_stops"
+		},
+		{
+			"nameExplicit": true,
+			"columns": [
+				{
+					"value": "slug",
+					"isExpression": false,
+					"asc": true,
+					"nullsFirst": false,
+					"opclass": null
+				}
+			],
+			"isUnique": false,
+			"where": null,
+			"with": "",
+			"method": "btree",
+			"concurrently": false,
+			"name": "idx_known_stops_slug",
+			"entityType": "indexes",
+			"schema": "public",
+			"table": "known_stops"
+		},
+		{
+			"nameExplicit": true,
+			"columns": [
+				{
+					"value": "line",
+					"isExpression": false,
+					"asc": true,
+					"nullsFirst": false,
+					"opclass": null
+				},
+				{
+					"value": "direction",
+					"isExpression": false,
+					"asc": true,
+					"nullsFirst": false,
+					"opclass": null
+				}
+			],
+			"isUnique": false,
+			"where": null,
+			"with": "",
+			"method": "btree",
+			"concurrently": false,
+			"name": "idx_telegram_line_dir",
+			"entityType": "indexes",
+			"schema": "public",
+			"table": "telegram_subscriptions"
+		},
+		{
+			"nameExplicit": true,
+			"columns": [
+				{
+					"value": "key",
+					"isExpression": false,
+					"asc": true,
+					"nullsFirst": false,
+					"opclass": null
+				}
+			],
+			"isUnique": false,
+			"where": null,
+			"with": "",
+			"method": "hash",
+			"concurrently": false,
+			"name": "idx_unlogged_cache_key",
+			"entityType": "indexes",
+			"schema": "public",
+			"table": "unlogged_cache"
+		},
+		{
+			"columns": ["journey_ref", "day_of_operation"],
+			"nameExplicit": false,
+			"name": "journey_runs_pkey",
+			"entityType": "pks",
+			"schema": "public",
+			"table": "journey_runs"
+		},
+		{
+			"columns": ["journey_ref", "day_of_operation", "route_idx"],
+			"nameExplicit": false,
+			"name": "journey_stops_pkey",
+			"entityType": "pks",
+			"schema": "public",
+			"table": "journey_stops"
+		},
+		{
+			"columns": ["stop_id"],
+			"nameExplicit": false,
+			"name": "known_stops_pkey",
+			"schema": "public",
+			"table": "known_stops",
+			"entityType": "pks"
+		},
+		{
+			"columns": ["id"],
+			"nameExplicit": false,
+			"name": "telegram_subscriptions_pkey",
+			"schema": "public",
+			"table": "telegram_subscriptions",
+			"entityType": "pks"
+		},
+		{
+			"columns": ["key"],
+			"nameExplicit": false,
+			"name": "unlogged_cache_pkey",
+			"schema": "public",
+			"table": "unlogged_cache",
+			"entityType": "pks"
+		},
+		{
+			"nameExplicit": false,
+			"columns": ["chat_id", "line", "direction", "stop_id"],
+			"nullsNotDistinct": false,
+			"name": "telegram_subscriptions_chat_id_line_direction_stop_id_unique",
+			"entityType": "uniques",
+			"schema": "public",
+			"table": "telegram_subscriptions"
+		}
+	],
+	"renames": []
+}

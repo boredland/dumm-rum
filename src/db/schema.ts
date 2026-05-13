@@ -73,6 +73,7 @@ export const journeyStops = pgTable(
 		primaryKey({ columns: [t.journeyRef, t.dayOfOperation, t.routeIdx] }),
 		index("idx_journey_stops_day").on(t.dayOfOperation),
 		index("idx_journey_stops_stop_day").on(t.stopId, t.dayOfOperation),
+		index("idx_journey_stops_day_name").on(t.dayOfOperation, t.stopName),
 		index("idx_journey_stops_delay_min")
 			.on(t.journeyRef, t.dayOfOperation)
 			.where(sql`${t.delayMin} >= 7.5`),

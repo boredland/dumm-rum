@@ -838,16 +838,20 @@ export interface StopPickerEntry {
 	name: string;
 }
 
-/** All distinct stop names known to the system. Intended for client-side
- * fuzzy search in the subscribe modal — heavy cache at the HTTP layer. */
+/** All distinct stop names seen in the last 30 days, deduped case-insensitively.
+ * Intended for client-side fuzzy search in the subscribe modal — heavy cache
+ * at the HTTP layer. Backed by `idx_journey_stops_day_name`. */
 export async function getAllStopNames(): Promise<StopPickerEntry[]> {
 	const rows = await db
 		.select({
-			name: sql<string>`MIN(${knownStops.stopName})`.as("name"),
+			name: sql<string>`MIN(${journeyStops.stopName})`.as("name"),
 		})
-		.from(knownStops)
-		.groupBy(sql`LOWER(${knownStops.stopName})`)
-		.orderBy(sql`MIN(${knownStops.stopName})`);
+		.from(journeyStops)
+		.where(
+			sql`${journeyStops.dayOfOperation} >= to_char(CURRENT_DATE - INTERVAL '30 days', 'YYYY-MM-DD')`,
+		)
+		.groupBy(sql`LOWER(${journeyStops.stopName})`)
+		.orderBy(sql`MIN(${journeyStops.stopName})`);
 	return rows.map((r) => ({ name: r.name })).filter((r) => r.name);
 }
 
