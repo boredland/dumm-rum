@@ -364,7 +364,7 @@ export async function getLineStats(slug: string): Promise<LineStats> {
 	const dbr = delayedByRunSq();
 
 	let where: SQL | undefined = eq(journeyRuns.line, line);
-	if (category) where = and(where, eq(journeyRuns.category, category));
+	if (category) where = and(where, eq(normalizedCategorySql, category));
 	if (source) where = and(where, eq(sourceSql, source));
 
 	const rows = await db
@@ -441,7 +441,7 @@ export async function getLineDayJourneys(
 		eq(journeyRuns.line, line),
 		eq(journeyRuns.dayOfOperation, date),
 	);
-	if (category) where = and(where, eq(journeyRuns.category, category));
+	if (category) where = and(where, eq(normalizedCategorySql, category));
 	if (source) where = and(where, eq(sourceSql, source));
 
 	const rows = await db
@@ -885,7 +885,7 @@ export async function getAllDirections(): Promise<string[]> {
 export async function getDirectionsForLine(slug: string): Promise<string[]> {
 	const { line, category } = parseLineSlug(slug);
 	const where = category
-		? and(eq(journeyRuns.line, line), eq(journeyRuns.category, category))
+		? and(eq(journeyRuns.line, line), eq(normalizedCategorySql, category))
 		: eq(journeyRuns.line, line);
 
 	const rows = await db
@@ -909,7 +909,7 @@ export async function getDirectionsForLine(slug: string): Promise<string[]> {
 export async function getStopsForLine(slug: string): Promise<string[]> {
 	const { line, category } = parseLineSlug(slug);
 	const where = category
-		? and(eq(journeyRuns.line, line), eq(journeyRuns.category, category))
+		? and(eq(journeyRuns.line, line), eq(normalizedCategorySql, category))
 		: eq(journeyRuns.line, line);
 
 	const rows = await db
