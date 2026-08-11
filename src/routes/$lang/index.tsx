@@ -79,15 +79,21 @@ type SearchParams = { days?: DaysFilter; cat?: string[] };
 
 const STALE_TIME = 5 * 60 * 1000;
 
+/** Filter keys used to be UI shorthands rather than bucket names. Shared
+ * and bookmarked `?cat=` URLs still carry them, so translate on read. */
+const LEGACY_CAT_KEYS: Record<string, string> = {
+	S: "S-Bahn",
+	"RE,RB": "Regionalverkehr",
+	FV: "Fernverkehr",
+};
+
 function parseCatFilter(input: unknown): string[] | undefined {
-	if (typeof input === "string") {
-		return input.length > 0 ? [input] : undefined;
-	}
-	if (Array.isArray(input)) {
-		const cats = input.filter((c): c is string => typeof c === "string");
-		return cats.length > 0 ? cats : undefined;
-	}
-	return undefined;
+	const raw = typeof input === "string" ? [input] : input;
+	if (!Array.isArray(raw)) return undefined;
+	const cats = raw
+		.filter((c): c is string => typeof c === "string" && c.length > 0)
+		.map((c) => LEGACY_CAT_KEYS[c] ?? c);
+	return cats.length > 0 ? cats : undefined;
 }
 
 export const Route = createFileRoute("/$lang/")({
@@ -123,91 +129,24 @@ const DAY_FILTERS: {
 	{ key: "weekends", labelKey: "days.weekends" },
 ];
 
+/** Keys are the buckets `normalize_category` emits, so a filter is a
+ * plain equality check — no client-side normalization to drift. */
 const CATEGORY_OPTIONS: Array<{ key: string; label: string }> = [
 	{ key: "U-Bahn", label: "U-Bahn" },
-	{ key: "S", label: "S-Bahn" },
+	{ key: "S-Bahn", label: "S-Bahn" },
 	{ key: "Tram", label: "Tram" },
 	{ key: "Bus", label: "Bus" },
-	{ key: "RE,RB", label: "RE/RB" },
-	{ key: "FV", label: "Fernverkehr" },
+	{ key: "Regionalverkehr", label: "RE/RB" },
+	{ key: "Fernverkehr", label: "Fernverkehr" },
 ];
-
-const LONG_DISTANCE_CATEGORIES = new Set([
-	"Fernverkehr",
-	"ICE",
-	"ICE-Sprinter",
-	"IC",
-	"EC",
-	"ECE",
-	"NJ",
-	"EN",
-	"RJ",
-	"RJX",
-	"TGV",
-	"EST",
-	"Intercity-Express",
-	"Intercity",
-	"Eurocity",
-	"Nightjet",
-	"Railjet",
-	"Railjet Xpress",
-	"D-Zug",
-	"Fernzug",
-]);
-
-function normalizeCategory(category: string): string {
-	if (category === "S") return "S-Bahn";
-	if (
-		category === "Regional-Bahn" ||
-		category === "Regionalbahn" ||
-		category === "R-Bahn" ||
-		category === "R" ||
-		/^(RB|RE|IRE)\b/.test(category)
-	)
-		return "Regionalverkehr";
-	if (/bus$/i.test(category) || category === "AST") return "Bus";
-	if (/stra(ß|ss)enbahn/i.test(category) || category === "Str") return "Tram";
-	if (
-		category === "Fernverkehr" ||
-		category === "Intercity-Express" ||
-		category === "Intercity" ||
-		category === "Eurocity" ||
-		category === "Nightjet" ||
-		category === "Railjet" ||
-		category === "Railjet Xpress" ||
-		category === "D-Zug" ||
-		category === "Fernzug" ||
-		/^(ICE|ICE-Sprinter|IC|EC|ECE|NJ|EN|RJ|RJX|TGV|EST)\b/.test(category)
-	)
-		return "Fernverkehr";
-	return category;
-}
 
 function matchesCategoryFilters(
 	selectedFilters: string[],
 	categories: string | string[],
 ): boolean {
 	if (selectedFilters.length === 0) return true;
-	const normalized = (
-		Array.isArray(categories) ? categories : [categories]
-	).map(normalizeCategory);
-	return selectedFilters.some((filter) => {
-		if (filter === "RE,RB") {
-			return normalized.some(
-				(category) =>
-					category === "RE" ||
-					category === "RB" ||
-					category === "Regionalverkehr",
-			);
-		}
-		if (filter === "S") return normalized.includes("S-Bahn");
-		if (filter === "FV") {
-			return normalized.some((category) =>
-				LONG_DISTANCE_CATEGORIES.has(category),
-			);
-		}
-		return normalized.includes(filter);
-	});
+	const cats = Array.isArray(categories) ? categories : [categories];
+	return selectedFilters.some((filter) => cats.includes(filter));
 }
 
 function categoriesForActiveFilter(
@@ -651,13 +590,12 @@ function AggregateCard({
 
 function LineCard({ line, lang }: { line: LineSummary; lang: Lang }) {
 	const score = onTimeRate(line.cancelled, line.delayed, line.total);
-	const visibleCategory = normalizeCategory(line.category);
 	return (
 		<AggregateCard
 			to="/$lang/line/$line"
 			params={{ lang, line: line.slug }}
 			score={score}
-			icon={categoryIcons([visibleCategory])}
+			icon={categoryIcons([line.category])}
 			name={line.line}
 			subtitle={line.destinations.join(" ↔ ")}
 			subtitleTitle={line.destinations.join(" ↔ ")}

@@ -110,57 +110,38 @@ export function slugForStop(stopIds: string[], stopName: string): string {
 	return nameToSlug(stopName);
 }
 
-/** High-speed + night + cross-border long-distance trains — collapsed
- * onto one icon so stations served by several of them don't produce a
- * row of near-identical glyphs. Kept as a Set so we can probe in O(1)
- * without `.includes()` churn on every summary render. */
-const LONG_DISTANCE_CATEGORIES = new Set([
-	"ICE",
-	"ICE-Sprinter",
-	"IC",
-	"EC",
-	"ECE",
-	"NJ",
-	"EN",
-	"RJ",
-	"RJX",
-	"TGV",
-	"EST",
+/** Icons for the buckets `normalize_category` emits (see
+ * drizzle/20260811090000_normalize_category_fn). Every query hands us
+ * normalized categories, so this is a straight bucket lookup — the old
+ * per-glyph alias lists were a fourth copy of the normalization table
+ * and had drifted from the SQL one.
+ *
+ * Unknown buckets (a HAFAS category no branch claims) get no glyph
+ * rather than a wrong one. */
+const ICON_BY_CATEGORY: Record<string, string> = {
+	Fernverkehr: "🚄",
+	Regionalverkehr: "🚆",
+	"S-Bahn": "🚈",
+	"U-Bahn": "🚇",
+	Tram: "🚋",
+	Bus: "🚌",
+};
+
+/** Ordered so a station served by several modes always renders its
+ * glyphs fastest-first, regardless of category discovery order. */
+const ICON_ORDER = [
 	"Fernverkehr",
-	"Intercity-Express",
-	"Intercity",
-	"Eurocity",
-	"Nightjet",
-	"Railjet",
-	"Railjet Xpress",
-	"D-Zug",
-	"Fernzug",
-]);
+	"Regionalverkehr",
+	"S-Bahn",
+	"U-Bahn",
+	"Tram",
+	"Bus",
+];
 
 export function categoryIcons(categories: string[]): string {
-	const icons: string[] = [];
-	if (categories.some((c) => LONG_DISTANCE_CATEGORIES.has(c))) icons.push("🚄");
-	if (categories.some((c) => ["RE", "RB", "R", "Regionalverkehr"].includes(c)))
-		icons.push("🚆");
-	if (categories.some((c) => ["S-Bahn", "S"].includes(c))) icons.push("🚈");
-	if (categories.some((c) => c === "U-Bahn")) icons.push("🚇");
-	if (
-		categories.some(
-			(c) =>
-				/stra(ß|ss)enbahn/i.test(c) ||
-				c === "Str" ||
-				c === "Tram" ||
-				c === "Hochflurstraßenbahn" ||
-				c === "Niederflurstraßenbahn",
-		)
-	)
-		icons.push("🚋");
-	if (
-		categories.some(
-			(c) =>
-				/bus$/i.test(c) || c === "AST" || c === "Bus" || c === "Niederflurbus",
-		)
-	)
-		icons.push("🚌");
-	return icons.join("");
+	let icons = "";
+	for (const bucket of ICON_ORDER) {
+		if (categories.includes(bucket)) icons += ICON_BY_CATEGORY[bucket];
+	}
+	return icons;
 }

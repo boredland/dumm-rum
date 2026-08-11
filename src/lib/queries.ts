@@ -27,13 +27,15 @@ const sourceSql = sql<string>`CASE
 	ELSE 'unknown'
 END`;
 
-const normalizedCategorySql = sql<string>`CASE
-	WHEN ${journeyRuns.category} IN ('ICE', 'ICE-Sprinter', 'IC', 'EC', 'ECE', 'NJ', 'EN', 'RJ', 'RJX', 'TGV', 'EST', 'Fernverkehr', 'Intercity-Express', 'Intercity', 'Eurocity', 'Nightjet', 'Railjet', 'Railjet Xpress', 'D-Zug', 'Fernzug') THEN 'Fernverkehr'
-	WHEN ${journeyRuns.category} IN ('Regional-Bahn', 'Regionalbahn', 'R-Bahn', 'R', 'Regionalverkehr') OR ${journeyRuns.category} ~ '^(RB|RE|IRE)\\b' THEN 'Regionalverkehr'
-	WHEN ${journeyRuns.category} IN ('Stadtbus', 'Regionalbus', 'Schnellbus', 'Niederflurbus') THEN 'Bus'
-	WHEN ${journeyRuns.category} IN ('Straßenbahn', 'Hochflurstraßenbahn', 'Niederflurstraßenbahn', 'Str') THEN 'Tram'
-	ELSE COALESCE(${journeyRuns.category}, 'Bus')
-END`;
+/** HAFAS category -> display bucket. The CASE lives in Postgres as
+ * `normalize_category` (see drizzle/20260811090000_normalize_category_fn)
+ * so SQL and TS cannot drift. The function absorbs NULL itself: wrapping
+ * the call in COALESCE here would stop matching the functional index and
+ * seq-scan journey_runs on every category filter.
+ *
+ * Exported because every producer of a `source:category:line` slug must
+ * use the same bucket — a raw category yields a slug no lookup resolves. */
+export const normalizedCategorySql = sql<string>`normalize_category(${journeyRuns.category})`;
 
 const lineSlugSql = sql<string>`(${sourceSql} || ':' || ${normalizedCategorySql} || ':' || ${journeyRuns.line})`;
 
@@ -289,10 +291,7 @@ export async function getStopSummaries(): Promise<StopSummary[]> {
 				SELECT DISTINCT
 					${journeyStops.stopId} AS stop_id,
 					${journeyRuns.line} AS line,
-					CASE
-						WHEN ${journeyRuns.category} IN ('ICE', 'ICE-Sprinter', 'IC', 'EC', 'ECE', 'NJ', 'EN', 'RJ', 'RJX', 'TGV', 'EST') THEN 'Fernverkehr'
-						ELSE COALESCE(${journeyRuns.category}, 'Bus')
-					END AS category,
+					${normalizedCategorySql} AS category,
 					${sourceSql} AS source
 				FROM ${journeyStops}
 				LEFT JOIN ${journeyRuns}
@@ -394,7 +393,7 @@ export async function getLineStats(slug: string): Promise<LineStats> {
 				),
 			),
 		db
-			.selectDistinct({ category: journeyRuns.category })
+			.selectDistinct({ category: normalizedCategorySql.as("category") })
 			.from(journeyRuns)
 			.where(and(where, isNotNull(journeyRuns.category))),
 		db
@@ -457,7 +456,7 @@ export async function getLineDayJourneys(
 			cancelled: journeyRuns.cancelled,
 			ghost: sql<number>`${ghostCaseSql}`.as("ghost"),
 			operator: journeyRuns.operator,
-			category: journeyRuns.category,
+			category: normalizedCategorySql.as("category"),
 			stop: journeyRuns.originName,
 		})
 		.from(journeyRuns)
@@ -511,14 +510,14 @@ export async function getOperatorStats(
 		db
 			.selectDistinct({
 				line: journeyRuns.line,
-				category: journeyRuns.category,
+				category: normalizedCategorySql.as("category"),
 				source: sourceSql.as("source"),
 			})
 			.from(journeyRuns)
 			.where(eq(journeyRuns.operator, operator))
-			.orderBy(journeyRuns.category, journeyRuns.line),
+			.orderBy(normalizedCategorySql, journeyRuns.line),
 		db
-			.selectDistinct({ category: journeyRuns.category })
+			.selectDistinct({ category: normalizedCategorySql.as("category") })
 			.from(journeyRuns)
 			.where(
 				and(
@@ -568,7 +567,7 @@ export async function getOperatorDayJourneys(
 				AND js.route_idx = 0
 			)`.as("rt_time"),
 			line: journeyRuns.line,
-			category: journeyRuns.category,
+			category: normalizedCategorySql.as("category"),
 			direction: journeyRuns.destName,
 			cancelled: journeyRuns.cancelled,
 			ghost: sql<number>`${ghostCaseSql}`.as("ghost"),
@@ -639,7 +638,7 @@ export async function findStopBySlug(slug: string): Promise<KnownStop | null> {
 	const categoriesRow = await db
 		.select({
 			categories:
-				sql<string>`STRING_AGG(DISTINCT ${journeyRuns.category}, ',')`.as(
+				sql<string>`STRING_AGG(DISTINCT ${normalizedCategorySql}, ',')`.as(
 					"categories",
 				),
 		})
@@ -734,7 +733,7 @@ export async function getStopStats(stopIds: string[]): Promise<StopStats> {
 					"last_change",
 				),
 				categories:
-					sql<string>`STRING_AGG(DISTINCT ${journeyRuns.category}, ',')`.as(
+					sql<string>`STRING_AGG(DISTINCT ${normalizedCategorySql}, ',')`.as(
 						"categories",
 					),
 			})
@@ -858,12 +857,12 @@ export async function getAllLineNames(): Promise<string[]> {
 	const rows = await db
 		.selectDistinct({
 			line: journeyRuns.line,
-			category: journeyRuns.category,
+			category: normalizedCategorySql.as("category"),
 			source: sourceSql.as("source"),
 		})
 		.from(journeyRuns)
 		.where(isNotNull(journeyRuns.line))
-		.orderBy(journeyRuns.category, journeyRuns.line);
+		.orderBy(normalizedCategorySql, journeyRuns.line);
 	return rows
 		.map((r) => lineSlug(r.source, r.category, r.line))
 		.filter(Boolean);

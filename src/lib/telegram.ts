@@ -5,6 +5,7 @@ import {
 	journeyStops,
 	telegramSubscriptions,
 } from "../db/schema.ts";
+import { normalizedCategorySql } from "./queries.ts";
 import {
 	DELAY_THRESHOLD_MIN,
 	nowBerlin,
@@ -106,7 +107,7 @@ function formatWeekdays(weekdays: string): string {
 async function fetchDirections(lineSlug: string) {
 	const { line, category } = parseLineSlug(lineSlug);
 	const where = category
-		? and(eq(journeyRuns.line, line), eq(journeyRuns.category, category))
+		? and(eq(journeyRuns.line, line), eq(normalizedCategorySql, category))
 		: eq(journeyRuns.line, line);
 
 	return db
@@ -610,7 +611,7 @@ export async function notifyJourneyIssues(
 
 	const [run, stops] = await Promise.all([
 		db
-			.select({ category: journeyRuns.category })
+			.select({ category: normalizedCategorySql.as("category") })
 			.from(journeyRuns)
 			.where(
 				and(
