@@ -5,17 +5,28 @@ import {
 	type RequestHandler,
 } from "@tanstack/react-start/server";
 import { warmHomeSummaries } from "./lib/home.ts";
-import { startIngest } from "./lib/workers.ts";
+import { migrationsApplied, startIngest } from "./lib/workers.ts";
 
-// Start pg-boss workers once per server process, alongside request
-// handling. Top-level await blocks the server from accepting requests
-// until workers are registered — which is what we want: first request
-// hits a ready system.
-await startIngest();
+// Ingest startup runs alongside request handling rather than in front of
+// it. Awaiting it here meant migrations, the known_stops backfill, pg-boss
+// setup and a boot discovery all had to finish before serve.ts could open
+// the listener, and the proxy answered 502 for that entire window — the
+// deploy-time outage this ordering was meant to prevent.
+//
+// Failures still surface: nothing recovers from a broken ingest boot, so
+// the process exits and the platform restarts it, rather than quietly
+// serving a site whose data has silently stopped updating.
+startIngest().catch((e) => {
+	console.error("fatal: ingest startup failed:", e);
+	process.exit(1);
+});
 
-// getStopSummaries runs ~5 s on prod; seed the memo at boot so the first
-// post-deploy landing hit is served from cache.
-warmHomeSummaries().catch((e) => console.warn("home warmup failed:", e));
+// getStopSummaries costs ~1 s at prod scale; seed the memo at boot so the
+// first post-deploy landing hit is served from cache. Sequenced behind
+// migrations for the same reason requests are.
+migrationsApplied()
+	.then(warmHomeSummaries)
+	.catch((e) => console.warn("home warmup failed:", e));
 
 const fetch = createStartHandler(defaultStreamHandler);
 
@@ -23,6 +34,12 @@ export type ServerEntry = { fetch: RequestHandler<Register> };
 
 export default {
 	async fetch(...args) {
+		// The only part of startup a request genuinely depends on: a query
+		// referencing a column its migration has not committed yet would
+		// 500. Steady-state this resolves in ~1 ms and costs nothing; on a
+		// deploy carrying a schema change it holds the request instead of
+		// failing it. Everything else ingest does is irrelevant to readers.
+		await migrationsApplied();
 		return await fetch(...args);
 	},
 } satisfies ServerEntry;

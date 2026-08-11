@@ -19,6 +19,15 @@ export interface StartedIngest {
 	shutdown: () => Promise<void>;
 }
 
+/** Memoized so the server entry can gate request handling on migrations
+ * without also waiting for the slower ingest steps queued behind them.
+ * Both entries call it; only the first caller does the work. */
+let migration: Promise<unknown> | undefined;
+export function migrationsApplied(): Promise<unknown> {
+	migration ??= migrate(db, { migrationsFolder: "./drizzle" });
+	return migration;
+}
+
 /**
  * Runs migrations, starts pg-boss, registers the discovery cron + poll
  * worker, and fires one boot-time discovery. Safe to call from either the
@@ -32,13 +41,13 @@ export async function startIngest(): Promise<StartedIngest> {
 	const url = process.env.DATABASE_URL;
 	if (!url) throw new Error("DATABASE_URL is not set");
 
-	await migrate(db, { migrationsFolder: "./drizzle" });
+	await migrationsApplied();
 
 	// Stops discovered before the poller wrote known_stops have no slug row,
-	// and findStopBySlug is now a single indexed lookup — without this their
-	// pages 404 until each one is polled again. Awaited rather than
-	// fire-and-forget so no request can be served against a half-built
-	// rollup; once complete it costs one hash anti-join per boot.
+	// and findStopBySlug is a single indexed lookup — without this their
+	// pages 404 until each one is polled again. Requests are already being
+	// served by now, so a stop page can 404 for the moment this takes; the
+	// skip-scan keeps that to tens of milliseconds.
 	const backfilled = await backfillKnownStops(db);
 	if (backfilled > 0) console.log(`known_stops: backfilled ${backfilled}`);
 
