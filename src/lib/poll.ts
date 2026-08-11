@@ -1,4 +1,4 @@
-import { and, asc, eq, sql } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import type PgBoss from "pg-boss";
 import type { Db } from "../db/client.ts";
 import { excluded } from "../db/helpers.ts";
@@ -443,26 +443,53 @@ async function upsertJourneyRunFromMgate(
 /** One-off backfill for stops discovered before the poller started
  * writing the rollup. `nameToSlug` isn't reproducible in SQL, so this
  * can't be a plain UPDATE — it reads the distinct stops missing a row and
- * slugs them in JS. Takes the newest name per stop (MAX, matching what a
- * live poll would write) so the two writers agree instead of fighting
- * over the row. No-ops once every stop is covered. */
+ * slugs them in JS. Takes the newest name per stop (matching what a live
+ * poll would write) so the two writers agree instead of fighting over the
+ * row. No-ops once every stop is covered.
+ *
+ * Distinct stop ids come from a recursive index skip-scan, not `GROUP BY
+ * stop_id`. Postgres has no loose index scan, so the grouping form reads
+ * every row of journey_stops — at 25M visits that is ~1 s even fully
+ * cached, paid on every boot only to learn that nothing is missing.
+ * Walking `idx_journey_stops_stop_day` one id at a time is one index
+ * probe per distinct stop instead, and stays flat as history grows.
+ *
+ * The name is resolved per missing stop and scoped to that stop's newest
+ * day: an unscoped MAX(stop_name) re-reads every visit of the stop and
+ * puts the sequential scan straight back. */
 export async function backfillKnownStops(db: Db): Promise<number> {
-	const rows = await db
-		.select({
-			stopId: journeyStops.stopId,
-			stopName: sql<string>`MAX(${journeyStops.stopName})`.as("stop_name"),
-		})
-		.from(journeyStops)
-		.where(
-			sql`NOT EXISTS (SELECT 1 FROM ${knownStops} WHERE ${knownStops.stopId} = ${journeyStops.stopId})`,
+	const rows = (await db.execute(sql`
+		WITH RECURSIVE ids AS (
+			(SELECT ${journeyStops.stopId} AS stop_id FROM ${journeyStops}
+				ORDER BY ${journeyStops.stopId} LIMIT 1)
+			UNION ALL
+			SELECT (SELECT js.stop_id FROM ${journeyStops} js
+				WHERE js.stop_id > ids.stop_id ORDER BY js.stop_id LIMIT 1)
+			FROM ids WHERE ids.stop_id IS NOT NULL
 		)
-		.groupBy(journeyStops.stopId)
-		.orderBy(asc(journeyStops.stopId));
+		SELECT ids.stop_id, newest.stop_name
+		FROM ids
+		CROSS JOIN LATERAL (
+			SELECT MAX(js.stop_name) AS stop_name FROM ${journeyStops} js
+			WHERE js.stop_id = ids.stop_id
+				AND js.day_of_operation = (
+					SELECT MAX(d.day_of_operation) FROM ${journeyStops} d
+					WHERE d.stop_id = ids.stop_id
+				)
+		) newest
+		WHERE ids.stop_id IS NOT NULL
+			AND NOT EXISTS (
+				SELECT 1 FROM ${knownStops} ks WHERE ks.stop_id = ids.stop_id
+			)
+		ORDER BY ids.stop_id
+	`)) as unknown as { stop_id: string; stop_name: string | null }[];
 	if (rows.length === 0) return 0;
 
 	await upsertStopSlugs(
 		db,
-		rows.map((r) => ({ stopId: r.stopId, stopName: r.stopName })),
+		rows.flatMap((r) =>
+			r.stop_name ? [{ stopId: r.stop_id, stopName: r.stop_name }] : [],
+		),
 	);
 	return rows.length;
 }
