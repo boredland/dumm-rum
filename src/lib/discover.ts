@@ -43,6 +43,48 @@ const LONG_DISTANCE_CATEGORIES = new Set([
 
 const EXCLUDE_CATEGORIES = new Set(["FLX", "FlixTrain"]);
 
+/** Mainz city buses. They reach the Wiesbaden-Mainz-Kastel board across the
+ * Rhine, but Mainz is a different network and outside what this site
+ * reports on.
+ *
+ * Matched on the operator, not the line number: 54, 56 and 58 are also run
+ * by DB Regio Bus Mitte and Transdev in the Frankfurt area, and dropping
+ * those would take real data with it. */
+const EXCLUDE_OPERATORS = new Set(["Mainzer Mobilität"]);
+
+/** Some Mainz departures carry no operator at all — neither the station
+ * board nor JourneyDetails fills it in. A Mainz origin is the only signal
+ * left for those.
+ *
+ * Deliberately matched against the origin, never the stop list: plenty of
+ * Frankfurt runs pass through a Mainz-named stop, and dropping those would
+ * take real data with it. */
+const MAINZ_NAME = /\bmainz\b/i;
+
+/** True for an operator whose traffic we do not collect. The poller needs
+ * it too: the station board sometimes omits the operator that
+ * JourneyDetails later supplies. */
+export function isExcludedOperator(operator: string | null): boolean {
+	return operator != null && EXCLUDE_OPERATORS.has(operator);
+}
+
+/** True for a bus that belongs to the Mainz network but carries no operator
+ * to prove it.
+ *
+ * Only the poller may ask this. It needs the journey's real first stop, and
+ * a station board only knows the station it was queried for — asking it
+ * there would condemn every operator-less bus on a Mainz-named board,
+ * including any Wiesbaden service that happens to call at Mainz-Kastel. */
+export function isUnattributedMainzBus(
+	operator: string | null,
+	category: string | null,
+	originName: string,
+): boolean {
+	return (
+		!operator && category === "Niederflurbus" && MAINZ_NAME.test(originName)
+	);
+}
+
 /** Matches the prefix arm of normalize_category, which catches the
  * spaced forms ("ICE 123") the exact list above does not. */
 const LONG_DISTANCE_PREFIX = /^(ICE|IC|EC|ECE|NJ|EN|RJ|RJX|TGV|EST)\b/;
@@ -67,14 +109,13 @@ async function discoverStationJourneys(
 	journeys: MgateStationBoardEntry[],
 	today: string,
 ): Promise<number> {
-	const stationExcludes = station.excludeCategories
-		? new Set(station.excludeCategories)
-		: null;
+	// No unattributed-Mainz test here: see isUnattributedMainzBus. Such a run
+	// is admitted now and dropped by the poller, which knows its real origin.
 	const filtered = journeys.filter(
 		(j) =>
 			!EXCLUDE_CATEGORIES.has(j.category ?? "") &&
+			!isExcludedOperator(j.operator ?? null) &&
 			!isLongDistanceCategory(j.category ?? null) &&
-			!stationExcludes?.has(j.category ?? "") &&
 			!/N$/.test(j.line),
 	);
 	if (filtered.length === 0) return 0;

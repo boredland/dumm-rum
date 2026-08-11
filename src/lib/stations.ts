@@ -2,7 +2,6 @@ export interface Station {
 	id: string;
 	name: string;
 	slug: string;
-	excludeCategories?: string[];
 }
 
 export const STATIONS: Station[] = [
@@ -70,7 +69,6 @@ export const STATIONS: Station[] = [
 		id: "3006903",
 		name: "Wiesbaden-Mainz-Kastel Bahnhof",
 		slug: "mainz-kastel-bahnhof",
-		excludeCategories: ["Bus"],
 	},
 ];
 

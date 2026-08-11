@@ -6,7 +6,7 @@ import {
 	telegramSubscriptions,
 } from "../db/schema.ts";
 import {
-	DISPLAYED_CATEGORY,
+	COLLECTED_TRAFFIC,
 	normalizedCategorySql,
 	sinceDays,
 } from "./queries.ts";
@@ -112,7 +112,7 @@ async function fetchDirections(lineSlug: string) {
 	const { line, category } = parseLineSlug(lineSlug);
 	const where = and(
 		eq(journeyRuns.line, line),
-		DISPLAYED_CATEGORY,
+		COLLECTED_TRAFFIC,
 		category ? eq(normalizedCategorySql, category) : undefined,
 	);
 
@@ -640,7 +640,7 @@ export async function notifyJourneyIssues(
 
 	const category = run[0]?.category ?? "Bus";
 	// Long-distance traffic is ingested but never displayed, so it must not
-	// generate alerts either — see DISPLAYED_CATEGORY in queries.ts.
+	// generate alerts either — see COLLECTED_TRAFFIC in queries.ts.
 	if (category === "Fernverkehr") return;
 	const source = providerFromRef(journeyRef);
 	const line = `${source}:${category}:${rawLine}`;

@@ -3,7 +3,11 @@ import type PgBoss from "pg-boss";
 import type { Db } from "../db/client.ts";
 import { excluded } from "../db/helpers.ts";
 import { journeyRuns, journeyStops, knownStops } from "../db/schema.ts";
-import { isLongDistanceCategory } from "./discover.ts";
+import {
+	isExcludedOperator,
+	isLongDistanceCategory,
+	isUnattributedMainzBus,
+} from "./discover.ts";
 import { type MgateJourneyDetail, mgateJourneyDetailsBatch } from "./mgate.ts";
 import { slugForStop } from "./stations.ts";
 import { notifyJourneyIssues } from "./telegram.ts";
@@ -48,7 +52,7 @@ async function markRunDone(
  * `onConflictDoNothing` in discover.ts has nothing left to conflict with;
  * the poller would then delete it again on every cycle. The tombstone
  * keeps that loop closed. It carries the long-distance category, so
- * DISPLAYED_CATEGORY keeps it out of every read query. */
+ * COLLECTED_TRAFFIC keeps it out of every read query. */
 async function tombstoneLongDistanceRun(
 	db: Db,
 	journeyRef: string,
@@ -66,6 +70,44 @@ async function tombstoneLongDistanceRun(
 	await db
 		.update(journeyRuns)
 		.set({ category, pollState: "done" })
+		.where(
+			and(
+				eq(journeyRuns.journeyRef, journeyRef),
+				eq(journeyRuns.dayOfOperation, dayOfOperation),
+			),
+		);
+}
+
+/** Marks a run the poller must ignore and the site must not show.
+ *
+ * A distinct poll state, rather than reusing "done": the read guard then
+ * tests one unambiguous fact instead of re-deriving "is this Mainz?" from
+ * operator and origin columns that the tombstone does not control. */
+export const EXCLUDED_POLL_STATE = "excluded";
+
+/** Drops the stop visits of a run whose operator we do not collect, and
+ * marks the run excluded so the poller leaves it alone.
+ *
+ * The run row stays for the same reason as the long-distance tombstone: a
+ * hard delete leaves `onConflictDoNothing` in discover.ts nothing to
+ * conflict with, so the next station-board pass re-inserts the journey and
+ * the poller removes it again, every cycle. */
+async function tombstoneExcludedRun(
+	db: Db,
+	journeyRef: string,
+	dayOfOperation: string,
+): Promise<void> {
+	await db
+		.delete(journeyStops)
+		.where(
+			and(
+				eq(journeyStops.journeyRef, journeyRef),
+				eq(journeyStops.dayOfOperation, dayOfOperation),
+			),
+		);
+	await db
+		.update(journeyRuns)
+		.set({ pollState: EXCLUDED_POLL_STATE })
 		.where(
 			and(
 				eq(journeyRuns.journeyRef, journeyRef),
@@ -181,6 +223,31 @@ export async function processPollBatch(
 					dayOfOperation,
 					detailCategory,
 				);
+				stats.terminal++;
+				continue;
+			}
+
+			// Same story for an excluded operator: the station board sometimes
+			// omits the operator that JourneyDetails then supplies, so a Mainz
+			// bus can get this far.
+			//
+			// Tombstoned, not deleted. Discovery filters on the board's own
+			// operator field, which is exactly the one that was missing, so a
+			// deleted row would be re-inserted on the next pass and deleted
+			// again on every cycle. The tombstone keeps the poller off it, and
+			// the run carries no stops, so every stop-based query ignores it.
+			//
+			// The origin check earns its place here rather than in discovery
+			// alone: the board only knows the station it was queried for, while
+			// JourneyDetails gives the journey's real first stop. That is how a
+			// Mainz bus with no operator reaches us.
+			const detailOperator = mgDetail.product?.operator ?? null;
+			const detailOrigin = mgStops[0]?.name ?? "";
+			if (
+				isExcludedOperator(detailOperator) ||
+				isUnattributedMainzBus(detailOperator, detailCategory, detailOrigin)
+			) {
+				await tombstoneExcludedRun(db, journeyRef, dayOfOperation);
 				stats.terminal++;
 				continue;
 			}

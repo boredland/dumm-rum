@@ -36,20 +36,29 @@ END`;
  * use the same bucket — a raw category yields a slug no lookup resolves. */
 export const normalizedCategorySql = sql<string>`${journeyRuns.categoryNorm}`;
 
-/** Long-distance traffic (ICE / IC / EC / ECE / NJ / EN / RJ / RJX / TGV
- * / EST) is no longer ingested, and drizzle/20260811103000_drop_fernverkehr
- * deleted the historical rows, so this filter normally matches everything.
+/** Traffic this site reports on. Long-distance trains and Mainz city buses
+ * are neither ingested nor stored any more, so this filter normally matches
+ * everything.
  *
  * It stays as a safety net. The ingest filter in discover.ts is a TS list
  * plus a prefix regex; normalize_category is the SQL source of truth. If
  * the two ever disagree, a run can still land in the Fernverkehr bucket,
  * and this keeps it off the site until the ingest list catches up.
  *
+ * Two clauses beyond the category. The operator one covers Mainz city
+ * buses, which the ingest also rejects (EXCLUDE_OPERATORS in discover.ts).
+ * The poll-state one covers the rest: the poller can only tombstone a run
+ * it recognises late, and such a run keeps an ordinary bus category, so the
+ * line and operator summaries — which read journey_runs directly, not its
+ * stops — would otherwise count a run with no stops left.
+ *
  * Applied in every read query rather than in the UI, so headline totals,
  * worst-offender cards and section counts cannot disagree with the lists
  * they summarize. Exported for the alert path, which reads journey_runs
  * directly. */
-export const DISPLAYED_CATEGORY = sql`${normalizedCategorySql} <> 'Fernverkehr'`;
+export const COLLECTED_TRAFFIC = sql`${normalizedCategorySql} <> 'Fernverkehr'
+	AND (${journeyRuns.operator} IS NULL OR ${journeyRuns.operator} <> 'Mainzer Mobilität')
+	AND (${journeyRuns.pollState} IS NULL OR ${journeyRuns.pollState} <> 'excluded')`;
 
 const lineSlugSql = sql<string>`(${sourceSql} || ':' || ${normalizedCategorySql} || ':' || ${journeyRuns.line})`;
 
@@ -174,7 +183,7 @@ export async function getOperatorSummaries(
 	const hasOperator = and(
 		isNotNull(journeyRuns.operator),
 		ne(journeyRuns.operator, ""),
-		DISPLAYED_CATEGORY,
+		COLLECTED_TRAFFIC,
 	);
 	const dbr = delayedByRunSq(filter.until, true);
 
@@ -281,7 +290,7 @@ export async function getLineSummaries(
 		})
 		.from(journeyRuns)
 		.leftJoin(dbr, delayedJoinCondition(dbr))
-		.where(and(daysCond, DISPLAYED_CATEGORY))
+		.where(and(daysCond, COLLECTED_TRAFFIC))
 		.groupBy(journeyRuns.line, normalizedCategorySql, sourceSql)
 		.orderBy(normalizedCategorySql, journeyRuns.line);
 
@@ -349,7 +358,7 @@ export async function getStopSummaries(): Promise<StopSummary[]> {
 					eq(journeyRuns.dayOfOperation, journeyStops.dayOfOperation),
 				),
 			)
-			.where(and(dayWindow, runDayWindow, DISPLAYED_CATEGORY))
+			.where(and(dayWindow, runDayWindow, COLLECTED_TRAFFIC))
 			.groupBy(journeyStops.stopId)
 			.orderBy(desc(sql`COUNT(*)`)),
 		db.execute(sql<{
@@ -367,7 +376,7 @@ export async function getStopSummaries(): Promise<StopSummary[]> {
 				LEFT JOIN ${journeyRuns}
 					ON ${journeyRuns.journeyRef} = ${journeyStops.journeyRef}
 					AND ${journeyRuns.dayOfOperation} = ${journeyStops.dayOfOperation}
-				WHERE ${dayWindow} AND ${runDayWindow} AND ${DISPLAYED_CATEGORY}
+				WHERE ${dayWindow} AND ${runDayWindow} AND ${COLLECTED_TRAFFIC}
 			)
 			SELECT
 				stop_id,
@@ -431,7 +440,7 @@ export async function getLineStats(slug: string): Promise<LineStats> {
 
 	let where: SQL | undefined = and(
 		eq(journeyRuns.line, line),
-		DISPLAYED_CATEGORY,
+		COLLECTED_TRAFFIC,
 	);
 	if (category) where = and(where, eq(normalizedCategorySql, category));
 	if (source) where = and(where, eq(sourceSql, source));
@@ -508,7 +517,7 @@ export async function getLineDayJourneys(
 	let where = and(
 		eq(journeyRuns.line, line),
 		eq(journeyRuns.dayOfOperation, date),
-		DISPLAYED_CATEGORY,
+		COLLECTED_TRAFFIC,
 	);
 	if (category) where = and(where, eq(normalizedCategorySql, category));
 	if (source) where = and(where, eq(sourceSql, source));
@@ -572,7 +581,7 @@ export async function getOperatorStats(
 			delayed: runDelayedCorrelatedSql.as("delayed"),
 		})
 		.from(journeyRuns)
-		.where(and(eq(journeyRuns.operator, operator), DISPLAYED_CATEGORY))
+		.where(and(eq(journeyRuns.operator, operator), COLLECTED_TRAFFIC))
 		.groupBy(journeyRuns.dayOfOperation)
 		.orderBy(desc(journeyRuns.dayOfOperation));
 
@@ -584,7 +593,7 @@ export async function getOperatorStats(
 				source: sourceSql.as("source"),
 			})
 			.from(journeyRuns)
-			.where(and(eq(journeyRuns.operator, operator), DISPLAYED_CATEGORY))
+			.where(and(eq(journeyRuns.operator, operator), COLLECTED_TRAFFIC))
 			.orderBy(normalizedCategorySql, journeyRuns.line),
 		db
 			.selectDistinct({ category: normalizedCategorySql.as("category") })
@@ -593,7 +602,7 @@ export async function getOperatorStats(
 				and(
 					eq(journeyRuns.operator, operator),
 					isNotNull(journeyRuns.category),
-					DISPLAYED_CATEGORY,
+					COLLECTED_TRAFFIC,
 				),
 			),
 	]);
@@ -649,7 +658,7 @@ export async function getOperatorDayJourneys(
 			and(
 				eq(journeyRuns.operator, operator),
 				eq(journeyRuns.dayOfOperation, date),
-				DISPLAYED_CATEGORY,
+				COLLECTED_TRAFFIC,
 			),
 		)
 		.orderBy(
@@ -746,7 +755,7 @@ export async function getStopStats(stopIds: string[]): Promise<StopStats> {
 					eq(journeyRuns.dayOfOperation, journeyStops.dayOfOperation),
 				),
 			)
-			.where(and(inArray(journeyStops.stopId, stopIds), DISPLAYED_CATEGORY))
+			.where(and(inArray(journeyStops.stopId, stopIds), COLLECTED_TRAFFIC))
 			.groupBy(journeyStops.dayOfOperation)
 			.orderBy(desc(journeyStops.dayOfOperation)),
 		db
@@ -767,7 +776,7 @@ export async function getStopStats(stopIds: string[]): Promise<StopStats> {
 					eq(journeyRuns.dayOfOperation, journeyStops.dayOfOperation),
 				),
 			)
-			.where(and(inArray(journeyStops.stopId, stopIds), DISPLAYED_CATEGORY)),
+			.where(and(inArray(journeyStops.stopId, stopIds), COLLECTED_TRAFFIC)),
 	]);
 
 	const meta = metaRows[0];
@@ -834,7 +843,7 @@ export async function getStopDayDepartures(
 			and(
 				inArray(journeyStops.stopId, stopIds),
 				eq(journeyStops.dayOfOperation, date),
-				DISPLAYED_CATEGORY,
+				COLLECTED_TRAFFIC,
 			),
 		)
 		.orderBy(asc(sql`time`), asc(journeyRuns.line));
@@ -893,7 +902,7 @@ export async function getAllStopNames(): Promise<StopPickerEntry[]> {
 					AND ${journeyRuns.dayOfOperation} = ${journeyStops.dayOfOperation}
 				WHERE ${journeyStops.stopId} = ${knownStops.stopId}
 					AND ${journeyStops.dayOfOperation} >= ${sinceDays(30)}
-					AND ${DISPLAYED_CATEGORY}
+					AND ${COLLECTED_TRAFFIC}
 			)`,
 		)
 		.groupBy(sql`LOWER(${knownStops.stopName})`)
@@ -912,9 +921,7 @@ export async function getAllLineNames(): Promise<string[]> {
 			source: sourceSql.as("source"),
 		})
 		.from(journeyRuns)
-		.where(
-			and(isNotNull(journeyRuns.line), DISPLAYED_CATEGORY, last30DaysSql()),
-		)
+		.where(and(isNotNull(journeyRuns.line), COLLECTED_TRAFFIC, last30DaysSql()))
 		.orderBy(normalizedCategorySql, journeyRuns.line);
 	return rows
 		.map((r) => lineSlug(r.source, r.category, r.line))
@@ -928,7 +935,7 @@ export async function getAllDirections(): Promise<string[]> {
 		.selectDistinct({ dest: journeyRuns.destName })
 		.from(journeyRuns)
 		.where(
-			and(isNotNull(journeyRuns.destName), DISPLAYED_CATEGORY, last30DaysSql()),
+			and(isNotNull(journeyRuns.destName), COLLECTED_TRAFFIC, last30DaysSql()),
 		)
 		.orderBy(journeyRuns.destName);
 	return rows.map((r) => r.dest).filter(Boolean);
@@ -939,7 +946,7 @@ export async function getDirectionsForLine(slug: string): Promise<string[]> {
 	const { line, category } = parseLineSlug(slug);
 	const where = and(
 		eq(journeyRuns.line, line),
-		DISPLAYED_CATEGORY,
+		COLLECTED_TRAFFIC,
 		category ? eq(normalizedCategorySql, category) : undefined,
 	);
 
@@ -962,7 +969,7 @@ export async function getStopsForLine(slug: string): Promise<string[]> {
 	const { line, category } = parseLineSlug(slug);
 	const where = and(
 		eq(journeyRuns.line, line),
-		DISPLAYED_CATEGORY,
+		COLLECTED_TRAFFIC,
 		category ? eq(normalizedCategorySql, category) : undefined,
 	);
 
