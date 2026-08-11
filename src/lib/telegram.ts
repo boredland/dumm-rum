@@ -5,7 +5,7 @@ import {
 	journeyStops,
 	telegramSubscriptions,
 } from "../db/schema.ts";
-import { normalizedCategorySql } from "./queries.ts";
+import { DISPLAYED_CATEGORY, normalizedCategorySql } from "./queries.ts";
 import {
 	DELAY_THRESHOLD_MIN,
 	nowBerlin,
@@ -106,9 +106,11 @@ function formatWeekdays(weekdays: string): string {
 
 async function fetchDirections(lineSlug: string) {
 	const { line, category } = parseLineSlug(lineSlug);
-	const where = category
-		? and(eq(journeyRuns.line, line), eq(normalizedCategorySql, category))
-		: eq(journeyRuns.line, line);
+	const where = and(
+		eq(journeyRuns.line, line),
+		DISPLAYED_CATEGORY,
+		category ? eq(normalizedCategorySql, category) : undefined,
+	);
 
 	return db
 		.selectDistinct({ direction: journeyRuns.destName })
@@ -314,11 +316,15 @@ export async function handleTelegramWebhook(
 					stop_id: string;
 					stop_name: string;
 				}>(sql`
-				SELECT DISTINCT ON (stop_id) stop_id, stop_name
-				FROM journey_stops
-				WHERE day_of_operation >= to_char(CURRENT_DATE - INTERVAL '30 days', 'YYYY-MM-DD')
-					AND LOWER(stop_name) LIKE ${`%${stopFilter.toLowerCase()}%`}
-				ORDER BY stop_id, stop_name
+				SELECT DISTINCT ON (js.stop_id) js.stop_id, js.stop_name
+				FROM journey_stops js
+				JOIN journey_runs jr
+					ON jr.journey_ref = js.journey_ref
+					AND jr.day_of_operation = js.day_of_operation
+				WHERE js.day_of_operation >= to_char(CURRENT_DATE - INTERVAL '30 days', 'YYYY-MM-DD')
+					AND LOWER(js.stop_name) LIKE ${`%${stopFilter.toLowerCase()}%`}
+					AND normalize_category(jr.category) <> 'Fernverkehr'
+				ORDER BY js.stop_id, js.stop_name
 			`)
 				.then((rs) =>
 					(rs as unknown as { stop_id: string; stop_name: string }[]).map(
@@ -631,8 +637,11 @@ export async function notifyJourneyIssues(
 			),
 	]);
 
-	const source = providerFromRef(journeyRef);
 	const category = run[0]?.category ?? "Bus";
+	// Long-distance traffic is ingested but never displayed, so it must not
+	// generate alerts either — see DISPLAYED_CATEGORY in queries.ts.
+	if (category === "Fernverkehr") return;
+	const source = providerFromRef(journeyRef);
 	const line = `${source}:${category}:${rawLine}`;
 
 	const issues: Issue[] = [];

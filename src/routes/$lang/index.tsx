@@ -84,7 +84,6 @@ const STALE_TIME = 5 * 60 * 1000;
 const LEGACY_CAT_KEYS: Record<string, string> = {
 	S: "S-Bahn",
 	"RE,RB": "Regionalverkehr",
-	FV: "Fernverkehr",
 };
 
 function parseCatFilter(input: unknown): string[] | undefined {
@@ -137,7 +136,6 @@ const CATEGORY_OPTIONS: Array<{ key: string; label: string }> = [
 	{ key: "Tram", label: "Tram" },
 	{ key: "Bus", label: "Bus" },
 	{ key: "Regionalverkehr", label: "RE/RB" },
-	{ key: "Fernverkehr", label: "Fernverkehr" },
 ];
 
 function matchesCategoryFilters(

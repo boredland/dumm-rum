@@ -116,10 +116,10 @@ export function slugForStop(stopIds: string[], stopName: string): string {
  * per-glyph alias lists were a fourth copy of the normalization table
  * and had drifted from the SQL one.
  *
- * Unknown buckets (a HAFAS category no branch claims) get no glyph
- * rather than a wrong one. */
+ * No Fernverkehr glyph: long-distance runs are filtered out of every
+ * read query, so that bucket never reaches a card. Unknown buckets get
+ * no glyph rather than a wrong one. */
 const ICON_BY_CATEGORY: Record<string, string> = {
-	Fernverkehr: "🚄",
 	Regionalverkehr: "🚆",
 	"S-Bahn": "🚈",
 	"U-Bahn": "🚇",
@@ -129,14 +129,7 @@ const ICON_BY_CATEGORY: Record<string, string> = {
 
 /** Ordered so a station served by several modes always renders its
  * glyphs fastest-first, regardless of category discovery order. */
-const ICON_ORDER = [
-	"Fernverkehr",
-	"Regionalverkehr",
-	"S-Bahn",
-	"U-Bahn",
-	"Tram",
-	"Bus",
-];
+const ICON_ORDER = ["Regionalverkehr", "S-Bahn", "U-Bahn", "Tram", "Bus"];
 
 export function categoryIcons(categories: string[]): string {
 	let icons = "";

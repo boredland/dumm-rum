@@ -37,6 +37,14 @@ END`;
  * use the same bucket — a raw category yields a slug no lookup resolves. */
 export const normalizedCategorySql = sql<string>`normalize_category(${journeyRuns.category})`;
 
+/** Long-distance traffic (ICE / IC / EC / ECE / NJ / EN / RJ / RJX / TGV
+ * / EST) is still ingested — see the rationale in discover.ts — but never
+ * displayed. Applied in every read query rather than filtered in the UI
+ * so headline totals, worst-offender cards and section counts can't
+ * disagree with the lists they summarize. Exported for the alert path,
+ * which reads journey_runs directly. */
+export const DISPLAYED_CATEGORY = sql`${normalizedCategorySql} <> 'Fernverkehr'`;
+
 const lineSlugSql = sql<string>`(${sourceSql} || ':' || ${normalizedCategorySql} || ':' || ${journeyRuns.line})`;
 
 // Per-run "was delayed" signal, precomputed once across journey_stops so
@@ -110,6 +118,7 @@ export async function getOperatorSummaries(
 	const hasOperator = and(
 		isNotNull(journeyRuns.operator),
 		ne(journeyRuns.operator, ""),
+		DISPLAYED_CATEGORY,
 	);
 	const dbr = delayedByRunSq();
 
@@ -216,7 +225,7 @@ export async function getLineSummaries(
 		})
 		.from(journeyRuns)
 		.leftJoin(dbr, delayedJoinCondition(dbr))
-		.where(daysCond)
+		.where(and(daysCond, DISPLAYED_CATEGORY))
 		.groupBy(journeyRuns.line, normalizedCategorySql, sourceSql)
 		.orderBy(normalizedCategorySql, journeyRuns.line);
 
@@ -279,7 +288,7 @@ export async function getStopSummaries(): Promise<StopSummary[]> {
 					eq(journeyRuns.dayOfOperation, journeyStops.dayOfOperation),
 				),
 			)
-			.where(dayWindow)
+			.where(and(dayWindow, DISPLAYED_CATEGORY))
 			.groupBy(journeyStops.stopId)
 			.orderBy(desc(sql`COUNT(*)`)),
 		db.execute(sql<{
@@ -297,7 +306,7 @@ export async function getStopSummaries(): Promise<StopSummary[]> {
 				LEFT JOIN ${journeyRuns}
 					ON ${journeyRuns.journeyRef} = ${journeyStops.journeyRef}
 					AND ${journeyRuns.dayOfOperation} = ${journeyStops.dayOfOperation}
-				WHERE ${dayWindow}
+				WHERE ${dayWindow} AND ${DISPLAYED_CATEGORY}
 			)
 			SELECT
 				stop_id,
@@ -360,7 +369,10 @@ export async function getLineStats(slug: string): Promise<LineStats> {
 	const { line, category, source } = parseLineSlug(slug);
 	const dbr = delayedByRunSq();
 
-	let where: SQL | undefined = eq(journeyRuns.line, line);
+	let where: SQL | undefined = and(
+		eq(journeyRuns.line, line),
+		DISPLAYED_CATEGORY,
+	);
 	if (category) where = and(where, eq(normalizedCategorySql, category));
 	if (source) where = and(where, eq(sourceSql, source));
 
@@ -437,6 +449,7 @@ export async function getLineDayJourneys(
 	let where = and(
 		eq(journeyRuns.line, line),
 		eq(journeyRuns.dayOfOperation, date),
+		DISPLAYED_CATEGORY,
 	);
 	if (category) where = and(where, eq(normalizedCategorySql, category));
 	if (source) where = and(where, eq(sourceSql, source));
@@ -502,7 +515,7 @@ export async function getOperatorStats(
 		})
 		.from(journeyRuns)
 		.leftJoin(dbr, delayedJoinCondition(dbr))
-		.where(eq(journeyRuns.operator, operator))
+		.where(and(eq(journeyRuns.operator, operator), DISPLAYED_CATEGORY))
 		.groupBy(journeyRuns.dayOfOperation)
 		.orderBy(desc(journeyRuns.dayOfOperation));
 
@@ -514,7 +527,7 @@ export async function getOperatorStats(
 				source: sourceSql.as("source"),
 			})
 			.from(journeyRuns)
-			.where(eq(journeyRuns.operator, operator))
+			.where(and(eq(journeyRuns.operator, operator), DISPLAYED_CATEGORY))
 			.orderBy(normalizedCategorySql, journeyRuns.line),
 		db
 			.selectDistinct({ category: normalizedCategorySql.as("category") })
@@ -523,6 +536,7 @@ export async function getOperatorStats(
 				and(
 					eq(journeyRuns.operator, operator),
 					isNotNull(journeyRuns.category),
+					DISPLAYED_CATEGORY,
 				),
 			),
 	]);
@@ -578,6 +592,7 @@ export async function getOperatorDayJourneys(
 			and(
 				eq(journeyRuns.operator, operator),
 				eq(journeyRuns.dayOfOperation, date),
+				DISPLAYED_CATEGORY,
 			),
 		)
 		.orderBy(
@@ -651,9 +666,12 @@ export async function findStopBySlug(slug: string): Promise<KnownStop | null> {
 			),
 		)
 		.where(
-			inArray(
-				journeyStops.stopId,
-				liveMatch.map((r) => r.stopId),
+			and(
+				inArray(
+					journeyStops.stopId,
+					liveMatch.map((r) => r.stopId),
+				),
+				DISPLAYED_CATEGORY,
 			),
 		);
 	const categories = categoriesRow[0]?.categories ?? null;
@@ -672,7 +690,12 @@ function mergeStopRows(
 	const categories = new Set<string>();
 	for (const r of rows) {
 		if (r.categories)
-			for (const c of r.categories.split(",")) categories.add(c);
+			for (const c of r.categories.split(",")) {
+				// The known_stops rollup predates the display filter and can
+				// carry a raw Fernverkehr entry; a stop page must never grow a
+				// 🚄 the rest of the query layer has filtered away.
+				if (c !== "Fernverkehr") categories.add(c);
+			}
 	}
 	return {
 		stopIds: rows.map((r) => r.stopId),
@@ -724,7 +747,7 @@ export async function getStopStats(stopIds: string[]): Promise<StopStats> {
 					eq(journeyRuns.dayOfOperation, journeyStops.dayOfOperation),
 				),
 			)
-			.where(inArray(journeyStops.stopId, stopIds))
+			.where(and(inArray(journeyStops.stopId, stopIds), DISPLAYED_CATEGORY))
 			.groupBy(journeyStops.dayOfOperation)
 			.orderBy(desc(journeyStops.dayOfOperation)),
 		db
@@ -745,7 +768,7 @@ export async function getStopStats(stopIds: string[]): Promise<StopStats> {
 					eq(journeyRuns.dayOfOperation, journeyStops.dayOfOperation),
 				),
 			)
-			.where(inArray(journeyStops.stopId, stopIds)),
+			.where(and(inArray(journeyStops.stopId, stopIds), DISPLAYED_CATEGORY)),
 	]);
 
 	const meta = metaRows[0];
@@ -805,6 +828,7 @@ export async function getStopDayDepartures(
 			and(
 				inArray(journeyStops.stopId, stopIds),
 				eq(journeyStops.dayOfOperation, date),
+				DISPLAYED_CATEGORY,
 			),
 		)
 		.orderBy(asc(sql`time`), asc(journeyRuns.line));
@@ -844,8 +868,18 @@ export async function getAllStopNames(): Promise<StopPickerEntry[]> {
 			name: sql<string>`MIN(${journeyStops.stopName})`.as("name"),
 		})
 		.from(journeyStops)
+		.innerJoin(
+			journeyRuns,
+			and(
+				eq(journeyRuns.journeyRef, journeyStops.journeyRef),
+				eq(journeyRuns.dayOfOperation, journeyStops.dayOfOperation),
+			),
+		)
 		.where(
-			sql`${journeyStops.dayOfOperation} >= to_char(CURRENT_DATE - INTERVAL '30 days', 'YYYY-MM-DD')`,
+			and(
+				sql`${journeyStops.dayOfOperation} >= to_char(CURRENT_DATE - INTERVAL '30 days', 'YYYY-MM-DD')`,
+				DISPLAYED_CATEGORY,
+			),
 		)
 		.groupBy(sql`LOWER(${journeyStops.stopName})`)
 		.orderBy(sql`MIN(${journeyStops.stopName})`);
@@ -861,7 +895,7 @@ export async function getAllLineNames(): Promise<string[]> {
 			source: sourceSql.as("source"),
 		})
 		.from(journeyRuns)
-		.where(isNotNull(journeyRuns.line))
+		.where(and(isNotNull(journeyRuns.line), DISPLAYED_CATEGORY))
 		.orderBy(normalizedCategorySql, journeyRuns.line);
 	return rows
 		.map((r) => lineSlug(r.source, r.category, r.line))
@@ -873,7 +907,7 @@ export async function getAllDirections(): Promise<string[]> {
 	const rows = await db
 		.selectDistinct({ dest: journeyRuns.destName })
 		.from(journeyRuns)
-		.where(isNotNull(journeyRuns.destName))
+		.where(and(isNotNull(journeyRuns.destName), DISPLAYED_CATEGORY))
 		.orderBy(journeyRuns.destName);
 	return rows.map((r) => r.dest).filter(Boolean);
 }
@@ -881,9 +915,11 @@ export async function getAllDirections(): Promise<string[]> {
 /** All distinct destinations a given line has run to in the last 30 days. */
 export async function getDirectionsForLine(slug: string): Promise<string[]> {
 	const { line, category } = parseLineSlug(slug);
-	const where = category
-		? and(eq(journeyRuns.line, line), eq(normalizedCategorySql, category))
-		: eq(journeyRuns.line, line);
+	const where = and(
+		eq(journeyRuns.line, line),
+		DISPLAYED_CATEGORY,
+		category ? eq(normalizedCategorySql, category) : undefined,
+	);
 
 	const rows = await db
 		.selectDistinct({ dest: journeyRuns.destName })
@@ -905,9 +941,11 @@ export async function getDirectionsForLine(slug: string): Promise<string[]> {
 /** All distinct stop names served by a line in the last 30 days. */
 export async function getStopsForLine(slug: string): Promise<string[]> {
 	const { line, category } = parseLineSlug(slug);
-	const where = category
-		? and(eq(journeyRuns.line, line), eq(normalizedCategorySql, category))
-		: eq(journeyRuns.line, line);
+	const where = and(
+		eq(journeyRuns.line, line),
+		DISPLAYED_CATEGORY,
+		category ? eq(normalizedCategorySql, category) : undefined,
+	);
 
 	const rows = await db
 		.selectDistinct({

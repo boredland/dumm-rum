@@ -11,11 +11,13 @@ import { nowBerlin, todayBerlin } from "./utils.ts";
 
 // Categories we never want in journey_runs. FLX / FlixTrain are
 // commercial long-distance coach/rail services outside the ÖPNV scope
-// this site reports on. Long-distance trains
-// (ICE / IC / EC / ECE / NJ / EN / RJ / RJX / TGV / EST) are kept
-// because their delay + cancellation stats from HAFAS are valuable even
-// though they aren't strictly ÖPNV — users asked for reliability data
-// on the intercity services that run through Rhein-Main.
+// this site reports on.
+//
+// Long-distance trains (ICE / IC / EC / ECE / NJ / EN / RJ / RJX / TGV /
+// EST) are still ingested even though nothing displays them any more —
+// the UI filters the Fernverkehr bucket out of every read query
+// (DISPLAYED_CATEGORY in queries.ts). Keeping the rows accruing makes
+// that call reversible; adding Fernverkehr here would not be.
 const EXCLUDE_CATEGORIES = new Set(["FLX", "FlixTrain"]);
 
 const POLL_QUEUE = "journey-poll";
