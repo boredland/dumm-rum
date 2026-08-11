@@ -381,7 +381,6 @@ function Index() {
 						{[
 							"collection",
 							"cancellation",
-							"delay",
 							"delayed",
 							"ghost",
 							"reliability",
@@ -391,7 +390,6 @@ function Index() {
 							const translationKey = `home.methodology_${key}` as
 								| "home.methodology_collection"
 								| "home.methodology_cancellation"
-								| "home.methodology_delay"
 								| "home.methodology_delayed"
 								| "home.methodology_ghost"
 								| "home.methodology_reliability"

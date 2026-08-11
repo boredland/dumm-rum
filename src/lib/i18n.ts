@@ -12,10 +12,8 @@ const translations = {
 			"Die Ausfallquote ist der Anteil der ausgefallenen Abfahrten an der Gesamtzahl.",
 		"home.methodology_ghost":
 			"Geisterfahrten (👻) sind geplante Abfahrten, die nie Echtzeitdaten erhalten haben. Laut RMV ist das Fehlen von Echtzeitdaten \u201eein sehr starkes Indiz, dass dieser Bus mit hoher Wahrscheinlichkeit ausfallen wird\u201c \u2014 das System empfängt keine Live-Position, weil schlicht kein Bus auf dieser Fahrt unterwegs ist. Diese werden getrennt von bestätigten Ausfällen erfasst.",
-		"home.methodology_delay":
-			"Die Durchschnittsverspätung vergleicht die tatsächliche Abfahrtszeit mit der geplanten \u2014 bei Ausfällen wird der geplante Takt als Wartezeit angenommen.",
 		"home.methodology_delayed":
-			"Als verspätet gilt eine Abfahrt, wenn die Verspätung \u226550% des geplanten Takts oder \u22657,5 Minuten beträgt (50% der angenommenen durchschnittlichen Fahrtzeit von 15 Minuten innerhalb Frankfurts).",
+			"Als verspätet gilt eine nicht ausgefallene Abfahrt, wenn die Echtzeit \u22657,5 Minuten nach dem Fahrplan liegt \u2014 gemessen an der Abfahrtszeit, ersatzweise an der Ankunftszeit (z. B. an Endhaltestellen).",
 		"home.methodology_reliability":
 			"Die P\u00fcnktlichkeitsquote (OTP) ist der Anteil der Abfahrten, die weder ausgefallen noch versp\u00e4tet sind \u2014 ein g\u00e4ngiger Standard im \u00d6PNV.",
 		"home.methodology_dedup":
@@ -154,10 +152,8 @@ const translations = {
 			"The cancellation rate is the share of cancelled departures out of the total.",
 		"home.methodology_ghost":
 			"Ghost departures (👻) are scheduled trips that never received realtime data. According to RMV, the absence of realtime data is \u201ca very strong indicator that the bus will very likely not run\u201d \u2014 the system cannot receive a live position because there simply is no bus on that route. These are tracked separately from confirmed cancellations.",
-		"home.methodology_delay":
-			"Average delay compares actual departure time to the scheduled time \u2014 for cancellations, we assume the wait equals the planned frequency.",
 		"home.methodology_delayed":
-			"A departure counts as delayed if the delay is \u226550% of the planned frequency or \u22657.5 minutes (50% of the assumed average 15-minute trip time within Frankfurt).",
+			"A non-cancelled departure counts as delayed when its realtime is \u22657.5 minutes behind schedule \u2014 measured on departure time, falling back to arrival time (e.g. at terminus stops).",
 		"home.methodology_reliability":
 			"On-time performance (OTP) is the share of departures that were neither cancelled nor delayed \u2014 a standard metric in public transport.",
 		"home.methodology_dedup":

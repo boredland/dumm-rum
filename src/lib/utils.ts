@@ -23,11 +23,9 @@ export function yesterdayBerlin(): string {
 	return nowBerlin().subtract(1, "day").format("YYYY-MM-DD");
 }
 
-// Stats thresholds. Planned frequency is the assumed wait between
-// departures — used as the "wait time" contribution when a departure is
-// cancelled, so avg_delay for a 100%-cancelled day isn't NaN. Delay
-// threshold is the minutes after which a departure counts as "delayed".
-export const PLANNED_FREQUENCY_MIN = 15;
+/** Minutes after which a departure counts as "delayed". Drives both the
+ * `delay_min` generated column's partial index and every query filter, so
+ * changing it means regenerating that index. */
 export const DELAY_THRESHOLD_MIN = 7.5;
 
 export function pct(numer: number, denom: number): string {
