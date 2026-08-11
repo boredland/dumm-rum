@@ -6,16 +6,44 @@
 // from `public/`) are served directly from disk; anything else falls
 // through to the TanStack request handler.
 
+import { resolve, sep } from "node:path";
+
 import { handleTelegramWebhook } from "./src/lib/telegram.ts";
 
 const entry = (await import("./dist/server/server.js")).default as {
 	fetch: (req: Request) => Response | Promise<Response>;
 };
 
-const CLIENT_DIR = "./dist/client";
+const CLIENT_DIR = resolve("./dist/client");
+const CLIENT_PREFIX = CLIENT_DIR + sep;
 const TELEGRAM_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
 
 const port = Number(process.env.PORT ?? 3000);
+
+/** Resolves a request path to a file inside `dist/client`, or null when it
+ * escapes or the path is malformed.
+ *
+ * `new URL()` already collapses `../` and never decodes `%2e%2e`, so no
+ * traversal reaches this today. That is a property of the parser rather
+ * than of this handler, though, and the handler is what concatenates a
+ * request-controlled string onto a filesystem path — so it verifies the
+ * resolved path itself instead of trusting a caller it does not own.
+ *
+ * Decoding is required for the check to mean anything: without it, a
+ * legitimate asset with an escaped character would miss on disk, and any
+ * future decode upstream would sail past a check done on raw bytes. A
+ * malformed escape throws, and is treated as no asset. */
+function resolveAsset(pathname: string): string | null {
+	let decoded: string;
+	try {
+		decoded = decodeURIComponent(pathname);
+	} catch {
+		return null;
+	}
+	if (decoded.includes("\0")) return null;
+	const path = resolve(CLIENT_DIR + decoded);
+	return path.startsWith(CLIENT_PREFIX) ? path : null;
+}
 
 Bun.serve({
 	port,
@@ -44,8 +72,9 @@ Bun.serve({
 		// Only attempt static lookup for paths that look like file requests
 		// (have an extension). Avoids touching disk for every SSR route.
 		if (/\.[a-z0-9]+$/i.test(url.pathname)) {
-			const file = Bun.file(`${CLIENT_DIR}${url.pathname}`);
-			if (await file.exists()) {
+			const assetPath = resolveAsset(url.pathname);
+			const file = assetPath ? Bun.file(assetPath) : null;
+			if (file && (await file.exists())) {
 				const noCache = url.pathname.endsWith("/sw.js");
 				return new Response(file, {
 					headers: {
