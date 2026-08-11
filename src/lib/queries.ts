@@ -27,15 +27,14 @@ const sourceSql = sql<string>`CASE
 	ELSE 'unknown'
 END`;
 
-/** HAFAS category -> display bucket. The CASE lives in Postgres as
- * `normalize_category` (see drizzle/20260811090000_normalize_category_fn)
- * so SQL and TS cannot drift. The function absorbs NULL itself: wrapping
- * the call in COALESCE here would stop matching the functional index and
- * seq-scan journey_runs on every category filter.
+/** HAFAS category -> display bucket. Reads the stored `category_norm`
+ * column rather than calling `normalize_category` per row: the function
+ * runs several regex arms, so grouping on the call cost ~5x the column
+ * (74 ms against 13 ms over 30 days of runs).
  *
  * Exported because every producer of a `source:category:line` slug must
  * use the same bucket — a raw category yields a slug no lookup resolves. */
-export const normalizedCategorySql = sql<string>`normalize_category(${journeyRuns.category})`;
+export const normalizedCategorySql = sql<string>`${journeyRuns.categoryNorm}`;
 
 /** Long-distance traffic (ICE / IC / EC / ECE / NJ / EN / RJ / RJX / TGV
  * / EST) is no longer ingested, and drizzle/20260811103000_drop_fernverkehr
@@ -55,19 +54,36 @@ export const DISPLAYED_CATEGORY = sql`${normalizedCategorySql} <> 'Fernverkehr'`
 const lineSlugSql = sql<string>`(${sourceSql} || ':' || ${normalizedCategorySql} || ':' || ${journeyRuns.line})`;
 
 // Per-run "was delayed" signal, precomputed once across journey_stops so
-// summary queries can LEFT JOIN instead of running a correlated EXISTS per
-// row. The correlated form was ~6× slower on a 16k-run dataset — Postgres
-// re-scanned the stops pk index once per run. Filter first + SELECT DISTINCT
-// keeps the result small (one row per delayed run) and beats BOOL_OR across
-// every row, because most stops aren't delayed.
-function delayedByRunSq() {
+// summary queries can LEFT JOIN instead of probing per run. Filter first +
+// SELECT DISTINCT keeps the result small (one row per delayed run) and beats
+// BOOL_OR across every row, because most stops aren't delayed.
+//
+// This is the right shape only when the caller reads most of the window
+// anyway. The entity detail pages read one line or one operator, so they use
+// runDelayedCorrelatedSql below instead.
+function delayedByRunSq(until?: string, bounded = false) {
+	// Bounded to the caller's own window where it has one. Unbounded, this
+	// walked every delayed stop ever recorded — 493k index entries and
+	// growing, to answer a question about 30 days.
+	//
+	// The bound must mirror last30DaysSql exactly, `until` included: with an
+	// `until` the caller reads the 30 days before THAT date, so anchoring on
+	// CURRENT_DATE would drop delayed runs the summary still counts.
+	const where = bounded
+		? and(
+				gte(journeyStops.delayMin, DELAY_THRESHOLD_MIN),
+				until
+					? sql`${journeyStops.dayOfOperation} >= to_char(cast(${until} as date) - INTERVAL '30 days', 'YYYY-MM-DD')`
+					: sql`${journeyStops.dayOfOperation} >= ${sinceDays(30)}`,
+			)
+		: gte(journeyStops.delayMin, DELAY_THRESHOLD_MIN);
 	return db
 		.selectDistinct({
 			journeyRef: journeyStops.journeyRef,
 			dayOfOperation: journeyStops.dayOfOperation,
 		})
 		.from(journeyStops)
-		.where(gte(journeyStops.delayMin, DELAY_THRESHOLD_MIN))
+		.where(where)
 		.as("dbr");
 }
 
@@ -82,6 +98,39 @@ function runDelayedSql(dbr: ReturnType<typeof delayedByRunSq>) {
 	return sql<number>`SUM(CASE WHEN NOT ${journeyRuns.cancelled} AND ${dbr.journeyRef} IS NOT NULL THEN 1 ELSE 0 END)`;
 }
 
+/** Same "was this run delayed" signal as the joinable subquery, correlated
+ * per run instead of precomputed across the table.
+ *
+ * For the entity detail pages this is the cheaper shape: the join form has
+ * no line or operator to push down, so it walks every delayed stop ever
+ * recorded (493k index entries, growing without bound) to report on one
+ * line. The correlated form probes `idx_journey_stops_delay_min` once per
+ * run of that line, and cost scales with the entity, not with history:
+ * 60 ms against 9 ms.
+ *
+ * The summary queries keep the join form. They read every run in the
+ * window, so one pass beats a probe per run. */
+const runDelayedCorrelatedSql = sql<number>`SUM(CASE WHEN NOT ${journeyRuns.cancelled} AND EXISTS (
+	SELECT 1 FROM ${journeyStops}
+	WHERE ${journeyStops.journeyRef} = "journey_runs"."journey_ref"
+		AND ${journeyStops.dayOfOperation} = "journey_runs"."day_of_operation"
+		AND ${journeyStops.delayMin} >= ${DELAY_THRESHOLD_MIN}
+) THEN 1 ELSE 0 END)`;
+
+/** Today in Berlin, as the database sees it.
+ *
+ * `day_of_operation` is a Berlin-local HAFAS service date, but the server
+ * runs UTC, so a plain CURRENT_DATE is a day behind between 22:00 UTC and
+ * midnight. Every window below anchors here instead, so the boundaries
+ * cannot disagree with `todayBerlin()` in the app. */
+const berlinToday = sql`(now() AT TIME ZONE 'Europe/Berlin')::date`;
+
+/** A `day_of_operation >= N days ago` bound, anchored on Berlin time.
+ * Exported so the alert path uses the same boundary as the read queries. */
+export function sinceDays(days: number): SQL {
+	return sql`to_char(${berlinToday} - ${sql.raw(`INTERVAL '${days} days'`)}, 'YYYY-MM-DD')`;
+}
+
 export type DaysFilter = "all" | "today" | "weekdays" | "weekends";
 
 export interface QueryFilter {
@@ -93,7 +142,7 @@ function last30DaysSql(until?: string): SQL {
 	if (until) {
 		return sql`${journeyRuns.dayOfOperation} >= to_char(cast(${until} as date) - INTERVAL '30 days', 'YYYY-MM-DD')`;
 	}
-	return sql`${journeyRuns.dayOfOperation} >= to_char(CURRENT_DATE - INTERVAL '30 days', 'YYYY-MM-DD')`;
+	return sql`${journeyRuns.dayOfOperation} >= ${sinceDays(30)}`;
 }
 
 function daysCondition(filter: DaysFilter = "today", until?: string) {
@@ -127,7 +176,7 @@ export async function getOperatorSummaries(
 		ne(journeyRuns.operator, ""),
 		DISPLAYED_CATEGORY,
 	);
-	const dbr = delayedByRunSq();
+	const dbr = delayedByRunSq(filter.until, true);
 
 	const [statsRows, lineRows] = await Promise.all([
 		db
@@ -208,7 +257,7 @@ export async function getLineSummaries(
 	filter: QueryFilter = {},
 ): Promise<LineSummary[]> {
 	const daysCond = daysCondition(filter.days, filter.until);
-	const dbr = delayedByRunSq();
+	const dbr = delayedByRunSq(filter.until, true);
 	const rows = await db
 		.select({
 			line: journeyRuns.line,
@@ -222,11 +271,11 @@ export async function getLineSummaries(
 			ghost: sql<number>`SUM(${ghostCaseSql})`.as("ghost"),
 			delayed: runDelayedSql(dbr).as("delayed"),
 			operators:
-				sql<string>`STRING_AGG(DISTINCT ${journeyRuns.operator}, ',')`.as(
+				sql<string>`STRING_AGG(DISTINCT ${journeyRuns.operator}, ',' ORDER BY ${journeyRuns.operator})`.as(
 					"operators",
 				),
 			destinations:
-				sql<string>`STRING_AGG(DISTINCT ${journeyRuns.destName}, ',')`.as(
+				sql<string>`STRING_AGG(DISTINCT ${journeyRuns.destName}, ',' ORDER BY ${journeyRuns.destName})`.as(
 					"destinations",
 				),
 		})
@@ -270,7 +319,12 @@ export interface StopSummary {
  * category, source) tuples before the STRING_AGG. Merged back by stop_id
  * in JS. Same result shape as the single-query version, 20–30× faster. */
 export async function getStopSummaries(): Promise<StopSummary[]> {
-	const dayWindow = sql`${journeyStops.dayOfOperation} >= to_char(CURRENT_DATE - INTERVAL '7 days', 'YYYY-MM-DD')`;
+	const dayWindow = sql`${journeyStops.dayOfOperation} >= ${sinceDays(7)}`;
+	// The same bound on the run side of the join. It adds no rows — the join
+	// matches on day_of_operation anyway — but it lets the planner build the
+	// hash from 7 days of runs instead of every row ever ingested, which is
+	// what made the join spill to disk (84 ms against 55 ms).
+	const runDayWindow = sql`${journeyRuns.dayOfOperation} >= ${sinceDays(7)}`;
 
 	const [countsRows, linesRows] = await Promise.all([
 		db
@@ -295,7 +349,7 @@ export async function getStopSummaries(): Promise<StopSummary[]> {
 					eq(journeyRuns.dayOfOperation, journeyStops.dayOfOperation),
 				),
 			)
-			.where(and(dayWindow, DISPLAYED_CATEGORY))
+			.where(and(dayWindow, runDayWindow, DISPLAYED_CATEGORY))
 			.groupBy(journeyStops.stopId)
 			.orderBy(desc(sql`COUNT(*)`)),
 		db.execute(sql<{
@@ -313,12 +367,12 @@ export async function getStopSummaries(): Promise<StopSummary[]> {
 				LEFT JOIN ${journeyRuns}
 					ON ${journeyRuns.journeyRef} = ${journeyStops.journeyRef}
 					AND ${journeyRuns.dayOfOperation} = ${journeyStops.dayOfOperation}
-				WHERE ${dayWindow} AND ${DISPLAYED_CATEGORY}
+				WHERE ${dayWindow} AND ${runDayWindow} AND ${DISPLAYED_CATEGORY}
 			)
 			SELECT
 				stop_id,
-				STRING_AGG(source || ':' || category || ':' || line, ',') AS lines,
-				STRING_AGG(DISTINCT category, ',') AS categories
+				STRING_AGG(source || ':' || category || ':' || line, ',' ORDER BY category, line) AS lines,
+				STRING_AGG(DISTINCT category, ',' ORDER BY category) AS categories
 			FROM distinct_stop_lines
 			GROUP BY stop_id
 		`),
@@ -374,7 +428,6 @@ export interface LineStats {
 /** Per-day stats for one line, ad-hoc from journey_runs. */
 export async function getLineStats(slug: string): Promise<LineStats> {
 	const { line, category, source } = parseLineSlug(slug);
-	const dbr = delayedByRunSq();
 
 	let where: SQL | undefined = and(
 		eq(journeyRuns.line, line),
@@ -392,10 +445,9 @@ export async function getLineStats(slug: string): Promise<LineStats> {
 					"cancelled",
 				),
 			ghost: sql<number>`SUM(${ghostCaseSql})`.as("ghost"),
-			delayed: runDelayedSql(dbr).as("delayed"),
+			delayed: runDelayedCorrelatedSql.as("delayed"),
 		})
 		.from(journeyRuns)
-		.leftJoin(dbr, delayedJoinCondition(dbr))
 		.where(where)
 		.groupBy(journeyRuns.dayOfOperation)
 		.orderBy(desc(journeyRuns.dayOfOperation));
@@ -508,7 +560,6 @@ export interface OperatorStats {
 export async function getOperatorStats(
 	operator: string,
 ): Promise<OperatorStats> {
-	const dbr = delayedByRunSq();
 	const rows = await db
 		.select({
 			date: journeyRuns.dayOfOperation,
@@ -518,10 +569,9 @@ export async function getOperatorStats(
 					"cancelled",
 				),
 			ghost: sql<number>`SUM(${ghostCaseSql})`.as("ghost"),
-			delayed: runDelayedSql(dbr).as("delayed"),
+			delayed: runDelayedCorrelatedSql.as("delayed"),
 		})
 		.from(journeyRuns)
-		.leftJoin(dbr, delayedJoinCondition(dbr))
 		.where(and(eq(journeyRuns.operator, operator), DISPLAYED_CATEGORY))
 		.groupBy(journeyRuns.dayOfOperation)
 		.orderBy(desc(journeyRuns.dayOfOperation));
@@ -659,6 +709,14 @@ export interface StopStats {
 	categories: string[];
 }
 
+/** Per-day history for one stop. Deliberately unwindowed — the station page
+ * charts every day it has, so a 30-day bound would drop rows users can see.
+ *
+ * The join costs ~35 ms at 1.9M stop visits regardless of how the category
+ * filter is written; the planner reads `<> 'Fernverkehr'` as unselective
+ * (it now matches every row) and picks a parallel seq scan over the runs.
+ * Left as is: the route memoizes this for 60 s, so it is paid once per
+ * stop per minute, not per request. */
 export async function getStopStats(stopIds: string[]): Promise<StopStats> {
 	if (stopIds.length === 0) {
 		return { days: [], lastChange: null, categories: [] };
@@ -697,7 +755,7 @@ export async function getStopStats(stopIds: string[]): Promise<StopStats> {
 					"last_change",
 				),
 				categories:
-					sql<string>`STRING_AGG(DISTINCT ${normalizedCategorySql}, ',')`.as(
+					sql<string>`STRING_AGG(DISTINCT ${normalizedCategorySql}, ',' ORDER BY ${normalizedCategorySql})`.as(
 						"categories",
 					),
 			})
@@ -809,34 +867,43 @@ export interface StopPickerEntry {
 	name: string;
 }
 
-/** All distinct stop names seen in the last 30 days, deduped case-insensitively.
+/** Stop names served in the last 30 days, deduped case-insensitively.
  * Intended for client-side fuzzy search in the subscribe modal — heavy cache
- * at the HTTP layer. Backed by `idx_journey_stops_day_name`. */
+ * at the HTTP layer.
+ *
+ * Names come from the known_stops rollup, which holds one row per stop id,
+ * rather than from grouping the 1.9M-row journey_stops table: 14 ms against
+ * 224 ms. The EXISTS keeps the 30-day window, because the rollup itself
+ * never expires an entry — without it the picker would slowly fill with
+ * stops that stopped running. */
 export async function getAllStopNames(): Promise<StopPickerEntry[]> {
 	const rows = await db
 		.select({
-			name: sql<string>`MIN(${journeyStops.stopName})`.as("name"),
+			name: sql<string>`MIN(${knownStops.stopName})`.as("name"),
 		})
-		.from(journeyStops)
-		.innerJoin(
-			journeyRuns,
-			and(
-				eq(journeyRuns.journeyRef, journeyStops.journeyRef),
-				eq(journeyRuns.dayOfOperation, journeyStops.dayOfOperation),
-			),
-		)
+		.from(knownStops)
 		.where(
-			and(
-				sql`${journeyStops.dayOfOperation} >= to_char(CURRENT_DATE - INTERVAL '30 days', 'YYYY-MM-DD')`,
-				DISPLAYED_CATEGORY,
-			),
+			// EXISTS over the run join rather than a plain visit check: a stop
+			// reachable only by long-distance traffic must not enter the picker
+			// if that traffic ever comes back.
+			sql`EXISTS (
+				SELECT 1 FROM ${journeyStops}
+				JOIN ${journeyRuns}
+					ON ${journeyRuns.journeyRef} = ${journeyStops.journeyRef}
+					AND ${journeyRuns.dayOfOperation} = ${journeyStops.dayOfOperation}
+				WHERE ${journeyStops.stopId} = ${knownStops.stopId}
+					AND ${journeyStops.dayOfOperation} >= ${sinceDays(30)}
+					AND ${DISPLAYED_CATEGORY}
+			)`,
 		)
-		.groupBy(sql`LOWER(${journeyStops.stopName})`)
-		.orderBy(sql`MIN(${journeyStops.stopName})`);
+		.groupBy(sql`LOWER(${knownStops.stopName})`)
+		.orderBy(sql`MIN(${knownStops.stopName})`);
 	return rows.map((r) => ({ name: r.name })).filter((r) => r.name);
 }
 
-/** All distinct line codes seen in journey_runs. */
+/** Line codes active in the last 30 days. The window matches the other
+ * picklists: without it this scanned every row ever ingested, and the modal
+ * offered lines that stopped running months ago. */
 export async function getAllLineNames(): Promise<string[]> {
 	const rows = await db
 		.selectDistinct({
@@ -845,19 +912,24 @@ export async function getAllLineNames(): Promise<string[]> {
 			source: sourceSql.as("source"),
 		})
 		.from(journeyRuns)
-		.where(and(isNotNull(journeyRuns.line), DISPLAYED_CATEGORY))
+		.where(
+			and(isNotNull(journeyRuns.line), DISPLAYED_CATEGORY, last30DaysSql()),
+		)
 		.orderBy(normalizedCategorySql, journeyRuns.line);
 	return rows
 		.map((r) => lineSlug(r.source, r.category, r.line))
 		.filter(Boolean);
 }
 
-/** All distinct destinations (headsigns) seen in journey_runs. */
+/** Destinations served in the last 30 days. Windowed for the same reason
+ * as getAllLineNames. */
 export async function getAllDirections(): Promise<string[]> {
 	const rows = await db
 		.selectDistinct({ dest: journeyRuns.destName })
 		.from(journeyRuns)
-		.where(and(isNotNull(journeyRuns.destName), DISPLAYED_CATEGORY))
+		.where(
+			and(isNotNull(journeyRuns.destName), DISPLAYED_CATEGORY, last30DaysSql()),
+		)
 		.orderBy(journeyRuns.destName);
 	return rows.map((r) => r.dest).filter(Boolean);
 }
@@ -878,10 +950,7 @@ export async function getDirectionsForLine(slug: string): Promise<string[]> {
 			and(
 				where,
 				isNotNull(journeyRuns.destName),
-				gte(
-					journeyRuns.dayOfOperation,
-					sql`to_char(CURRENT_DATE - INTERVAL '30 days', 'YYYY-MM-DD')`,
-				),
+				gte(journeyRuns.dayOfOperation, sinceDays(30)),
 			),
 		)
 		.orderBy(journeyRuns.destName);
@@ -909,15 +978,7 @@ export async function getStopsForLine(slug: string): Promise<string[]> {
 				eq(journeyRuns.dayOfOperation, journeyStops.dayOfOperation),
 			),
 		)
-		.where(
-			and(
-				where,
-				gte(
-					journeyStops.dayOfOperation,
-					sql`to_char(CURRENT_DATE - INTERVAL '30 days', 'YYYY-MM-DD')`,
-				),
-			),
-		)
+		.where(and(where, gte(journeyStops.dayOfOperation, sinceDays(30))))
 		.orderBy(journeyStops.stopName);
 	return rows.map((r) => r.name).filter(Boolean);
 }

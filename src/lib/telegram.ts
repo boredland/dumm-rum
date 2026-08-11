@@ -5,7 +5,11 @@ import {
 	journeyStops,
 	telegramSubscriptions,
 } from "../db/schema.ts";
-import { DISPLAYED_CATEGORY, normalizedCategorySql } from "./queries.ts";
+import {
+	DISPLAYED_CATEGORY,
+	normalizedCategorySql,
+	sinceDays,
+} from "./queries.ts";
 import {
 	DELAY_THRESHOLD_MIN,
 	nowBerlin,
@@ -119,10 +123,7 @@ async function fetchDirections(lineSlug: string) {
 			and(
 				where,
 				isNotNull(journeyRuns.destName),
-				gte(
-					journeyRuns.dayOfOperation,
-					sql`to_char(CURRENT_DATE - INTERVAL '7 days', 'YYYY-MM-DD')`,
-				),
+				gte(journeyRuns.dayOfOperation, sinceDays(7)),
 			),
 		);
 }
@@ -321,9 +322,9 @@ export async function handleTelegramWebhook(
 				JOIN journey_runs jr
 					ON jr.journey_ref = js.journey_ref
 					AND jr.day_of_operation = js.day_of_operation
-				WHERE js.day_of_operation >= to_char(CURRENT_DATE - INTERVAL '30 days', 'YYYY-MM-DD')
+				WHERE js.day_of_operation >= ${sinceDays(30)}
 					AND LOWER(js.stop_name) LIKE ${`%${stopFilter.toLowerCase()}%`}
-					AND normalize_category(jr.category) <> 'Fernverkehr'
+					AND jr.category_norm <> 'Fernverkehr'
 				ORDER BY js.stop_id, js.stop_name
 			`)
 				.then((rs) =>

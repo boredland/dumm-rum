@@ -1,0 +1,22 @@
+-- Store the display bucket instead of deriving it per row.
+-- normalize_category runs several regex arms, so calling it in a GROUP BY
+-- cost ~5x the plain column (74 ms against 13 ms over 30 days of runs), and
+-- every summary query groups or filters on it.
+--
+-- Adding a STORED generated column rewrites the table. journey_runs is the
+-- smaller of the two ingest tables (runs, not per-stop visits), and the
+-- rewrite took ~1 s at 135k rows locally.
+--
+-- STORED means the value is written once, not recomputed on read. Postgres
+-- allows CREATE OR REPLACE on the function without touching existing rows,
+-- so any later migration that changes normalize_category MUST follow it
+-- with a rewrite, or old rows keep the old bucket:
+--   UPDATE "journey_runs" SET "category" = "category";
+ALTER TABLE "journey_runs" ADD COLUMN "category_norm" text GENERATED ALWAYS AS (normalize_category(category)) STORED;--> statement-breakpoint
+-- No index on category_norm. Every caller filters it with `<> 'Fernverkehr'`,
+-- and an inequality on the leading column cannot drive a B-tree probe, so
+-- the planner ignored such an index: measured 0 scans across a full
+-- benchmark of every read query. Drop the functional index added with the
+-- function for the same reason — it was never used either, and both only
+-- cost write throughput.
+DROP INDEX IF EXISTS "idx_journey_runs_normalized_category";

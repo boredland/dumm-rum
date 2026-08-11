@@ -30,6 +30,17 @@ export const journeyRuns = pgTable(
 		wasTracked: boolean("was_tracked").notNull().default(false),
 		pollState: text("poll_state"),
 		snapshotAt: text("snapshot_at").notNull(),
+		/** Display bucket for `category`, stored rather than derived per row.
+		 * `normalize_category` runs several regex arms, so calling it inside a
+		 * GROUP BY cost ~5x the raw column: 74 ms against 13 ms over 30 days of
+		 * runs. Every summary query groups or filters on it.
+		 *
+		 * STORED, so changing `normalize_category` does NOT update rows that
+		 * already exist. A migration that edits the function must rewrite the
+		 * table too: `UPDATE journey_runs SET category = category`. */
+		categoryNorm: text("category_norm").generatedAlwaysAs(
+			sql`normalize_category(category)`,
+		),
 	},
 	(t) => [
 		primaryKey({ columns: [t.journeyRef, t.dayOfOperation] }),
