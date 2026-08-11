@@ -80,18 +80,18 @@ export const journeyStops = pgTable(
 	],
 );
 
+/**
+ * Stop-id -> slug rollup, written by the poller for every stop it sees.
+ * Exists so `findStopBySlug` is one indexed lookup: `nameToSlug` does
+ * umlaut transliteration plus NFD normalization in JS and can't be
+ * reproduced in SQL, so the slug has to be materialized on write.
+ */
 export const knownStops = pgTable(
 	"known_stops",
 	{
 		stopId: text("stop_id").primaryKey(),
 		stopName: text("stop_name").notNull(),
 		slug: text(),
-		lines: text(),
-		categories: text(),
-		journeyCount: integer("journey_count").notNull().default(0),
-		cancelled: integer().notNull().default(0),
-		ghost: integer().notNull().default(0),
-		delayed: integer().notNull().default(0),
 	},
 	(t) => [index("idx_known_stops_slug").on(t.slug)],
 );

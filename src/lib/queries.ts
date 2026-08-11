@@ -612,95 +612,29 @@ export async function getOperatorDayJourneys(
 export interface KnownStop {
 	stopIds: string[];
 	stopName: string;
-	categories: string[];
 }
 
-// Three-layer cascade because WorstCard links to stops via `nameToSlug(stop_name)`
-// from journey_stops, but known_stops (the rollup) may not have caught up yet.
+/** Resolve a stop slug to its ids + display name.
+ *
+ * One indexed lookup on `known_stops.slug`, which the poller writes for
+ * every stop it sees (upsertKnownStops). This used to be a three-layer
+ * cascade whose fallbacks scanned all of known_stops and then grouped the
+ * whole of journey_stops — unbounded work per distinct slug, with no memo
+ * protection at all against slugs that don't exist.
+ *
+ * Several stop ids can share a slug (a multi-platform station resolves to
+ * one name), so every match is returned; the display name is pinned to the
+ * lowest id so a reload can't flip between platform name variants. */
 export async function findStopBySlug(slug: string): Promise<KnownStop | null> {
 	const rows = await db
-		.select({
-			stopId: knownStops.stopId,
-			stopName: knownStops.stopName,
-			categories: knownStops.categories,
-		})
+		.select({ stopId: knownStops.stopId, stopName: knownStops.stopName })
 		.from(knownStops)
-		.where(eq(knownStops.slug, slug));
-	if (rows.length > 0) return mergeStopRows(rows);
-
-	const { nameToSlug } = await import("./stations.ts");
-	const candidates = await db
-		.select({
-			stopId: knownStops.stopId,
-			stopName: knownStops.stopName,
-			categories: knownStops.categories,
-		})
-		.from(knownStops);
-	const match = candidates.filter((r) => nameToSlug(r.stopName) === slug);
-	if (match.length > 0) return mergeStopRows(match);
-
-	// nameToSlug isn't deterministic in SQL (umlaut transliteration + NFD in JS),
-	// so group in SQL and match in app memory.
-	const live = await db
-		.select({
-			stopId: journeyStops.stopId,
-			stopName: sql<string>`MIN(${journeyStops.stopName})`.as("stop_name"),
-		})
-		.from(journeyStops)
-		.groupBy(journeyStops.stopId);
-	const liveMatch = live.filter((r) => nameToSlug(r.stopName) === slug);
-	if (liveMatch.length === 0) return null;
-	const categoriesRow = await db
-		.select({
-			categories:
-				sql<string>`STRING_AGG(DISTINCT ${normalizedCategorySql}, ',')`.as(
-					"categories",
-				),
-		})
-		.from(journeyStops)
-		.leftJoin(
-			journeyRuns,
-			and(
-				eq(journeyRuns.journeyRef, journeyStops.journeyRef),
-				eq(journeyRuns.dayOfOperation, journeyStops.dayOfOperation),
-			),
-		)
-		.where(
-			and(
-				inArray(
-					journeyStops.stopId,
-					liveMatch.map((r) => r.stopId),
-				),
-				DISPLAYED_CATEGORY,
-			),
-		);
-	const categories = categoriesRow[0]?.categories ?? null;
-	return mergeStopRows(
-		liveMatch.map((r) => ({
-			stopId: r.stopId,
-			stopName: r.stopName,
-			categories,
-		})),
-	);
-}
-
-function mergeStopRows(
-	rows: { stopId: string; stopName: string; categories: string | null }[],
-): KnownStop {
-	const categories = new Set<string>();
-	for (const r of rows) {
-		if (r.categories)
-			for (const c of r.categories.split(",")) {
-				// The known_stops rollup predates the display filter and can
-				// carry a raw Fernverkehr entry; a stop page must never grow a
-				// 🚄 the rest of the query layer has filtered away.
-				if (c !== "Fernverkehr") categories.add(c);
-			}
-	}
+		.where(eq(knownStops.slug, slug))
+		.orderBy(asc(knownStops.stopId));
+	if (rows.length === 0) return null;
 	return {
 		stopIds: rows.map((r) => r.stopId),
 		stopName: rows[0].stopName,
-		categories: [...categories].filter(Boolean),
 	};
 }
 

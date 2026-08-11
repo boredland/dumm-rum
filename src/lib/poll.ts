@@ -1,9 +1,10 @@
-import { and, eq, sql } from "drizzle-orm";
+import { and, asc, eq, sql } from "drizzle-orm";
 import type PgBoss from "pg-boss";
 import type { Db } from "../db/client.ts";
 import { excluded } from "../db/helpers.ts";
-import { journeyRuns, journeyStops } from "../db/schema.ts";
+import { journeyRuns, journeyStops, knownStops } from "../db/schema.ts";
 import { type MgateJourneyDetail, mgateJourneyDetailsBatch } from "./mgate.ts";
+import { slugForStop } from "./stations.ts";
 import { notifyJourneyIssues } from "./telegram.ts";
 import { berlinTime, nowBerlin } from "./utils.ts";
 
@@ -141,6 +142,10 @@ export async function processPollBatch(
 				now,
 			);
 			await upsertMgateStops(db, journeyRef, dayOfOperation, mgStops);
+			await upsertStopSlugs(
+				db,
+				mgStops.map((s) => ({ stopId: s.extId, stopName: s.name })),
+			);
 
 			if (pollCount === 0 && process.env.TELEGRAM_BOT_TOKEN) {
 				const mgLine = mgDetail.product?.line ?? mgDetail.product?.name;
@@ -313,6 +318,72 @@ async function upsertJourneyRunFromMgate(
 				wasTracked: sql`${journeyRuns.wasTracked} OR ${excluded(journeyRuns.wasTracked)}`,
 				pollState: sql`'polling'`,
 				snapshotAt: excluded(journeyRuns.snapshotAt),
+			},
+		});
+}
+
+/** One-off backfill for stops discovered before the poller started
+ * writing the rollup. `nameToSlug` isn't reproducible in SQL, so this
+ * can't be a plain UPDATE — it reads the distinct stops missing a row and
+ * slugs them in JS. Takes the newest name per stop (MAX, matching what a
+ * live poll would write) so the two writers agree instead of fighting
+ * over the row. No-ops once every stop is covered. */
+export async function backfillKnownStops(db: Db): Promise<number> {
+	const rows = await db
+		.select({
+			stopId: journeyStops.stopId,
+			stopName: sql<string>`MAX(${journeyStops.stopName})`.as("stop_name"),
+		})
+		.from(journeyStops)
+		.where(
+			sql`NOT EXISTS (SELECT 1 FROM ${knownStops} WHERE ${knownStops.stopId} = ${journeyStops.stopId})`,
+		)
+		.groupBy(journeyStops.stopId)
+		.orderBy(asc(journeyStops.stopId));
+	if (rows.length === 0) return 0;
+
+	await upsertStopSlugs(
+		db,
+		rows.map((r) => ({ stopId: r.stopId, stopName: r.stopName })),
+	);
+	return rows.length;
+}
+
+/** Keeps the `known_stops` slug rollup current so `findStopBySlug` is a
+ * single indexed lookup. `nameToSlug` does umlaut transliteration plus NFD
+ * normalization in JS and isn't reproducible in SQL, so the slug has to be
+ * written here — otherwise resolving one would mean scanning every stop and
+ * matching in app memory.
+ *
+ * Rows are ordered by stop id so concurrent writers (replicas booting, or a
+ * backfill racing a poll batch) take the same locks in the same order and
+ * can't deadlock. */
+async function upsertStopSlugs(
+	db: Db,
+	stops: { stopId: string; stopName: string }[],
+): Promise<void> {
+	const byId = new Map<string, string>();
+	for (const s of stops) {
+		if (s.stopId && s.stopName) byId.set(s.stopId, s.stopName);
+	}
+	if (byId.size === 0) return;
+
+	const values = [...byId]
+		.sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
+		.map(([stopId, stopName]) => ({
+			stopId,
+			stopName,
+			slug: slugForStop([stopId], stopName),
+		}));
+
+	await db
+		.insert(knownStops)
+		.values(values)
+		.onConflictDoUpdate({
+			target: knownStops.stopId,
+			set: {
+				stopName: excluded(knownStops.stopName),
+				slug: excluded(knownStops.slug),
 			},
 		});
 }

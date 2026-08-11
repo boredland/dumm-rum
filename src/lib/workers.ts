@@ -2,7 +2,12 @@ import { migrate } from "drizzle-orm/postgres-js/migrator";
 import PgBoss from "pg-boss";
 import { db, sql as pg } from "../db/client.ts";
 import { runDiscovery } from "./discover.ts";
-import { POLL_QUEUE, type PollJob, processPollBatch } from "./poll.ts";
+import {
+	backfillKnownStops,
+	POLL_QUEUE,
+	type PollJob,
+	processPollBatch,
+} from "./poll.ts";
 
 const DISCOVER_QUEUE = "discover";
 const DISCOVER_CRON = process.env.DISCOVER_CRON ?? "*/5 * * * *";
@@ -28,6 +33,14 @@ export async function startIngest(): Promise<StartedIngest> {
 	if (!url) throw new Error("DATABASE_URL is not set");
 
 	await migrate(db, { migrationsFolder: "./drizzle" });
+
+	// Stops discovered before the poller wrote known_stops have no slug row,
+	// and findStopBySlug is now a single indexed lookup — without this their
+	// pages 404 until each one is polled again. Awaited rather than
+	// fire-and-forget so no request can be served against a half-built
+	// rollup; once complete it costs one hash anti-join per boot.
+	const backfilled = await backfillKnownStops(db);
+	if (backfilled > 0) console.log(`known_stops: backfilled ${backfilled}`);
 
 	const boss = new PgBoss({ connectionString: url });
 	boss.on("error", (err) => console.error("pg-boss error:", err));

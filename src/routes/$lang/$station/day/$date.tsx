@@ -23,6 +23,7 @@ import { makeSwr } from "../../../../lib/swr.ts";
 import {
 	delayMin,
 	formatTime,
+	parseLineSlug,
 	shortStationName,
 	todayBerlin,
 } from "../../../../lib/utils.ts";
@@ -45,9 +46,19 @@ const stationDaySwr = makeSwr<DayData | null>(
 		const stop = await findStopBySlug(slug);
 		if (!stop) return null;
 		const departures = await getStopDayDepartures(stop.stopIds, date);
+		// The line slugs already carry the normalized category, so the day's
+		// own departures decide which glyphs the header shows — no separate
+		// query, and the icons match the day being displayed.
+		const categories = [
+			...new Set(
+				departures
+					.map((d) => parseLineSlug(d.line).category)
+					.filter((c): c is string => !!c),
+			),
+		];
 		return {
 			stopName: stop.stopName,
-			categories: stop.categories,
+			categories,
 			date,
 			departures,
 		};

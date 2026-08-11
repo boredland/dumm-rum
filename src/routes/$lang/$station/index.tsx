@@ -66,7 +66,7 @@ const stationSwr = makeSwr<StationCacheValue | null>(
 		]);
 		return {
 			stopName: stop.stopName,
-			categories: stop.categories,
+			categories: stats.categories,
 			stopIds: stop.stopIds,
 			days: stats.days,
 			lastChange: stats.lastChange,
