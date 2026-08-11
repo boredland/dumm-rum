@@ -62,11 +62,6 @@ function RootComponent() {
 				<Outlet />
 				<ScrollToTop />
 				<Scripts />
-				<script
-					dangerouslySetInnerHTML={{
-						__html: `if("serviceWorker"in navigator)navigator.serviceWorker.register("/sw.js")`,
-					}}
-				/>
 			</body>
 		</html>
 	);
@@ -99,8 +94,10 @@ function ScrollToTop() {
 				strokeWidth="2"
 				strokeLinecap="round"
 				strokeLinejoin="round"
+				role="img"
 				aria-hidden
 			>
+				<title>Scroll to top</title>
 				<path d="M18 15l-6-6-6 6" />
 			</svg>
 		</button>

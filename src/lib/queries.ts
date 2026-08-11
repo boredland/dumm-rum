@@ -720,6 +720,11 @@ export async function getStopStats(stopIds: string[]): Promise<StopStats> {
 }
 
 export interface StopDayDeparture {
+	/** Identity of the stop visit: the journey_stops primary key minus the
+	 * day, which every row in one response already shares. Lets the UI key
+	 * rows on real data instead of the array index. */
+	journeyRef: string;
+	routeIdx: number;
 	date: string;
 	time: string;
 	rtTime: string | null;
@@ -736,6 +741,8 @@ export async function getStopDayDepartures(
 	if (stopIds.length === 0) return [];
 	const rows = await db
 		.select({
+			journeyRef: journeyStops.journeyRef,
+			routeIdx: journeyStops.routeIdx,
 			date: journeyStops.dayOfOperation,
 			time: sql<string>`COALESCE(${journeyStops.depTime}, ${journeyStops.arrTime})`.as(
 				"time",
@@ -768,6 +775,8 @@ export async function getStopDayDepartures(
 		.orderBy(asc(sql`time`), asc(journeyRuns.line));
 
 	return rows.map((r) => ({
+		journeyRef: r.journeyRef,
+		routeIdx: r.routeIdx,
 		date: r.date,
 		time: r.time,
 		rtTime: r.rtTime,

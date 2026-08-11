@@ -186,7 +186,7 @@ function StationDay() {
 						   information hierarchy actually needs — a per-row
 						   card keeps each departure self-contained. */}
 						<ul className="space-y-2 sm:hidden">
-							{filters.filtered.map((d, i) => {
+							{filters.filtered.map((d) => {
 								const delay = delayMin(d.date, d.time, d.rtTime);
 								const isRail = /^(ICE|IC|EC|RE|RB|S)\s?\d/i.test(d.line);
 								const bahnUrl =
@@ -195,7 +195,7 @@ function StationDay() {
 										: null;
 								return (
 									<li
-										key={`m-${i}-${d.time}-${d.line}-${d.direction}`}
+										key={`m-${d.journeyRef}-${d.routeIdx}`}
 										className="rounded-sm border border-border-dim p-3"
 									>
 										<div className="flex items-baseline justify-between gap-2">
@@ -249,7 +249,7 @@ function StationDay() {
 									</tr>
 								</thead>
 								<tbody>
-									{filters.filtered.map((d, i) => {
+									{filters.filtered.map((d) => {
 										const delay = delayMin(d.date, d.time, d.rtTime);
 										const isRail = /^(ICE|IC|EC|RE|RB|S)\s?\d/i.test(d.line);
 										const bahnUrl =
@@ -258,7 +258,7 @@ function StationDay() {
 												: null;
 										return (
 											<tr
-												key={`${i}-${d.time}-${d.line}-${d.direction}`}
+												key={`${d.journeyRef}-${d.routeIdx}`}
 												className="border-b border-border-dim"
 											>
 												<td className="py-2 pr-3 whitespace-nowrap tabular-nums">

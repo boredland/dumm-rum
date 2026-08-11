@@ -218,17 +218,22 @@ export function SubscribeModal({
 	const label = "text-meta uppercase tracking-wide text-muted font-bold";
 
 	return (
-		<div
-			className="fixed inset-0 z-[2000] flex items-center justify-center p-4 bg-black/50"
-			onClick={onClose}
-			onKeyDown={(e) => {
-				if (e.target === e.currentTarget && e.key === "Enter") onClose();
-			}}
-		>
+		<div className="fixed inset-0 z-[2000] flex items-center justify-center p-4">
+			{/* The backdrop is a real button so dismiss-on-click carries a role and
+			 * a label instead of hanging off a plain div. It stays out of the tab
+			 * order: keyboard users close with Escape (handled above) or the ✕. */}
+			<button
+				type="button"
+				tabIndex={-1}
+				onClick={onClose}
+				aria-label={t(lang, "subscribe.cancel")}
+				className="absolute inset-0 bg-black/50 cursor-default"
+			/>
 			<div
+				role="dialog"
+				aria-modal="true"
+				aria-labelledby="subscribe-modal-title"
 				className="relative w-full max-w-md bg-surface border border-border rounded-sm shadow-xl p-5 space-y-4"
-				onClick={(e) => e.stopPropagation()}
-				onKeyDown={(e) => e.stopPropagation()}
 			>
 				<button
 					type="button"
@@ -239,7 +244,7 @@ export function SubscribeModal({
 					✕
 				</button>
 				<header>
-					<h2 className="text-lg font-bold text-fg">
+					<h2 id="subscribe-modal-title" className="text-lg font-bold text-fg">
 						{t(lang, "subscribe.modal.title")}
 					</h2>
 					<p className="text-xs text-muted mt-1">
