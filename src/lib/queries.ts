@@ -38,11 +38,18 @@ END`;
 export const normalizedCategorySql = sql<string>`normalize_category(${journeyRuns.category})`;
 
 /** Long-distance traffic (ICE / IC / EC / ECE / NJ / EN / RJ / RJX / TGV
- * / EST) is still ingested — see the rationale in discover.ts — but never
- * displayed. Applied in every read query rather than filtered in the UI
- * so headline totals, worst-offender cards and section counts can't
- * disagree with the lists they summarize. Exported for the alert path,
- * which reads journey_runs directly. */
+ * / EST) is no longer ingested, and drizzle/20260811103000_drop_fernverkehr
+ * deleted the historical rows, so this filter normally matches everything.
+ *
+ * It stays as a safety net. The ingest filter in discover.ts is a TS list
+ * plus a prefix regex; normalize_category is the SQL source of truth. If
+ * the two ever disagree, a run can still land in the Fernverkehr bucket,
+ * and this keeps it off the site until the ingest list catches up.
+ *
+ * Applied in every read query rather than in the UI, so headline totals,
+ * worst-offender cards and section counts cannot disagree with the lists
+ * they summarize. Exported for the alert path, which reads journey_runs
+ * directly. */
 export const DISPLAYED_CATEGORY = sql`${normalizedCategorySql} <> 'Fernverkehr'`;
 
 const lineSlugSql = sql<string>`(${sourceSql} || ':' || ${normalizedCategorySql} || ':' || ${journeyRuns.line})`;

@@ -3,6 +3,7 @@ import type PgBoss from "pg-boss";
 import type { Db } from "../db/client.ts";
 import { excluded } from "../db/helpers.ts";
 import { journeyRuns, journeyStops, knownStops } from "../db/schema.ts";
+import { isLongDistanceCategory } from "./discover.ts";
 import { type MgateJourneyDetail, mgateJourneyDetailsBatch } from "./mgate.ts";
 import { slugForStop } from "./stations.ts";
 import { notifyJourneyIssues } from "./telegram.ts";
@@ -31,6 +32,40 @@ async function markRunDone(
 	await db
 		.update(journeyRuns)
 		.set({ pollState: "done" })
+		.where(
+			and(
+				eq(journeyRuns.journeyRef, journeyRef),
+				eq(journeyRuns.dayOfOperation, dayOfOperation),
+			),
+		);
+}
+
+/** Drops the stop visits of a run that a poll revealed to be long-distance
+ * traffic, and tombstones the run itself.
+ *
+ * The run row stays, marked done, on purpose. Deleting it outright would
+ * let the next station-board pass re-insert the same journey, because
+ * `onConflictDoNothing` in discover.ts has nothing left to conflict with;
+ * the poller would then delete it again on every cycle. The tombstone
+ * keeps that loop closed. It carries the long-distance category, so
+ * DISPLAYED_CATEGORY keeps it out of every read query. */
+async function tombstoneLongDistanceRun(
+	db: Db,
+	journeyRef: string,
+	dayOfOperation: string,
+	category: string | null,
+): Promise<void> {
+	await db
+		.delete(journeyStops)
+		.where(
+			and(
+				eq(journeyStops.journeyRef, journeyRef),
+				eq(journeyStops.dayOfOperation, dayOfOperation),
+			),
+		);
+	await db
+		.update(journeyRuns)
+		.set({ category, pollState: "done" })
 		.where(
 			and(
 				eq(journeyRuns.journeyRef, journeyRef),
@@ -133,6 +168,22 @@ export async function processPollBatch(
 
 			const mgDetail = mgateResult.detail;
 			const mgStops = mgDetail.stops;
+
+			// JourneyDetails can report a different category than the station
+			// board did, so a run can turn out to be long-distance after
+			// discovery accepted it. Stop tracking it: we no longer keep that
+			// traffic.
+			const detailCategory = mgDetail.product?.catOut ?? null;
+			if (isLongDistanceCategory(detailCategory)) {
+				await tombstoneLongDistanceRun(
+					db,
+					journeyRef,
+					dayOfOperation,
+					detailCategory,
+				);
+				stats.terminal++;
+				continue;
+			}
 
 			await upsertJourneyRunFromMgate(
 				db,

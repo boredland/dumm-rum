@@ -116,9 +116,9 @@ export function slugForStop(stopIds: string[], stopName: string): string {
  * per-glyph alias lists were a fourth copy of the normalization table
  * and had drifted from the SQL one.
  *
- * No Fernverkehr glyph: long-distance runs are filtered out of every
- * read query, so that bucket never reaches a card. Unknown buckets get
- * no glyph rather than a wrong one. */
+ * No Fernverkehr glyph: long-distance traffic is neither ingested nor
+ * stored any more, so that bucket never reaches a card. Unknown buckets
+ * get no glyph rather than a wrong one. */
 const ICON_BY_CATEGORY: Record<string, string> = {
 	Regionalverkehr: "🚆",
 	"S-Bahn": "🚈",
