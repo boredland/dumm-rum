@@ -6,14 +6,14 @@ import {
 	DaysToggleBar,
 	useDaysFilter,
 } from "../../../components/DaysToggle.tsx";
+import { DepartureRow } from "../../../components/DepartureRow.tsx";
 import { EmptyState } from "../../../components/EmptyState.tsx";
-import { LedRow } from "../../../components/LedRow.tsx";
+import { Figure, Figures } from "../../../components/Figures.tsx";
 import {
+	AlertButton,
 	BackLink,
-	SignageHeader,
-	SubscribeButton,
-} from "../../../components/SignageHeader.tsx";
-import { borderForCancRate, StatCard } from "../../../components/StatCard.tsx";
+	PageHeader,
+} from "../../../components/PageHeader.tsx";
 import { SubscribeModal } from "../../../components/SubscribeModal.tsx";
 import { type Lang, t } from "../../../lib/i18n.ts";
 import {
@@ -24,11 +24,15 @@ import {
 	type StopDayDeparture,
 } from "../../../lib/queries.ts";
 import { urlFilter } from "../../../lib/search-state.ts";
-import { categoryIcons } from "../../../lib/stations.ts";
-import { ledForCount, ledForScore } from "../../../lib/status.ts";
+import {
+	toneForCancRate,
+	toneForCount,
+	toneForScore,
+} from "../../../lib/status.ts";
 import { makeSwr } from "../../../lib/swr.ts";
 import {
 	onTimeRate,
+	parseLineSlug,
 	pct,
 	shortStationName,
 	todayBerlin,
@@ -160,32 +164,29 @@ function StationIndex() {
 	const score7 = onTimeRate(canc7, delayed7, total7);
 
 	return (
-		<main className="mx-auto max-w-4xl p-6 space-y-6">
-			<SignageHeader
+		<main className="mx-auto max-w-3xl px-6 py-10 space-y-10">
+			<PageHeader
 				backLink={
 					<Link to="/$lang" params={{ lang: l }}>
 						<BackLink>{t(l, "nav.back")}</BackLink>
 					</Link>
 				}
-				title={
-					<>
-						{categoryIcons(categories)} {shortStationName(stopName)}
-					</>
-				}
+				title={shortStationName(stopName)}
 				action={
-					<SubscribeButton
+					<AlertButton
 						label={t(l, "subscribe.cta.button")}
 						onClick={() => setSubscribeOpen(true)}
 					/>
 				}
 			>
+				{categories.length > 0 && <p>{categories.join(" · ")}</p>}
 				{lastChange && (
 					<p>
 						{t(l, "station.last_updated")}:{" "}
 						{new Date(lastChange).toLocaleString(l)}
 					</p>
 				)}
-			</SignageHeader>
+			</PageHeader>
 
 			{subscribeOpen && (
 				<SubscribeModal
@@ -196,33 +197,34 @@ function StationIndex() {
 			)}
 
 			{today && (
-				<section className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-					<StatCard label={t(l, "stat.today")} value={String(today.total)} />
-					<StatCard
+				<Figures>
+					<Figure label={t(l, "stat.today")} value={String(today.total)} />
+					<Figure
 						label={t(l, "stat.cancelled")}
 						value={`${pct(today.cancelled, today.total)}%`}
-						tone={
-							today.cancelled / (today.total || 1) > 0.05 ? "danger" : undefined
-						}
+						tone={toneForCancRate(today.cancelled / (today.total || 1))}
 					/>
-					<StatCard
+					<Figure
 						label={t(l, "stat.ghost")}
 						value={`${pct(today.ghost, today.total)}%`}
-						tone={today.ghost > 0 ? "info" : undefined}
+						tone={today.ghost > 0 ? "text-ghost" : "text-muted"}
 					/>
-					<StatCard
+					<Figure
 						label={t(l, "stat.reliability")}
 						value={`${onTimeRate(today.cancelled, today.delayed, today.total)}%`}
+						tone={toneForScore(
+							onTimeRate(today.cancelled, today.delayed, today.total),
+						)}
 					/>
-				</section>
+				</Figures>
 			)}
 
 			{nextDepartures.length > 0 && (
-				<section>
-					<h2 className="signage-label mb-3 block">
-						{t(l, "section.next_departures")} ({nextDepartures.length})
+				<section className="space-y-3">
+					<h2 className="eyebrow text-ink border-b border-ink pb-2">
+						{t(l, "section.next_departures")}
 					</h2>
-					<ul className="space-y-1">
+					<ul>
 						{nextDepartures.map((d) => {
 							const delay =
 								d.rtTime && d.time
@@ -233,11 +235,12 @@ function StationIndex() {
 										)
 									: null;
 							return (
-								<LedRow
+								<DepartureRow
 									key={`${d.time}-${d.line}-${d.direction}`}
+									lang={l}
 									time={d.time}
 									rtTime={d.rtTime}
-									line={d.line}
+									line={parseLineSlug(d.line).line}
 									direction={d.direction}
 									cancelled={d.cancelled}
 									ghost={d.ghost}
@@ -249,9 +252,9 @@ function StationIndex() {
 				</section>
 			)}
 
-			<section>
-				<h2 className="signage-label mb-3 block">
-					{t(l, "section.daily_breakdown")} ({daysFilter.filtered.length})
+			<section className="space-y-3">
+				<h2 className="eyebrow text-ink border-b border-ink pb-2">
+					{t(l, "section.daily_breakdown")}
 				</h2>
 				<DaysToggleBar
 					lang={l}
@@ -259,74 +262,51 @@ function StationIndex() {
 					setActive={daysFilter.setActive}
 				/>
 				{daysFilter.filtered.length === 0 ? (
-					<EmptyState icon="⌛" title={t(l, "table.no_data")} />
+					<EmptyState title={t(l, "table.no_data")} />
 				) : (
 					<div className="overflow-x-auto">
-						<table className="w-full text-sm">
+						<table className="report-table">
 							<thead>
-								<tr className="text-left signage-label border-b border-border">
-									<th className="py-2 pr-4">{t(l, "table.date")}</th>
-									<th className="py-2 pr-4 text-right">
-										{t(l, "table.th.total")}
-									</th>
-									<th className="py-2 pr-4 text-right">
-										{t(l, "table.th.cancelled")}
-									</th>
-									<th className="py-2 pr-4 text-right">
-										{t(l, "table.th.ghost")}
-									</th>
-									<th className="py-2 pr-4 text-right">
-										{t(l, "table.th.delayed")}
-									</th>
-									<th className="py-2 pr-4 text-right">{t(l, "table.otp")}</th>
-									<th className="py-2 pr-4" />
+								<tr>
+									<th>{t(l, "table.date")}</th>
+									<th className="num">{t(l, "table.th.total")}</th>
+									<th className="num">{t(l, "table.th.cancelled")}</th>
+									<th className="num">{t(l, "table.th.ghost")}</th>
+									<th className="num">{t(l, "table.th.delayed")}</th>
+									<th className="num">{t(l, "table.otp")}</th>
+									<th />
 								</tr>
 							</thead>
 							<tbody>
 								{daysFilter.filtered.map((d) => {
-									const rate = d.total > 0 ? d.cancelled / d.total : 0;
-									const border = borderForCancRate(rate);
-									const score = onTimeRate(d.cancelled, d.delayed, d.total);
+									const dayScore = onTimeRate(d.cancelled, d.delayed, d.total);
 									return (
-										<tr
-											key={d.date}
-											className={`border-l-2 ${border} border-b border-border-dim`}
-										>
-											<td className="py-2 pr-4 pl-2 whitespace-nowrap">
+										<tr key={d.date}>
+											<td className="whitespace-nowrap">
 												{new Date(`${d.date}T00:00:00`).toLocaleDateString(l, {
 													weekday: "short",
 													day: "2-digit",
 													month: "2-digit",
 												})}
 											</td>
-											<td className="py-2 pr-4 text-right tabular-nums">
-												{d.total}
-											</td>
-											<td
-												className={`py-2 pr-4 text-right tabular-nums ${ledForCount(d.cancelled, "danger")}`}
-											>
+											<td className="num text-muted">{d.total}</td>
+											<td className={`num ${toneForCount(d.cancelled, "bad")}`}>
 												{d.cancelled || "—"}
 											</td>
-											<td
-												className={`py-2 pr-4 text-right tabular-nums ${ledForCount(d.ghost, "info")}`}
-											>
+											<td className={`num ${toneForCount(d.ghost, "ghost")}`}>
 												{d.ghost || "—"}
 											</td>
-											<td
-												className={`py-2 pr-4 text-right tabular-nums ${ledForCount(d.delayed, "warn")}`}
-											>
+											<td className={`num ${toneForCount(d.delayed, "mixed")}`}>
 												{d.delayed || "—"}
 											</td>
-											<td
-												className={`py-2 pr-4 text-right tabular-nums font-bold ${ledForScore(score)}`}
-											>
-												{score}%
+											<td className={`num ${toneForScore(dayScore)}`}>
+												{dayScore}%
 											</td>
-											<td className="py-2 pr-4 text-right">
+											<td className="num">
 												<Link
 													to="/$lang/$station/day/$date"
 													params={{ lang: l, station, date: d.date }}
-													className="text-xs"
+													className="text-meta text-muted hover:text-ink"
 												>
 													→
 												</Link>
@@ -341,10 +321,15 @@ function StationIndex() {
 			</section>
 
 			{days.length > 0 && (
-				<section className="text-xs text-muted">
-					7-day: {total7} departures · {canc7} cancelled · {ghost7} ghost ·{" "}
-					{delayed7} delayed · {score7}% OTP
-				</section>
+				<p className="text-meta text-muted border-t border-rule pt-4">
+					{t(l, "station.seven_day", {
+						total: total7,
+						cancelled: canc7,
+						ghost: ghost7,
+						delayed: delayed7,
+						score: score7,
+					})}
+				</p>
 			)}
 		</main>
 	);

@@ -107,32 +107,3 @@ export function slugForStop(stopIds: string[], stopName: string): string {
 	}
 	return nameToSlug(stopName);
 }
-
-/** Icons for the buckets `normalize_category` emits (see
- * drizzle/20260811090000_normalize_category_fn). Every query hands us
- * normalized categories, so this is a straight bucket lookup — the old
- * per-glyph alias lists were a fourth copy of the normalization table
- * and had drifted from the SQL one.
- *
- * No Fernverkehr glyph: long-distance traffic is neither ingested nor
- * stored any more, so that bucket never reaches a card. Unknown buckets
- * get no glyph rather than a wrong one. */
-const ICON_BY_CATEGORY: Record<string, string> = {
-	Regionalverkehr: "🚆",
-	"S-Bahn": "🚈",
-	"U-Bahn": "🚇",
-	Tram: "🚋",
-	Bus: "🚌",
-};
-
-/** Ordered so a station served by several modes always renders its
- * glyphs fastest-first, regardless of category discovery order. */
-const ICON_ORDER = ["Regionalverkehr", "S-Bahn", "U-Bahn", "Tram", "Bus"];
-
-export function categoryIcons(categories: string[]): string {
-	let icons = "";
-	for (const bucket of ICON_ORDER) {
-		if (categories.includes(bucket)) icons += ICON_BY_CATEGORY[bucket];
-	}
-	return icons;
-}

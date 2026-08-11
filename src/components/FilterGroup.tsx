@@ -39,7 +39,7 @@ export function FilterGroup<T extends string>({
 	};
 
 	return (
-		<div className="flex flex-wrap gap-2">
+		<div className="flex flex-wrap items-center gap-x-4 gap-y-2">
 			{options.map((option) => {
 				const active = isActive(option.key);
 				if (linkProps) {

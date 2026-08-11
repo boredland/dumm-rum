@@ -1,25 +1,23 @@
 /**
- * Rounded-rectangle toggle chip used for every filter / day / status
- * selector in the app. Consolidates the three padding variants the
- * design audit flagged (`px-3 py-1.5`, `px-2.5 py-1`, `px-3 py-1`) so
- * identical affordances don't read as different controls.
+ * Filter toggle. The active option is set in ink and underlined; the rest
+ * stay muted. Filters are navigation, not content, so they get the least
+ * ink on the page that still reads as a control.
  *
  * For callers that need a `<Link>` instead of a `<button>` (URL-driven
- * filters that want SPA navigation), compose with `pillClass` on the
- * link directly — one style source, two render modes, no type gymnastics.
+ * filters that want SPA navigation), compose with `pillClass` on the link
+ * directly — one style source, two render modes.
  */
 
 import type { ReactNode } from "react";
 
 const BASE =
-	"cursor-pointer rounded border border-border px-3 py-1.5 text-meta font-bold uppercase tracking-wider no-underline transition-[transform,box-shadow,background-color] duration-150 ease-out active:translate-y-px select-none";
+	"cursor-pointer text-meta no-underline whitespace-nowrap transition-colors decoration-1 underline-offset-4";
 
-/** Returns the className string for a pill in the given state. Use on
- * router `<Link>`s and other non-button triggers. */
+/** Returns the className string for a filter toggle in the given state. */
 export function pillClass(active: boolean): string {
 	const state = active
-		? "bg-accent !text-white border-accent shadow-sm"
-		: "bg-surface-hover text-muted hover:text-fg surface-backlit";
+		? "text-ink underline"
+		: "text-muted hover:text-ink no-underline";
 	return `${BASE} ${state}`;
 }
 

@@ -5,12 +5,9 @@ import {
 	DepartureFilterBar,
 	useDepartureFilters,
 } from "../../../../../components/DepartureFilters.tsx";
+import { StatusMark } from "../../../../../components/DepartureRow.tsx";
 import { EmptyState } from "../../../../../components/EmptyState.tsx";
-import { StatusGlyph } from "../../../../../components/LedRow.tsx";
-import {
-	BackLink,
-	SignageHeader,
-} from "../../../../../components/SignageHeader.tsx";
+import { BackLink, PageHeader } from "../../../../../components/PageHeader.tsx";
 import { type Lang, t } from "../../../../../lib/i18n.ts";
 import {
 	getOperatorDayJourneys,
@@ -123,8 +120,8 @@ function OperatorDay() {
 	});
 
 	return (
-		<main className="mx-auto max-w-4xl p-6 space-y-6">
-			<SignageHeader
+		<main className="mx-auto max-w-3xl px-6 py-10 space-y-10">
+			<PageHeader
 				backLink={
 					<Link to="/$lang/operator/$operator" params={{ lang: l, operator }}>
 						<BackLink>{operator}</BackLink>
@@ -133,55 +130,55 @@ function OperatorDay() {
 				title={operator}
 			>
 				<p>{pretty}</p>
-			</SignageHeader>
+			</PageHeader>
 
-			<section>
-				<h2 className="signage-label mb-3 block">
-					{t(l, "section.all_departures")} ({filters.filtered.length}/
-					{journeys.length})
+			<section className="space-y-4">
+				<h2 className="eyebrow text-ink border-b border-ink pb-2">
+					{t(l, "section.all_departures")}
 				</h2>
 
 				<DepartureFilterBar lang={l} {...filters} />
 
 				{filters.filtered.length === 0 ? (
-					<EmptyState icon="🕊️" title={t(l, "table.no_departures")} />
+					<EmptyState title={t(l, "table.no_departures")} />
 				) : (
 					<div className="overflow-x-auto">
-						<table className="w-full text-sm">
+						<table className="report-table">
 							<thead>
-								<tr className="text-left signage-label border-b border-border">
-									<th className="py-2 pr-3">{t(l, "table.time")}</th>
-									<th className="py-2 pr-3">{t(l, "table.line")}</th>
-									<th className="py-2 pr-3">{t(l, "table.station")}</th>
-									<th className="py-2 pr-3">{t(l, "table.direction")}</th>
-									<th className="py-2 pr-3">{t(l, "table.status")}</th>
+								<tr>
+									<th>{t(l, "table.time")}</th>
+									<th>{t(l, "table.line")}</th>
+									<th>{t(l, "table.station")}</th>
+									<th>{t(l, "table.direction")}</th>
+									<th>{t(l, "table.status")}</th>
 								</tr>
 							</thead>
 							<tbody>
 								{filters.filtered.map((j) => {
 									const delay = delayMin(j.date, j.time, j.rtTime);
 									return (
-										<tr
-											key={`${j.time}-${j.line}-${j.direction}-${j.stop}`}
-											className="border-b border-border-dim"
-										>
-											<td className="py-2 pr-3 whitespace-nowrap tabular-nums">
+										<tr key={`${j.time}-${j.line}-${j.direction}-${j.stop}`}>
+											<td className="figures whitespace-nowrap">
 												{formatTime(j.time)}
 												{j.rtTime && j.rtTime !== j.time && (
-													<span className="ml-1 text-dimmed">
+													<span className="ml-1 text-muted">
 														→ {formatTime(j.rtTime)}
 													</span>
 												)}
 											</td>
-											<td className="py-2 pr-3 font-bold">{j.line}</td>
-											<td className="py-2 pr-3 truncate" title={j.stop}>
+											<td className="figures text-meta text-muted">{j.line}</td>
+											<td className="max-w-0 w-full truncate" title={j.stop}>
 												{j.stop}
 											</td>
-											<td className="py-2 pr-3 truncate" title={j.direction}>
+											<td
+												className="max-w-0 w-full truncate"
+												title={j.direction}
+											>
 												{j.direction}
 											</td>
-											<td className="py-2 pr-3">
-												<StatusGlyph
+											<td>
+												<StatusMark
+													lang={l}
 													cancelled={j.cancelled}
 													ghost={j.ghost}
 													delayMin={delay}

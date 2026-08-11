@@ -210,12 +210,12 @@ export function SubscribeModal({
 	const canSubmit = line.trim().length > 0;
 
 	const pill =
-		"px-3 py-1.5 text-meta font-bold rounded-full border border-border cursor-pointer transition-colors";
-	const pillOn = "bg-accent/10 text-fg border-accent/60";
-	const pillOff = "bg-transparent text-muted hover:text-fg";
+		"px-2.5 py-1 text-meta border border-rule cursor-pointer transition-colors";
+	const pillOn = "bg-ink text-paper border-ink";
+	const pillOff = "bg-transparent text-muted hover:text-ink hover:border-ink";
 	const field =
-		"w-full bg-surface border border-border rounded px-2 py-1.5 text-body text-fg";
-	const label = "text-meta uppercase tracking-wide text-muted font-bold";
+		"w-full bg-transparent border border-rule px-2 py-1.5 text-body text-ink focus:border-ink focus:outline-none";
+	const label = "text-micro uppercase tracking-[0.08em] text-muted";
 
 	return (
 		<div className="fixed inset-0 z-[2000] flex items-center justify-center p-4">
@@ -227,27 +227,27 @@ export function SubscribeModal({
 				tabIndex={-1}
 				onClick={onClose}
 				aria-label={t(lang, "subscribe.cancel")}
-				className="absolute inset-0 bg-black/50 cursor-default"
+				className="absolute inset-0 bg-ink/40 cursor-default"
 			/>
 			<div
 				role="dialog"
 				aria-modal="true"
 				aria-labelledby="subscribe-modal-title"
-				className="relative w-full max-w-md bg-surface border border-border rounded-sm shadow-xl p-5 space-y-4"
+				className="relative w-full max-w-md bg-paper border border-ink p-6 space-y-5"
 			>
 				<button
 					type="button"
 					onClick={onClose}
 					aria-label={t(lang, "subscribe.cancel")}
-					className="absolute top-3 right-3 text-muted hover:text-fg cursor-pointer"
+					className="absolute top-4 right-4 text-muted hover:text-ink"
 				>
 					✕
 				</button>
 				<header>
-					<h2 id="subscribe-modal-title" className="text-lg font-bold text-fg">
+					<h2 id="subscribe-modal-title" className="text-lead font-bold">
 						{t(lang, "subscribe.modal.title")}
 					</h2>
-					<p className="text-xs text-muted mt-1">
+					<p className="text-meta text-muted mt-1 max-w-prose">
 						{t(lang, "subscribe.modal.subtitle")}
 					</p>
 				</header>
@@ -314,7 +314,7 @@ export function SubscribeModal({
 											setRanges(next);
 										}}
 									/>
-									<span className="text-muted text-xs">→</span>
+									<span className="text-muted text-meta">→</span>
 									<input
 										type="time"
 										className={field}
@@ -332,7 +332,7 @@ export function SubscribeModal({
 												setRanges(ranges.filter((_, j) => j !== i))
 											}
 											aria-label={t(lang, "subscribe.hours.remove_range")}
-											className="text-muted hover:text-fg cursor-pointer text-sm"
+											className="text-muted hover:text-ink text-meta"
 										>
 											✕
 										</button>
@@ -388,7 +388,7 @@ export function SubscribeModal({
 							else onClose();
 						}}
 						aria-disabled={!canSubmit}
-						className={`${pill} ${canSubmit ? "bg-accent text-white border-accent" : "opacity-50 cursor-not-allowed"} no-underline`}
+						className={`${pill} ${canSubmit ? "bg-ink text-paper border-ink" : "opacity-40 cursor-not-allowed"} no-underline`}
 					>
 						{t(lang, "subscribe.submit")}
 					</a>

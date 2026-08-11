@@ -166,8 +166,8 @@ export function Combobox({
 				aria-autocomplete="list"
 				aria-label={ariaLabel}
 				aria-invalid={strictInvalid || undefined}
-				className={`w-full bg-surface border rounded px-2 py-1.5 text-sm text-fg ${
-					strictInvalid ? "border-danger" : "border-border"
+				className={`w-full bg-transparent border px-2 py-1.5 text-body text-ink focus:outline-none ${
+					strictInvalid ? "border-bad" : "border-rule focus:border-ink"
 				}`}
 				value={query}
 				onChange={(e) => {
@@ -184,7 +184,7 @@ export function Combobox({
 				<div
 					id={listId}
 					role="listbox"
-					className="absolute z-10 mt-1 left-0 right-0 max-h-60 overflow-y-auto bg-surface border border-border rounded shadow-lg"
+					className="absolute z-10 mt-1 left-0 right-0 max-h-60 overflow-y-auto bg-paper border border-ink"
 				>
 					{filtered.map((opt, i) => (
 						<div
@@ -192,10 +192,8 @@ export function Combobox({
 							role="option"
 							tabIndex={-1}
 							aria-selected={i === activeIdx}
-							className={`px-2 py-1 text-sm cursor-pointer ${
-								i === activeIdx
-									? "bg-accent/15 text-fg"
-									: "text-fg hover:bg-accent/10"
+							className={`px-2 py-1 text-body cursor-pointer ${
+								i === activeIdx ? "bg-surface text-ink" : "text-ink"
 							}`}
 							onMouseDown={(e) => {
 								e.preventDefault();

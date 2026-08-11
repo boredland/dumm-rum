@@ -1,242 +1,212 @@
 @import "tailwindcss";
 
-/* 
-   "The Digital Platform" Theme 
-   Inspired by public transit signage, station materials (concrete, steel, LED), 
-   and highly legible physical infrastructure.
+/* latin-ext only: covers German diacritics and the Latin-script station
+ * names in the RMV feed. The default entrypoints also ship Cyrillic,
+ * Greek and Vietnamese, which this app never renders. */
+@import "@fontsource/fira-sans/latin-ext-400.css";
+@import "@fontsource/fira-sans/latin-ext-500.css";
+@import "@fontsource/fira-sans/latin-ext-700.css";
+@import "@fontsource/fira-mono/latin-ext-400.css";
+@import "@fontsource/fira-mono/latin-ext-500.css";
+
+/*
+   "The Report" theme.
+
+   DummRum publishes a finding — how much of Frankfurt's scheduled service
+   actually ran. So the page is set like a printed performance report, not
+   like the departure board it draws its data from: one reading column,
+   real tables, rules instead of boxes, and colour used only where a number
+   needs a verdict attached to it.
+
+   Fira Sans / Fira Mono are Spiekermann faces, the same lineage as German
+   rail wayfinding — the subject's own typography, without imitating the
+   signage itself.
 */
 
 @theme inline {
-	--color-bg: var(--bg);
-	--color-fg: var(--fg);
+	--color-paper: var(--paper);
+	--color-ink: var(--ink);
 	--color-muted: var(--muted);
 	--color-dimmed: var(--dimmed);
-	--color-border: var(--border);
-	--color-border-dim: var(--border-dim);
+	--color-rule: var(--rule);
+	--color-rule-dim: var(--rule-dim);
 	--color-accent: var(--accent);
 	--color-surface: var(--surface);
-	--color-surface-hover: var(--surface-hover);
-	--color-signage: var(--signage);
-	--color-danger: var(--danger);
-	--color-warn: var(--warn);
-	--color-ok: var(--ok);
-	--color-info: var(--info);
-	--color-white: var(--white);
+	--color-bad: var(--bad);
+	--color-mixed: var(--mixed);
+	--color-good: var(--good);
+	--color-ghost: var(--ghost);
 
-	/* Branding / Special Transit Colors */
-	--color-platform-yellow: #fdb913; /* Tactile paving yellow */
-	--color-rail-blue: #003399; /* Classic rail signage blue */
+	--font-sans: "Fira Sans", ui-sans-serif, system-ui, sans-serif;
+	--font-mono: "Fira Mono", ui-monospace, monospace;
 
-	/* Signage type scale — the only sizes any new UI should use. */
-	--text-micro: 10px;
-	--text-micro--line-height: 1.2;
-	--text-micro--letter-spacing: 0.15em;
-	--text-meta: 11px;
-	--text-meta--line-height: 1.4;
-	--text-meta--letter-spacing: 0.05em;
-	--text-body: 14px;
-	--text-body--line-height: 1.5;
-	--text-lg: 16px;
-	--text-lg--line-height: 1.4;
-	--text-h2: 22px;
-	--text-h2--line-height: 1.2;
-	--text-h2--letter-spacing: -0.01em;
-	--text-h1: 32px;
-	--text-h1--line-height: 1.1;
-	--text-h1--letter-spacing: -0.02em;
-	--text-display: 48px;
-	--text-display--line-height: 1;
-	--text-display--letter-spacing: -0.03em;
+	/* One scale, editorial proportions. `figure` is reserved for the single
+	 * headline finding; everything else stays close to reading size. */
+	--text-micro: 11px;
+	--text-micro--line-height: 1.3;
+	--text-micro--letter-spacing: 0.08em;
+	--text-meta: 12px;
+	--text-meta--line-height: 1.45;
+	--text-body: 15px;
+	--text-body--line-height: 1.6;
+	--text-lead: 19px;
+	--text-lead--line-height: 1.5;
+	--text-h2: 15px;
+	--text-h2--line-height: 1.3;
+	--text-h2--letter-spacing: 0.1em;
+	--text-h1: 30px;
+	--text-h1--line-height: 1.15;
+	--text-h1--letter-spacing: -0.015em;
+	--text-figure: 40px;
+	--text-figure--line-height: 1.2;
+	--text-figure--letter-spacing: -0.02em;
 }
 
 :root {
 	color-scheme: light dark;
 
-	/* Light Mode: Modern Station Signage (Clean, high-contrast) */
-	--bg: #ffffff;
-	--fg: #1a1a1b;
-	--muted: #575757;
-	--dimmed: #8e8e8e;
-	--border: #d1d1d1;
-	--border-dim: #e5e5e5;
-	--accent: #003399; /* Rail Blue */
-	--surface: #f2f2f2;
-	--surface-hover: #e8e8e8;
-	--signage: #111112; /* Dark signage panel — always dark, both themes */
-	--white: #ffffff;
+	--paper: #fcfbf9;
+	--ink: #16171a;
+	--muted: #5a5d64;
+	--dimmed: #8b8e95;
+	--rule: #ddd9d2;
+	--rule-dim: #eceae5;
+	--surface: #f5f3ef;
+	--accent: #003399;
 
-	/* Dark Mode: "Night Platform" (Concrete charcoal + illuminated LED) */
+	/* Verdict tones. Desaturated enough to sit inside running text at
+	 * body weight without turning the page into a status board. */
+	--bad: #a11b1b;
+	--mixed: #7a5200;
+	--good: #1d6b38;
+	--ghost: #4b3f8f;
+
 	@media (prefers-color-scheme: dark) {
-		--bg: #121212; /* Deep matte asphalt */
-		--fg: #e1e1e1;
-		--muted: #a0a0a0;
-		--dimmed: #666666;
-		--border: #2a2a2a;
-		--border-dim: #1e1e1e;
-		--accent: #3b82f6;
-		--surface: #1a1a1b; /* Concrete block */
-		--surface-hover: #222223;
-	}
+		--paper: #14151a;
+		--ink: #e6e4e0;
+		--muted: #9a9ba2;
+		--dimmed: #6b6d75;
+		--rule: #2c2e35;
+		--rule-dim: #21232a;
+		--surface: #1b1d23;
+		--accent: #7d9dff;
 
-	/* Transit Status Tones (Tuned for LED-style contrast) */
-	--danger: light-dark(#d1242f, #ff453a);
-	--warn: light-dark(#bf8700, #ff9f0a);
-	--ok: light-dark(#1a7f37, #30d158);
-	--info: light-dark(#003399, #5e5ce6);
+		--bad: #f28b82;
+		--mixed: #e0b354;
+		--good: #79c98f;
+		--ghost: #a99cf5;
+	}
 }
 
 html,
 body {
 	margin: 0;
 	padding: 0;
-	background: var(--bg);
-	color: var(--fg);
-	font-family: "Inter", system-ui, -apple-system, sans-serif;
-	line-height: 1.5;
+	background: var(--paper);
+	color: var(--ink);
+	font-family: var(--font-sans);
+	font-size: var(--text-body);
+	line-height: 1.6;
 	-webkit-font-smoothing: antialiased;
+	text-rendering: optimizeLegibility;
 }
 
-/* Tactile Station UI: Global interactive resets. The press motion is
- * scoped per-component via `active:translate-y-px` so only genuinely
- * pressable elements bob. A global rule made every <a> and <button>
- * twitch on click, including inline text links. */
-button,
 a {
+	color: inherit;
+	text-decoration-color: var(--rule);
+	text-underline-offset: 3px;
 	transition:
-		color 0.15s ease-in-out,
-		background-color 0.15s ease-in-out,
-		border-color 0.15s ease-in-out,
-		box-shadow 0.15s ease-in-out;
-	cursor: pointer;
-}
-
-a {
-	color: var(--accent);
-	text-decoration: none;
+		color 0.12s ease-out,
+		text-decoration-color 0.12s ease-out;
 }
 a:hover {
-	text-decoration: underline;
+	text-decoration-color: currentColor;
 }
 
-/* The signage voice — `font-black uppercase tracking-[0.18em]` was being
- * applied piecemeal to every helper label across the app, which dulled
- * its impact. Centralised here so it can be used sparingly and tuned in
- * one place. Reserve for axis-of-reading labels (section eyebrows,
- * status chips, hero metric captions) — never body copy. */
-.signage-label {
-	font-weight: 900;
+button {
+	font: inherit;
+	cursor: pointer;
+	transition:
+		color 0.12s ease-out,
+		border-color 0.12s ease-out;
+}
+
+/* Section eyebrow. Sparse by design: it marks where a new part of the
+ * report begins, and nothing else is allowed to shout. */
+.eyebrow {
+	font-size: var(--text-h2);
+	line-height: var(--text-h2--line-height);
+	letter-spacing: var(--text-h2--letter-spacing);
+	font-weight: 500;
 	text-transform: uppercase;
-	letter-spacing: 0.18em;
-	font-size: var(--text-micro);
-	line-height: var(--text-micro--line-height);
 	color: var(--muted);
 }
 
-/* Quiet hairline card. The default surface for aggregate / index cards.
- * Reserve `.signage-frame` for the small number of true "physical panel"
- * moments (hero score, day-detail header). */
-.card {
+/* Figures are set in the mono face so digits line up down a column and
+ * a rate never changes width as it ticks. */
+.figures {
+	font-family: var(--font-mono);
+	font-variant-numeric: tabular-nums;
+}
+
+/* Report table. Horizontal rules only — vertical lines and zebra fills
+ * are noise once the columns are already aligned by the mono face. */
+.report-table {
+	width: 100%;
+	border-collapse: collapse;
+}
+.report-table th,
+.report-table td {
+	padding: 0.5rem 0;
+	text-align: left;
+}
+.report-table th {
+	font-size: var(--text-micro);
+	line-height: var(--text-micro--line-height);
+	letter-spacing: var(--text-micro--letter-spacing);
+	font-weight: 500;
+	text-transform: uppercase;
+	color: var(--muted);
+	border-bottom: 1px solid var(--rule);
+	white-space: nowrap;
+}
+.report-table td {
+	border-bottom: 1px solid var(--rule-dim);
+}
+.report-table tbody tr:hover td {
 	background: var(--surface);
-	border: 1px solid var(--border);
-	border-radius: 4px;
 }
-
-/* Industrial Signage Effects — the heavyweight panel. Used sparingly. */
-.signage-frame {
-	border: 2px solid #2a2a2b;
-	border-radius: 4px;
-	background: #1a1a1b;
-	box-shadow:
-		inset 0 1px 1px rgba(255, 255, 255, 0.05),
-		0 2px 4px rgba(0, 0, 0, 0.3);
+.report-table .num {
+	text-align: right;
+	font-family: var(--font-mono);
+	font-variant-numeric: tabular-nums;
+	white-space: nowrap;
 }
-
-.led-display {
-	background: #252526;
-	border-radius: 2px;
-	box-shadow:
-		inset 0 4px 15px rgba(0, 0, 0, 0.85),
-		0 0 1px rgba(255, 255, 255, 0.1);
-	padding: 0.5rem;
-	position: relative;
-	overflow: hidden;
+.report-table th.num {
+	text-align: right;
 }
-
-/* Single subtle scanline pass — the chromatic-aberration layer was making
- * every numeric readout vibrate, which fought the actual content. */
-.led-display::after {
-	content: "";
-	position: absolute;
-	inset: 0;
-	background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.18) 50%);
-	background-size: 100% 2px;
-	pointer-events: none;
-}
-
-/* Simulated LED Glow */
-.led-text-ok {
-	color: #30d158;
-	text-shadow: 0 0 8px rgba(48, 209, 88, 0.4);
-}
-.led-text-warn {
-	color: #ff9f0a;
-	text-shadow: 0 0 8px rgba(255, 159, 10, 0.4);
-}
-.led-text-danger {
-	color: #ff453a;
-	text-shadow: 0 0 8px rgba(255, 69, 58, 0.4);
-}
-.led-text-info {
-	color: #5e5ce6;
-	text-shadow: 0 0 8px rgba(94, 92, 230, 0.4);
-}
-
-.platform-yellow-line {
-	height: 6px; /* Heavier paving */
-	background: repeating-linear-gradient(
-		90deg,
-		#fdb913,
-		#fdb913 30px,
-		#000 30px,
-		#000 60px
-	);
+/* Give the numeric block breathing room without vertical rules. */
+.report-table :is(th, td):not(:first-child) {
+	padding-left: 1.25rem;
 }
 
 *:focus-visible {
-	outline: 2px solid var(--color-platform-yellow);
+	outline: 2px solid var(--accent);
 	outline-offset: 2px;
-	border-radius: 2px;
 }
 
+/* `!important` is load-bearing here: this has to override the transition
+ * durations declared on individual elements, which a plain universal
+ * selector loses to on specificity. */
 @media (prefers-reduced-motion: reduce) {
-	button,
-	a {
-		transition: none;
-		transform: none;
+	*,
+	*::before,
+	*::after {
+		/* biome-ignore lint/complexity/noImportantStyles: must beat per-element transition declarations */
+		animation-duration: 0.01ms !important;
+		/* biome-ignore lint/complexity/noImportantStyles: must beat per-element transition declarations */
+		animation-iteration-count: 1 !important;
+		/* biome-ignore lint/complexity/noImportantStyles: must beat per-element transition declarations */
+		transition-duration: 0.01ms !important;
 	}
-}
-
-/* Ghost Run Flickering Signage */
-@keyframes ghost-flicker {
-	0%,
-	19.999%,
-	22%,
-	62.999%,
-	64%,
-	64.999%,
-	70%,
-	100% {
-		opacity: 1;
-	}
-	20%,
-	21.999%,
-	63%,
-	63.999%,
-	65%,
-	69.999% {
-		opacity: 0.4;
-	}
-}
-.ghost-departure {
-	animation: ghost-flicker 4s linear infinite;
 }

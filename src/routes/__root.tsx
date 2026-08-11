@@ -31,7 +31,7 @@ export const Route = createRootRoute({
 					"Frankfurt public transport reliability tracker — cancellations, delays, ghost departures.",
 			},
 			{ name: "twitter:card", content: "summary" },
-			{ name: "theme-color", content: "#0d1117" },
+			{ name: "theme-color", content: "#fcfbf9" },
 		],
 		links: [
 			{
@@ -82,7 +82,7 @@ function ScrollToTop() {
 		<button
 			type="button"
 			onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
-			className="fixed bottom-4 right-4 z-50 bg-surface border border-border rounded-full w-10 h-10 flex items-center justify-center text-muted hover:text-fg shadow-sm cursor-pointer transition-colors"
+			className="fixed bottom-6 right-6 z-50 bg-paper border border-rule w-9 h-9 flex items-center justify-center text-muted hover:text-ink hover:border-ink transition-colors"
 			aria-label="Scroll to top"
 		>
 			<svg

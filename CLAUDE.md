@@ -88,7 +88,12 @@ Railpack on Dokploy. `railpack.json` specifies `--ignore-scripts` on install (sk
 ## Style conventions
 
 - **Biome** with tabs, double quotes, recommended rules. `root: false` (inherits from parent repo's biome.json). `routeTree.gen.ts` is excluded.
-- **Tailwind v4** via `@tailwindcss/vite`. Theme tokens in `src/styles.css` use `light-dark()` CSS function + `@theme inline` to expose them as tailwind colors.
+- **Tailwind v4** via `@tailwindcss/vite`. Theme tokens live in `src/styles.css`: `:root` custom properties (overridden in a `prefers-color-scheme: dark` block) exposed as tailwind colors via `@theme inline`.
+- **Design language: a printed report, not a dashboard.** One reading column (`max-w-3xl`), rules instead of boxes, tables instead of cards. Colour is annotation — a figure is toned only when the verdict is the point. Tone helpers live in `src/lib/status.ts` (`toneForScore` / `toneForCancRate` / `toneForCount`); never reach for a raw palette colour at a call site.
+- **Type**: Fira Sans (body) + Fira Mono (all figures, via `.figures`), self-hosted from `@fontsource`, `latin-ext` subsets only. Size tokens `--text-micro` … `--text-figure` are the only sizes new UI should use; `--text-figure` is reserved for the home page finding.
+- **Shared UI**: `.eyebrow` for section labels, `.report-table` (+ `.num` cells) for tabular data, `PageHeader` / `Figures` / `DepartureRow` / `EmptyState` components. Six-column tables get a stacked `sm:hidden` variant — phones truncate the name and drop the reliability column otherwise.
+- **No emoji in UI copy.** Status is a word (`StatusMark`), which screen readers can read and the type can set. On-time rows carry no visible label so the exceptions stand out.
+- Line identifiers are slugs (`rmv:U-Bahn:U4`) used for routing; always display `parseLineSlug(slug).line`.
 - **dayjs** for all date arithmetic (not raw `Date` math). Helpers in `src/lib/utils.ts`.
 - **No chunking** — Postgres handles large INSERT/SELECT fine. No stagger windows on job enqueuing.
 - **Optimize for read performance**, not write reduction. No `setWhere` skip-if-unchanged guards.

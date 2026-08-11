@@ -132,8 +132,8 @@ export function DepartureFilterBar({
 	lines?: string[];
 }) {
 	return (
-		<div className="flex flex-wrap gap-x-4 gap-y-2 mb-4">
-			<div className="flex gap-2">
+		<div className="flex flex-wrap items-center gap-x-6 gap-y-2">
+			<div className="flex flex-wrap items-center gap-x-4 gap-y-2">
 				{(
 					[
 						["issues", t(lang, "filter.issues")],
@@ -150,7 +150,7 @@ export function DepartureFilterBar({
 					</Pill>
 				))}
 			</div>
-			<div className="flex gap-2">
+			<div className="flex flex-wrap items-center gap-x-4 gap-y-2">
 				{(
 					[
 						["all", t(lang, "hours.all")],
@@ -170,7 +170,7 @@ export function DepartureFilterBar({
 				<select
 					value={dirFilter}
 					onChange={(e) => setDirFilter(e.target.value)}
-					className="bg-surface border border-border rounded-full px-3 py-1.5 text-meta text-muted cursor-pointer"
+					className="bg-transparent border-b border-rule py-1 text-meta text-muted cursor-pointer focus:border-ink focus:outline-none"
 				>
 					<option value="all">{t(lang, "filter.all_directions")}</option>
 					{directions.map((dir) => (
@@ -209,9 +209,9 @@ function TelegramLinks({
 					href={buildSubscribeUrl({ line, direction, timeRanges })}
 					target="_blank"
 					rel="noopener noreferrer"
-					className="inline-flex items-center gap-1 px-3 py-1.5 text-meta font-bold rounded-full border border-border text-accent hover:bg-surface-hover transition-colors no-underline"
+					className="text-meta text-accent underline decoration-rule hover:decoration-current"
 				>
-					<span>📱</span> {line} → Telegram
+					{line} → Telegram
 				</a>
 			))}
 		</div>

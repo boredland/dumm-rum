@@ -7,23 +7,23 @@ import {
 	useDaysFilter,
 } from "../../../../components/DaysToggle.tsx";
 import { EmptyState } from "../../../../components/EmptyState.tsx";
+import { Figure, Figures } from "../../../../components/Figures.tsx";
 import {
+	AlertButton,
 	BackLink,
-	SignageHeader,
-	SubscribeButton,
-} from "../../../../components/SignageHeader.tsx";
-import {
-	borderForCancRate,
-	StatCard,
-} from "../../../../components/StatCard.tsx";
+	PageHeader,
+} from "../../../../components/PageHeader.tsx";
 import { SubscribeModal } from "../../../../components/SubscribeModal.tsx";
 import { type Lang, t } from "../../../../lib/i18n.ts";
 import { getLineStats, type LineStats } from "../../../../lib/queries.ts";
 import { urlFilter } from "../../../../lib/search-state.ts";
-import { categoryIcons } from "../../../../lib/stations.ts";
-import { ledForCount, ledForScore } from "../../../../lib/status.ts";
+import {
+	toneForCancRate,
+	toneForCount,
+	toneForScore,
+} from "../../../../lib/status.ts";
 import { makeSwr } from "../../../../lib/swr.ts";
-import { onTimeRate } from "../../../../lib/utils.ts";
+import { onTimeRate, parseLineSlug } from "../../../../lib/utils.ts";
 
 const DAYS_FILTER_OPTS = ["all", "today", "weekdays", "weekends"] as const;
 
@@ -67,6 +67,8 @@ export const Route = createFileRoute("/$lang/line/$line/")({
 
 function LineIndex() {
 	const { line, stats } = Route.useLoaderData();
+	/** `line` is the routing slug (`rmv:U-Bahn:U4`); riders know it as "U4". */
+	const lineName = parseLineSlug(line).line;
 	const { lang } = Route.useParams();
 	const search = Route.useSearch();
 	const navigate = Route.useNavigate();
@@ -95,60 +97,58 @@ function LineIndex() {
 	const score = onTimeRate(canc, delayed, total);
 
 	return (
-		<main className="mx-auto max-w-4xl p-6 space-y-6">
-			<SignageHeader
+		<main className="mx-auto max-w-3xl px-6 py-10 space-y-10">
+			<PageHeader
 				backLink={
 					<Link to="/$lang" params={{ lang: l }}>
 						<BackLink>{t(l, "nav.back")}</BackLink>
 					</Link>
 				}
-				title={
-					<>
-						{categoryIcons(stats.categories)} {line}
-					</>
-				}
+				title={lineName}
 				action={
-					<SubscribeButton
+					<AlertButton
 						label={t(l, "subscribe.cta.button")}
 						onClick={() => setSubscribeOpen(true)}
 					/>
 				}
 			>
 				{stats.destinations.length > 0 && (
-					<p>{stats.destinations.join(" ↔ ")}</p>
+					<p>{stats.destinations.join(" – ")}</p>
 				)}
-				{stats.operators.length > 0 && (
-					<p className="text-dimmed">{stats.operators.join(", ")}</p>
-				)}
-			</SignageHeader>
+				{stats.operators.length > 0 && <p>{stats.operators.join(", ")}</p>}
+			</PageHeader>
 
 			{subscribeOpen && (
 				<SubscribeModal
 					lang={l}
-					initial={{ line }}
+					initial={{ line: lineName }}
 					availableDirections={stats.destinations}
 					onClose={() => setSubscribeOpen(false)}
 				/>
 			)}
 
-			<section className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-				<StatCard label={t(l, "stat.departures")} value={String(total)} />
-				<StatCard
+			<Figures>
+				<Figure label={t(l, "stat.departures")} value={String(total)} />
+				<Figure
 					label={t(l, "home.cancelled")}
 					value={`${((canc / (total || 1)) * 100).toFixed(1)}%`}
-					tone={canc / (total || 1) > 0.05 ? "danger" : undefined}
+					tone={toneForCancRate(canc / (total || 1))}
 				/>
-				<StatCard
+				<Figure
 					label={t(l, "home.ghost")}
 					value={`${((ghost / (total || 1)) * 100).toFixed(1)}%`}
-					tone={ghost > 0 ? "info" : undefined}
+					tone={ghost > 0 ? "text-ghost" : "text-muted"}
 				/>
-				<StatCard label={t(l, "stat.reliability")} value={`${score}%`} />
-			</section>
+				<Figure
+					label={t(l, "stat.reliability")}
+					value={`${score}%`}
+					tone={toneForScore(score)}
+				/>
+			</Figures>
 
-			<section>
-				<h2 className="signage-label mb-3 block">
-					{t(l, "section.daily_breakdown")} ({daysFilter.filtered.length})
+			<section className="space-y-3">
+				<h2 className="eyebrow text-ink border-b border-ink pb-2">
+					{t(l, "section.daily_breakdown")}
 				</h2>
 				<DaysToggleBar
 					lang={l}
@@ -156,74 +156,51 @@ function LineIndex() {
 					setActive={daysFilter.setActive}
 				/>
 				{daysFilter.filtered.length === 0 ? (
-					<EmptyState icon="⌛" title={t(l, "table.no_data")} />
+					<EmptyState title={t(l, "table.no_data")} />
 				) : (
 					<div className="overflow-x-auto">
-						<table className="w-full text-sm">
+						<table className="report-table">
 							<thead>
-								<tr className="text-left signage-label border-b border-border">
-									<th className="py-2 pr-4">{t(l, "table.date")}</th>
-									<th className="py-2 pr-4 text-right">
-										{t(l, "table.th.total")}
-									</th>
-									<th className="py-2 pr-4 text-right">
-										{t(l, "table.th.cancelled")}
-									</th>
-									<th className="py-2 pr-4 text-right">
-										{t(l, "table.th.ghost")}
-									</th>
-									<th className="py-2 pr-4 text-right">
-										{t(l, "table.th.delayed")}
-									</th>
-									<th className="py-2 pr-4 text-right">{t(l, "table.otp")}</th>
-									<th className="py-2 pr-4" />
+								<tr>
+									<th>{t(l, "table.date")}</th>
+									<th className="num">{t(l, "table.th.total")}</th>
+									<th className="num">{t(l, "table.th.cancelled")}</th>
+									<th className="num">{t(l, "table.th.ghost")}</th>
+									<th className="num">{t(l, "table.th.delayed")}</th>
+									<th className="num">{t(l, "table.otp")}</th>
+									<th />
 								</tr>
 							</thead>
 							<tbody>
 								{daysFilter.filtered.map((d) => {
-									const rate = d.total > 0 ? d.cancelled / d.total : 0;
-									const border = borderForCancRate(rate);
 									const dayScore = onTimeRate(d.cancelled, d.delayed, d.total);
 									return (
-										<tr
-											key={d.date}
-											className={`border-l-2 ${border} border-b border-border-dim`}
-										>
-											<td className="py-2 pr-4 pl-2 whitespace-nowrap">
+										<tr key={d.date}>
+											<td className="whitespace-nowrap">
 												{new Date(`${d.date}T00:00:00`).toLocaleDateString(l, {
 													weekday: "short",
 													day: "2-digit",
 													month: "2-digit",
 												})}
 											</td>
-											<td className="py-2 pr-4 text-right tabular-nums">
-												{d.total}
-											</td>
-											<td
-												className={`py-2 pr-4 text-right tabular-nums ${ledForCount(d.cancelled, "danger")}`}
-											>
+											<td className="num text-muted">{d.total}</td>
+											<td className={`num ${toneForCount(d.cancelled, "bad")}`}>
 												{d.cancelled || "—"}
 											</td>
-											<td
-												className={`py-2 pr-4 text-right tabular-nums ${ledForCount(d.ghost, "info")}`}
-											>
+											<td className={`num ${toneForCount(d.ghost, "ghost")}`}>
 												{d.ghost || "—"}
 											</td>
-											<td
-												className={`py-2 pr-4 text-right tabular-nums ${ledForCount(d.delayed, "warn")}`}
-											>
+											<td className={`num ${toneForCount(d.delayed, "mixed")}`}>
 												{d.delayed || "—"}
 											</td>
-											<td
-												className={`py-2 pr-4 text-right tabular-nums font-bold ${ledForScore(dayScore)}`}
-											>
+											<td className={`num ${toneForScore(dayScore)}`}>
 												{dayScore}%
 											</td>
-											<td className="py-2 pr-4 text-right">
+											<td className="num">
 												<Link
 													to="/$lang/line/$line/day/$date"
 													params={{ lang: l, line: line, date: d.date }}
-													className="text-xs"
+													className="text-meta text-muted hover:text-ink"
 												>
 													→
 												</Link>

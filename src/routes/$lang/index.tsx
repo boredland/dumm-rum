@@ -4,14 +4,15 @@ import { setResponseHeader } from "@tanstack/react-start/server";
 import { useEffect, useRef, useState } from "react";
 import { FilterGroup } from "../../components/FilterGroup.tsx";
 import { type HomePayload, loadHomeSummaries } from "../../lib/home.ts";
-import { type Lang, t } from "../../lib/i18n.ts";
+import { type Lang, t, tParts } from "../../lib/i18n.ts";
 import type {
 	DaysFilter,
 	LineSummary,
 	OperatorSummary,
 	StopSummary,
 } from "../../lib/queries.ts";
-import { categoryIcons, slugForStop } from "../../lib/stations.ts";
+import { slugForStop } from "../../lib/stations.ts";
+import { toneForCount, toneForScore } from "../../lib/status.ts";
 import {
 	onTimeRate,
 	shortStationName,
@@ -147,17 +148,6 @@ function matchesCategoryFilters(
 	return selectedFilters.some((filter) => cats.includes(filter));
 }
 
-function categoriesForActiveFilter(
-	categories: string[],
-	selectedFilters: string[],
-): string[] {
-	if (selectedFilters.length === 0) return categories;
-	const filteredCategories = categories.filter((category) =>
-		matchesCategoryFilters(selectedFilters, category),
-	);
-	return filteredCategories.length > 0 ? filteredCategories : categories;
-}
-
 const REFETCH_INTERVAL = 5 * 60 * 1000;
 
 function Index() {
@@ -189,13 +179,10 @@ function Index() {
 				const current = s.cat ?? [];
 				const next = Array.isArray(current) ? current : [];
 				if (next.includes(key)) {
-					// Remove category
 					const filtered = next.filter((c) => c !== key);
 					return { ...s, cat: filtered.length > 0 ? filtered : undefined };
-				} else {
-					// Add category
-					return { ...s, cat: [...next, key] };
 				}
+				return { ...s, cat: [...next, key] };
 			},
 			replace: true,
 		});
@@ -272,212 +259,169 @@ function Index() {
 			const sb = onTimeRate(b.cancelled, b.delayed, b.total);
 			return sa - sb || a.operator.localeCompare(b.operator);
 		});
-	const sectionTitle = (label: string, filtered: number, total: number) =>
-		filtered !== total
-			? `${label} (${filtered}/${total})`
-			: `${label} (${filtered})`;
 
 	return (
-		<div className="min-h-screen bg-bg">
-			<main className="mx-auto max-w-5xl p-6 space-y-8">
-				<header className="flex flex-wrap items-end justify-between gap-x-6 gap-y-2">
-					<div>
-						<h1 className="text-h1 font-black tracking-tighter">
-							{t(l, "home.title")}
-						</h1>
-						<p className="text-muted text-body">{t(l, "home.subtitle")}</p>
+		<div className="min-h-screen">
+			<main className="mx-auto max-w-3xl px-6 py-10 space-y-12">
+				<Masthead lang={l} oldestDate={oldestDate} activeDays={activeDays} />
+
+				<Finding lines={filteredLines} lang={l} />
+
+				<div className="space-y-5">
+					<div className="relative border-b border-rule focus-within:border-ink transition-colors">
+						<input
+							ref={searchRef}
+							type="search"
+							placeholder={t(l, "search.placeholder")}
+							value={query}
+							onChange={(e) => setQuery(e.target.value)}
+							className="w-full bg-transparent px-0 py-2 text-body placeholder:text-dimmed focus:outline-none [&::-webkit-search-cancel-button]:hidden"
+						/>
+						{query ? (
+							<button
+								type="button"
+								aria-label={l === "de" ? "Suche leeren" : "Clear search"}
+								onClick={() => {
+									setQuery("");
+									searchRef.current?.focus();
+								}}
+								className="absolute right-0 top-1/2 -translate-y-1/2 text-meta text-muted hover:text-ink"
+							>
+								✕
+							</button>
+						) : (
+							<kbd className="hidden sm:block absolute right-0 top-1/2 -translate-y-1/2 text-micro text-dimmed pointer-events-none">
+								{shortcutLabel}
+							</kbd>
+						)}
 					</div>
-					{oldestDate && (
-						<p className="text-meta text-dimmed tabular-nums">
-							{t(l, "stat.since")}{" "}
-							<time className="text-fg/70">
-								{new Date(`${oldestDate}T00:00:00`).toLocaleDateString(l, {
-									year: "numeric",
-									month: "long",
-									day: "numeric",
-								})}
-							</time>
-						</p>
-					)}
-				</header>
 
-				<div className="relative">
-					<input
-						ref={searchRef}
-						type="search"
-						placeholder={t(l, "search.placeholder")}
-						value={query}
-						onChange={(e) => setQuery(e.target.value)}
-						className="w-full bg-transparent border-b border-border focus:border-fg px-0 py-3 text-lg placeholder:text-muted/60 focus:outline-none transition-colors"
-					/>
-					{query ? (
-						<button
-							type="button"
-							aria-label={l === "de" ? "Suche leeren" : "Clear search"}
-							onClick={() => {
-								setQuery("");
-								searchRef.current?.focus();
-							}}
-							className="absolute right-0 top-1/2 -translate-y-1/2 inline-flex h-8 w-8 items-center justify-center text-muted hover:text-fg transition-colors"
-						>
-							✕
-						</button>
-					) : (
-						<kbd className="hidden sm:inline-flex absolute right-0 top-1/2 -translate-y-1/2 text-micro font-bold uppercase text-dimmed border border-border-dim rounded-sm px-1.5 py-0.5 pointer-events-none">
-							{shortcutLabel}
-						</kbd>
-					)}
+					<div className="flex flex-wrap items-center gap-x-6 gap-y-3">
+						<FilterGroup
+							options={DAY_FILTERS.map((f) => ({
+								key: f.key,
+								label: t(l, f.labelKey),
+							}))}
+							selected={activeDays}
+							linkProps={(key) => ({
+								to: "/$lang",
+								params: { lang: l },
+								search: (prev) => ({
+									...prev,
+									days: key === "today" ? undefined : key,
+								}),
+							})}
+						/>
+						<span className="hidden sm:block h-4 w-px bg-rule" />
+						<FilterGroup
+							options={CATEGORY_OPTIONS}
+							selected={catFilter}
+							onToggle={toggleCatFilter}
+							showClearButton={catFilter.length > 0}
+							clearLabel={t(l, "filter.all")}
+							onClear={() =>
+								navigate({
+									search: (s) => ({ ...s, cat: undefined }),
+									replace: true,
+								})
+							}
+						/>
+					</div>
 				</div>
 
-				<div className="flex flex-wrap items-center gap-x-6 gap-y-3">
-					<FilterGroup
-						options={DAY_FILTERS.map((f) => ({
-							key: f.key,
-							label: t(l, f.labelKey),
-						}))}
-						selected={activeDays}
-						linkProps={(key) => ({
-							to: "/$lang",
-							params: { lang: l },
-							search: (prev) => ({
-								...prev,
-								days: key === "today" ? undefined : key,
-							}),
-						})}
-					/>
-					<div className="hidden sm:block h-6 w-px bg-border" />
-					<FilterGroup
-						options={CATEGORY_OPTIONS}
-						selected={catFilter}
-						onToggle={toggleCatFilter}
-						showClearButton={catFilter.length > 0}
-						clearLabel={t(l, "filter.all")}
-						onClear={() =>
-							navigate({
-								search: (s) => ({ ...s, cat: undefined }),
-								replace: true,
-							})
-						}
-					/>
-				</div>
-
-				<OverviewCards
+				<Notables
 					lines={filteredLines}
 					stops={filteredStops}
 					operators={filteredOps}
 					lang={l}
 				/>
 
-				<details className="group text-meta text-muted -mt-2">
-					<summary className="list-none [&::-webkit-details-marker]:hidden inline-flex items-center gap-2 cursor-pointer select-none hover:text-fg transition-colors">
-						<span className="text-dimmed group-open:rotate-90 transition-transform inline-block w-3">
-							›
-						</span>
-						<span className="signage-label">
-							{t(l, "home.methodology_title")}
-						</span>
-					</summary>
-					<ul className="mt-3 ml-5 list-none space-y-1.5 border-l border-border pl-4 max-w-2xl">
-						{[
-							"collection",
-							"cancellation",
-							"delayed",
-							"ghost",
-							"reliability",
-							"dedup",
-							"colors",
-						].map((key) => {
-							const translationKey = `home.methodology_${key}` as
-								| "home.methodology_collection"
-								| "home.methodology_cancellation"
-								| "home.methodology_delayed"
-								| "home.methodology_ghost"
-								| "home.methodology_reliability"
-								| "home.methodology_dedup"
-								| "home.methodology_colors";
-							return (
-								<li key={key} className="text-meta leading-relaxed">
-									{t(l, translationKey)}
-								</li>
-							);
-						})}
-					</ul>
-				</details>
-
 				<Section
-					title={sectionTitle(
-						t(l, "home.lines"),
-						filteredLines.length,
-						lines.length,
-					)}
-					gridClass="grid grid-cols-[repeat(auto-fit,minmax(180px,1fr))] gap-3"
+					title={t(l, "home.lines")}
+					shown={filteredLines.length}
+					total={lines.length}
 					open={openSections.has("lines") || (!!q && filteredLines.length > 0)}
 					onToggle={(open) => toggleSection("lines", open)}
 				>
-					{filteredLines.map((line) => (
-						<LineCard key={line.line} line={line} lang={l} />
-					))}
+					<RankTable
+						lang={l}
+						nameHeader={t(l, "home.line")}
+						rows={filteredLines.map((line) => ({
+							key: line.line,
+							name: line.line,
+							detail: line.destinations.join(" – "),
+							total: line.total,
+							cancelled: line.cancelled,
+							ghost: line.ghost,
+							delayed: line.delayed,
+							to: "/$lang/line/$line",
+							params: { lang: l, line: line.slug },
+						}))}
+					/>
 				</Section>
 
 				<Section
-					title={sectionTitle(
-						t(l, "home.stations"),
-						filteredStops.length,
-						stops.length,
-					)}
-					gridClass="grid grid-cols-[repeat(auto-fit,minmax(220px,1fr))] gap-3"
+					title={t(l, "home.stations")}
+					shown={filteredStops.length}
+					total={stops.length}
 					open={openSections.has("stops") || (!!q && filteredStops.length > 0)}
 					onToggle={(open) => toggleSection("stops", open)}
 				>
-					{filteredStops.slice(0, q ? 200 : 40).map((stop) => (
-						<StopCard
-							key={stop.stopName}
-							stop={stop}
-							lang={l}
-							activeFilters={catFilter}
-						/>
-					))}
+					<RankTable
+						lang={l}
+						nameHeader={t(l, "home.station")}
+						rows={filteredStops.slice(0, q ? 200 : 40).map((stop) => ({
+							key: stop.stopName,
+							name: shortStationName(stop.stopName),
+							detail: stop.lines.join(" · "),
+							total: stop.journeyCount,
+							cancelled: stop.cancelled,
+							ghost: stop.ghost,
+							delayed: stop.delayed,
+							to: "/$lang/$station",
+							params: {
+								lang: l,
+								station: slugForStop(stop.stopIds, stop.stopName),
+							},
+						}))}
+					/>
 				</Section>
 
 				<Section
-					title={sectionTitle(
-						t(l, "home.operators"),
-						filteredOps.length,
-						operators.length,
-					)}
-					gridClass="grid grid-cols-[repeat(auto-fit,minmax(260px,1fr))] gap-3"
+					title={t(l, "home.operators")}
+					shown={filteredOps.length}
+					total={operators.length}
 					open={
 						openSections.has("operators") || (!!q && filteredOps.length > 0)
 					}
 					onToggle={(open) => toggleSection("operators", open)}
 				>
-					{filteredOps.map((op) => (
-						<OperatorCard
-							key={op.operator}
-							op={op}
-							lang={l}
-							activeFilters={catFilter}
-						/>
-					))}
+					<RankTable
+						lang={l}
+						nameHeader={t(l, "home.operator")}
+						rows={filteredOps.map((op) => ({
+							key: op.operator,
+							name: op.operator,
+							detail: op.lines.join(" · "),
+							total: op.total,
+							cancelled: op.cancelled,
+							ghost: op.ghost,
+							delayed: op.delayed,
+							to: "/$lang/operator/$operator",
+							params: { lang: l, operator: op.operator },
+						}))}
+					/>
 				</Section>
 
-				<footer className="mt-8 pt-6 border-t border-border flex flex-wrap items-center gap-x-6 gap-y-3 text-meta text-muted">
-					<a
-						href="https://www.rmv.de"
-						className="inline-flex items-center gap-2 hover:text-fg transition-colors"
-					>
-						<img
-							src="/rmv-logo.svg"
-							alt="RMV"
-							width={56}
-							height={11}
-							className="grayscale opacity-60 group-hover:opacity-100"
-						/>
-						<span>{l === "de" ? "Datenquelle: RMV" : "Data source: RMV"}</span>
+				<Method lang={l} />
+
+				<footer className="border-t border-rule pt-6 flex flex-wrap items-center gap-x-6 gap-y-2 text-meta text-muted">
+					<a href="https://www.rmv.de" className="hover:text-ink">
+						{l === "de" ? "Datenquelle: RMV" : "Data source: RMV"}
 					</a>
 					<a
 						href="https://github.com/boredland/dumm-rum"
-						className="hover:text-fg transition-colors"
+						className="hover:text-ink"
 					>
 						{t(l, "nav.github")}
 					</a>
@@ -485,16 +429,16 @@ function Index() {
 						href="https://github.com/boredland/dumm-rum/issues/new"
 						target="_blank"
 						rel="noopener noreferrer"
-						className="hover:text-fg transition-colors"
+						className="hover:text-ink"
 					>
 						{t(l, "nav.report_bug")}
 					</a>
 					<Link
 						to="/$lang"
 						params={{ lang: other }}
-						className="ml-auto signage-label hover:text-fg transition-colors"
+						className="ml-auto hover:text-ink"
 					>
-						{other.toUpperCase()} →
+						{other.toUpperCase()}
 					</Link>
 				</footer>
 			</main>
@@ -502,15 +446,110 @@ function Index() {
 	);
 }
 
+function Masthead({
+	lang,
+	oldestDate,
+	activeDays,
+}: {
+	lang: Lang;
+	oldestDate: string | null;
+	activeDays: DaysFilter;
+}) {
+	const window =
+		activeDays === "today"
+			? t(lang, "home.window_today")
+			: t(lang, "home.window_range");
+	return (
+		<header className="space-y-2">
+			<div className="flex items-baseline justify-between gap-4 border-b border-ink pb-2">
+				<h1 className="text-h2 font-bold uppercase tracking-[0.1em] text-ink">
+					{t(lang, "home.title")}
+				</h1>
+				<p className="text-micro uppercase tracking-[0.08em] text-muted">
+					{window}
+				</p>
+			</div>
+			<div className="flex flex-wrap items-baseline justify-between gap-x-6 gap-y-1 text-meta text-muted">
+				<p>{t(lang, "home.subtitle")}</p>
+				{oldestDate && (
+					<p>
+						{t(lang, "stat.since")}{" "}
+						<time className="figures">
+							{new Date(`${oldestDate}T00:00:00`).toLocaleDateString(lang, {
+								year: "numeric",
+								month: "long",
+								day: "numeric",
+							})}
+						</time>
+					</p>
+				)}
+			</div>
+		</header>
+	);
+}
+
+/** The signature: the report's conclusion, set as a sentence at display
+ * size with the figures carrying the verdict colour. A page whose whole
+ * job is answering "did the service run?" should answer it in words
+ * before it shows a single table. */
+function Finding({ lines, lang }: { lines: LineSummary[]; lang: Lang }) {
+	let total = 0;
+	let cancelled = 0;
+	let ghost = 0;
+	let delayed = 0;
+	for (const line of lines) {
+		total += line.total;
+		cancelled += line.cancelled;
+		ghost += line.ghost;
+		delayed += line.delayed;
+	}
+	if (total === 0) return null;
+
+	const score = onTimeRate(cancelled, delayed, total);
+	const withGhosts = onTimeRate(cancelled + ghost, delayed, total);
+	const values: Record<string, string> = {
+		total: total.toLocaleString(lang),
+		rate: `${score}%`,
+	};
+
+	return (
+		<section className="space-y-4">
+			<p className="text-figure text-balance">
+				{tParts(lang, "home.finding").map((part, i) =>
+					typeof part === "string" ? (
+						// biome-ignore lint/suspicious/noArrayIndexKey: fixed sentence structure
+						<span key={i}>{part}</span>
+					) : (
+						<span
+							// biome-ignore lint/suspicious/noArrayIndexKey: fixed sentence structure
+							key={i}
+							className={`figures ${part.param === "rate" ? toneForScore(score) : ""}`}
+						>
+							{values[part.param]}
+						</span>
+					),
+				)}
+			</p>
+			{ghost > 0 && (
+				<p className="text-meta text-muted">
+					{t(lang, "home.finding_ghosts", { rate: `${withGhosts}%` })}
+				</p>
+			)}
+		</section>
+	);
+}
+
 function Section({
 	title,
-	gridClass,
+	shown,
+	total,
 	open,
 	onToggle,
 	children,
 }: {
 	title: string;
-	gridClass: string;
+	shown: number;
+	total: number;
 	open: boolean;
 	onToggle: (open: boolean) => void;
 	children: React.ReactNode;
@@ -521,136 +560,140 @@ function Section({
 			open={open}
 			onToggle={(e) => onToggle((e.target as HTMLDetailsElement).open)}
 		>
-			<summary className="list-none [&::-webkit-details-marker]:hidden flex items-baseline gap-3 mb-4 cursor-pointer select-none">
-				<span className="text-dimmed group-open:rotate-90 transition-transform inline-block w-3">
-					›
+			<summary className="list-none [&::-webkit-details-marker]:hidden flex items-baseline gap-3 cursor-pointer select-none border-b border-ink pb-2">
+				<span className="eyebrow text-ink">{title}</span>
+				<span className="figures text-micro text-muted">
+					{shown === total ? total : `${shown}/${total}`}
 				</span>
-				<span className="signage-label text-fg">{title}</span>
-				<div className="h-px bg-border flex-1" />
+				<span className="ml-auto text-micro text-muted group-open:hidden">
+					+
+				</span>
+				<span className="ml-auto text-micro text-muted hidden group-open:block">
+					−
+				</span>
 			</summary>
-			<div className={gridClass}>{children}</div>
+			<div className="pt-2">{children}</div>
 		</details>
 	);
 }
 
-/** Quiet aggregate card. The card type (line/station/operator) is conveyed by
- * the section heading above; the reliability percent is the only numeric
- * anchor — colour-coded so the label is implicit. */
-function AggregateCard({
-	to,
-	params,
-	score,
-	icon,
-	name,
-	subtitle,
-	subtitleTitle,
-}: {
+interface RankRow {
+	key: string;
+	name: string;
+	detail: string;
+	total: number;
+	cancelled: number;
+	ghost: number;
+	delayed: number;
 	to: "/$lang/line/$line" | "/$lang/$station" | "/$lang/operator/$operator";
 	params: Record<string, string>;
-	score: number;
-	icon?: React.ReactNode;
-	name: string;
-	subtitle: string;
-	subtitleTitle?: string;
-}) {
-	const tone =
-		score < 80 ? "text-danger" : score < 90 ? "text-warn" : "text-ok";
-	return (
-		<Link
-			// biome-ignore lint/suspicious/noExplicitAny: route is union-typed
-			to={to as any}
-			// biome-ignore lint/suspicious/noExplicitAny: params shape varies per route
-			params={params as any}
-			className="card no-underline group p-3 hover:border-fg/40 hover:bg-surface-hover transition-colors flex flex-col gap-1"
-		>
-			<div className="flex items-start justify-between gap-2">
-				<div className="text-body font-bold text-fg leading-tight tracking-tight truncate">
-					{name}
-				</div>
-				<span className={`text-body font-black tabular-nums ${tone}`}>
-					{score}%
-				</span>
-			</div>
-			<div
-				className="text-meta text-muted truncate flex items-center gap-1.5"
-				title={subtitleTitle ?? subtitle}
-			>
-				{icon && (
-					<span className="text-dimmed shrink-0 inline-flex">{icon}</span>
-				)}
-				<span className="truncate">{subtitle}</span>
-			</div>
-		</Link>
-	);
 }
 
-function LineCard({ line, lang }: { line: LineSummary; lang: Lang }) {
-	const score = onTimeRate(line.cancelled, line.delayed, line.total);
-	return (
-		<AggregateCard
-			to="/$lang/line/$line"
-			params={{ lang, line: line.slug }}
-			score={score}
-			icon={categoryIcons([line.category])}
-			name={line.line}
-			subtitle={line.destinations.join(" ↔ ")}
-			subtitleTitle={line.destinations.join(" ↔ ")}
-		/>
-	);
-}
-
-function StopCard({
-	stop,
+/** One table per entity type, sorted worst-first by the parent. Cards gave
+ * every row the same weight and hid the counts behind a single percentage;
+ * a table lets a reader compare down a column and see what the rate is
+ * made of. */
+function RankTable({
 	lang,
-	activeFilters,
+	nameHeader,
+	rows,
 }: {
-	stop: StopSummary;
 	lang: Lang;
-	activeFilters: string[];
+	nameHeader: string;
+	rows: RankRow[];
 }) {
-	const cancRate =
-		stop.journeyCount > 0 ? stop.cancelled / stop.journeyCount : 0;
-	const slug = slugForStop(stop.stopIds, stop.stopName);
-	const score = Math.round((1 - cancRate) * 100);
-	const visibleCategories = categoriesForActiveFilter(
-		stop.categories,
-		activeFilters,
-	);
 	return (
-		<AggregateCard
-			to="/$lang/$station"
-			params={{ lang, station: slug }}
-			score={score}
-			icon={categoryIcons(visibleCategories)}
-			name={shortStationName(stop.stopName)}
-			subtitle={stop.lines.join(" · ")}
-		/>
-	);
-}
+		<>
+			{/* Six numeric columns don't fit a phone: the name truncates to
+			   nothing and the reliability column — the one the ranking is
+			   built on — falls off the right edge. Stack instead, leading
+			   with the score. */}
+			<ul className="sm:hidden divide-y divide-rule-dim">
+				{rows.map((row) => {
+					const score = onTimeRate(row.cancelled, row.delayed, row.total);
+					return (
+						<li key={row.key}>
+							<Link
+								// biome-ignore lint/suspicious/noExplicitAny: route is union-typed
+								to={row.to as any}
+								// biome-ignore lint/suspicious/noExplicitAny: params shape varies per route
+								params={row.params as any}
+								className="block py-3 no-underline"
+							>
+								<div className="flex items-baseline justify-between gap-3">
+									<span className="truncate">{row.name}</span>
+									<span className={`figures shrink-0 ${toneForScore(score)}`}>
+										{score}%
+									</span>
+								</div>
+								{row.detail && (
+									<p className="truncate text-meta text-muted">{row.detail}</p>
+								)}
+								<p className="figures text-meta text-dimmed">
+									{row.total} · {t(lang, "table.th.cancelled")} {row.cancelled}{" "}
+									· {t(lang, "table.th.ghost")} {row.ghost} ·{" "}
+									{t(lang, "table.th.delayed")} {row.delayed}
+								</p>
+							</Link>
+						</li>
+					);
+				})}
+			</ul>
 
-function OperatorCard({
-	op,
-	lang,
-	activeFilters,
-}: {
-	op: OperatorSummary;
-	lang: Lang;
-	activeFilters: string[];
-}) {
-	const score = onTimeRate(op.cancelled, op.delayed, op.total);
-	const visibleCategories = categoriesForActiveFilter(
-		op.categories,
-		activeFilters,
-	);
-	return (
-		<AggregateCard
-			to="/$lang/operator/$operator"
-			params={{ lang, operator: op.operator }}
-			score={score}
-			icon={categoryIcons(visibleCategories)}
-			name={op.operator}
-			subtitle={op.lines.join(" · ")}
-		/>
+			<div className="hidden sm:block">
+				<table className="report-table">
+					<thead>
+						<tr>
+							<th>{nameHeader}</th>
+							<th className="num">{t(lang, "table.th.total")}</th>
+							<th className="num">{t(lang, "table.th.cancelled")}</th>
+							<th className="num">{t(lang, "table.th.ghost")}</th>
+							<th className="num">{t(lang, "table.th.delayed")}</th>
+							<th className="num">{t(lang, "table.otp")}</th>
+						</tr>
+					</thead>
+					<tbody>
+						{rows.map((row) => {
+							const score = onTimeRate(row.cancelled, row.delayed, row.total);
+							return (
+								<tr key={row.key}>
+									<td className="max-w-0 w-full">
+										<Link
+											// biome-ignore lint/suspicious/noExplicitAny: route is union-typed
+											to={row.to as any}
+											// biome-ignore lint/suspicious/noExplicitAny: params shape varies per route
+											params={row.params as any}
+											className="block no-underline hover:underline"
+										>
+											<span className="block truncate">{row.name}</span>
+											{row.detail && (
+												<span
+													className="block truncate text-meta text-muted"
+													title={row.detail}
+												>
+													{row.detail}
+												</span>
+											)}
+										</Link>
+									</td>
+									<td className="num text-muted">{row.total}</td>
+									<td className={`num ${toneForCount(row.cancelled, "bad")}`}>
+										{row.cancelled || "—"}
+									</td>
+									<td className={`num ${toneForCount(row.ghost, "ghost")}`}>
+										{row.ghost || "—"}
+									</td>
+									<td className={`num ${toneForCount(row.delayed, "mixed")}`}>
+										{row.delayed || "—"}
+									</td>
+									<td className={`num ${toneForScore(score)}`}>{score}%</td>
+								</tr>
+							);
+						})}
+					</tbody>
+				</table>
+			</div>
+		</>
 	);
 }
 
@@ -677,7 +720,10 @@ function findWorst(
 	return worst;
 }
 
-function OverviewCards({
+/** The outliers, as a single table read across: each row is one measure,
+ * each column one kind of entity. Three separate cards forced the reader
+ * to re-learn the same layout three times. */
+function Notables({
 	lines,
 	stops,
 	operators,
@@ -688,35 +734,10 @@ function OverviewCards({
 	operators: OperatorSummary[];
 	lang: Lang;
 }) {
-	let totalAll = 0;
-	let cancelledAll = 0;
-	let ghostAll = 0;
-	let delayedAll = 0;
-	for (const l of lines) {
-		totalAll += l.total;
-		cancelledAll += l.cancelled;
-		ghostAll += l.ghost;
-		delayedAll += l.delayed;
-	}
-	if (totalAll === 0) return null;
-
-	const score = onTimeRate(cancelledAll, delayedAll, totalAll);
-	const scoreWithGhosts = onTimeRate(
-		cancelledAll + ghostAll,
-		delayedAll,
-		totalAll,
-	);
-	const scoreColor =
-		score < 80
-			? "led-text-danger"
-			: score < 90
-				? "led-text-warn"
-				: "led-text-ok";
-
 	const lineItems = (key: "cancelled" | "ghost" | "delayed") =>
 		lines.map((l) => ({
 			name: l.line,
-			slug: l.line,
+			slug: l.slug,
 			count: l[key],
 			total: l.total,
 		}));
@@ -735,157 +756,220 @@ function OverviewCards({
 			total: o.total,
 		}));
 
+	const measures = [
+		{
+			key: "cancelled" as const,
+			label: t(lang, "home.most_cancellations"),
+			tone: "text-bad",
+		},
+		{
+			key: "ghost" as const,
+			label: t(lang, "home.most_ghosts"),
+			tone: "text-ghost",
+		},
+		{
+			key: "delayed" as const,
+			label: t(lang, "home.most_delays"),
+			tone: "text-mixed",
+		},
+	];
+
+	const rows = measures.map((m) => ({
+		...m,
+		line: findWorst(lineItems(m.key)),
+		station: findWorst(stopItems(m.key)),
+		op: findWorst(opItems(m.key)),
+	}));
+	if (!rows.some((r) => r.line || r.station || r.op)) return null;
+
 	return (
-		<div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
-			<div className="sm:col-span-1 signage-frame p-2 flex flex-col">
-				<div className="flex justify-between items-center mb-1 px-1">
-					<span className="signage-label !text-white/30">
-						{t(lang, "board.status_monitor")}
-					</span>
-					<div className="w-1.5 h-1.5 rounded-full bg-green-500/40 animate-pulse" />
-				</div>
-				<div className="led-display flex-1 flex flex-col justify-center py-4">
-					<div className="signage-label !text-white/40 text-center mb-2">
-						{t(lang, "home.overall_score")}
+		<section className="space-y-2">
+			<h2 className="eyebrow text-ink border-b border-ink pb-2">
+				{t(lang, "home.worst_heading")}
+			</h2>
+			{/* Phones can't hold a four-column matrix without either
+			   truncating the names to uselessness or scrolling sideways,
+			   so each measure becomes its own labelled block. */}
+			<div className="sm:hidden divide-y divide-rule-dim">
+				{rows.map((row) => (
+					<div key={row.key} className="py-3 space-y-2">
+						<p className="text-micro uppercase tracking-[0.08em] text-muted">
+							{row.label}
+						</p>
+						<dl className="space-y-1">
+							<WorstLine
+								label={t(lang, "home.line")}
+								worst={row.line}
+								tone={row.tone}
+								to="/$lang/line/$line"
+								paramKey="line"
+								lang={lang}
+							/>
+							<WorstLine
+								label={t(lang, "home.station")}
+								worst={row.station}
+								tone={row.tone}
+								to="/$lang/$station"
+								paramKey="station"
+								lang={lang}
+							/>
+							<WorstLine
+								label={t(lang, "home.operator")}
+								worst={row.op}
+								tone={row.tone}
+								to="/$lang/operator/$operator"
+								paramKey="operator"
+								lang={lang}
+							/>
+						</dl>
 					</div>
-					<div
-						className={`text-display font-black text-center tabular-nums ${scoreColor}`}
-					>
-						{score}
-						<span className="text-h2 opacity-50">%</span>
-					</div>
-					{ghostAll > 0 && (
-						<div className="signage-label !text-info text-center mt-3 border-t border-white/10 pt-2 mx-4">
-							{scoreWithGhosts}% reliability incl. ghosts
-						</div>
-					)}
-				</div>
-				<div className="signage-label !text-white/40 text-center mt-2 py-1 bg-black/20 rounded-sm">
-					{totalAll.toLocaleString(lang)} {t(lang, "board.tracked")}
-				</div>
+				))}
 			</div>
 
-			<div className="sm:col-span-3 grid grid-cols-1 sm:grid-cols-3 gap-4">
-				<WorstCard
-					title={t(lang, "home.most_cancellations")}
-					line={findWorst(lineItems("cancelled"))}
-					station={findWorst(stopItems("cancelled"))}
-					op={findWorst(opItems("cancelled"))}
-					lang={lang}
-					color="text-danger"
-				/>
-				<WorstCard
-					title={t(lang, "home.most_ghosts")}
-					line={findWorst(lineItems("ghost"))}
-					station={findWorst(stopItems("ghost"))}
-					op={findWorst(opItems("ghost"))}
-					lang={lang}
-					color="text-info"
-				/>
-				<WorstCard
-					title={t(lang, "home.most_delays")}
-					line={findWorst(lineItems("delayed"))}
-					station={findWorst(stopItems("delayed"))}
-					op={findWorst(opItems("delayed"))}
-					lang={lang}
-					color="text-warn"
-				/>
+			<div className="hidden sm:block">
+				<table className="report-table">
+					<thead>
+						<tr>
+							<th />
+							<th>{t(lang, "home.line")}</th>
+							<th>{t(lang, "home.station")}</th>
+							<th>{t(lang, "home.operator")}</th>
+						</tr>
+					</thead>
+					<tbody>
+						{rows.map((row) => (
+							<tr key={row.key}>
+								<th scope="row" className="text-muted font-normal normal-case">
+									{row.label}
+								</th>
+								<WorstCell
+									worst={row.line}
+									tone={row.tone}
+									to="/$lang/line/$line"
+									paramKey="line"
+									lang={lang}
+								/>
+								<WorstCell
+									worst={row.station}
+									tone={row.tone}
+									to="/$lang/$station"
+									paramKey="station"
+									lang={lang}
+								/>
+								<WorstCell
+									worst={row.op}
+									tone={row.tone}
+									to="/$lang/operator/$operator"
+									paramKey="operator"
+									lang={lang}
+								/>
+							</tr>
+						))}
+					</tbody>
+				</table>
 			</div>
-		</div>
+		</section>
 	);
 }
 
-function WorstCard({
-	title,
-	line,
-	station,
-	op,
-	lang,
-	color,
-}: {
-	title: string;
-	line: Worst | null;
-	station: Worst | null;
-	op: Worst | null;
-	lang: Lang;
-	color: string;
-}) {
-	const hasAny =
-		(line?.count ?? 0) + (station?.count ?? 0) + (op?.count ?? 0) > 0;
-	return (
-		<div className="card p-3 hover:border-fg/40 transition-colors">
-			<div className="signage-label mb-3">{title}</div>
-			{!hasAny && (
-				<div className="text-h2 font-black text-ok/30 tabular-nums">0.0%</div>
-			)}
-			<div className="space-y-2.5">
-				{line && line.count > 0 && (
-					<WorstRow
-						to="/$lang/line/$line"
-						params={{ lang, line: line.slug }}
-						label={t(lang, "home.line")}
-						name={line.name}
-						rate={line.rate}
-						color={color}
-					/>
-				)}
-				{station && station.count > 0 && (
-					<WorstRow
-						to="/$lang/$station"
-						params={{ lang, station: station.slug }}
-						label={t(lang, "home.station")}
-						name={station.name}
-						rate={station.rate}
-						color={color}
-					/>
-				)}
-				{op && op.count > 0 && (
-					<WorstRow
-						to="/$lang/operator/$operator"
-						params={{ lang, operator: op.slug }}
-						label={t(lang, "home.operator")}
-						name={op.name}
-						rate={op.rate}
-						color={color}
-					/>
-				)}
-			</div>
-		</div>
-	);
-}
-
-function WorstRow({
-	to,
-	params,
+function WorstLine({
 	label,
-	name,
-	rate,
-	color,
+	worst,
+	tone,
+	to,
+	paramKey,
+	lang,
 }: {
-	to: "/$lang/line/$line" | "/$lang/$station" | "/$lang/operator/$operator";
-	params: Record<string, string>;
 	label: string;
-	name: string;
-	rate: number;
-	color: string;
+	worst: Worst | null;
+	tone: string;
+	to: "/$lang/line/$line" | "/$lang/$station" | "/$lang/operator/$operator";
+	paramKey: "line" | "station" | "operator";
+	lang: Lang;
 }) {
+	if (!worst) return null;
 	return (
-		<Link
-			// biome-ignore lint/suspicious/noExplicitAny: route is union-typed
-			to={to as any}
-			// biome-ignore lint/suspicious/noExplicitAny: params shape varies per route
-			params={params as any}
-			className="block no-underline group"
-		>
-			<div className="text-micro text-dimmed uppercase tracking-wider group-hover:text-muted transition-colors">
-				{label}
-			</div>
-			<div className="flex items-baseline justify-between gap-2">
-				<span className="text-body font-bold text-fg truncate">{name}</span>
-				<span className={`${color} text-body font-black tabular-nums shrink-0`}>
-					{(rate * 100).toFixed(1)}%
+		<div className="flex items-baseline gap-3">
+			<dt className="text-meta text-dimmed w-20 shrink-0">{label}</dt>
+			<dd className="flex-1 min-w-0 flex items-baseline justify-between gap-3">
+				<Link
+					// biome-ignore lint/suspicious/noExplicitAny: route is union-typed
+					to={to as any}
+					// biome-ignore lint/suspicious/noExplicitAny: params shape varies per route
+					params={{ lang, [paramKey]: worst.slug } as any}
+					className="truncate no-underline hover:underline"
+				>
+					{worst.name}
+				</Link>
+				<span className={`figures text-meta shrink-0 ${tone}`}>
+					{(worst.rate * 100).toFixed(1)}%
 				</span>
-			</div>
-		</Link>
+			</dd>
+		</div>
+	);
+}
+
+function WorstCell({
+	worst,
+	tone,
+	to,
+	paramKey,
+	lang,
+}: {
+	worst: Worst | null;
+	tone: string;
+	to: "/$lang/line/$line" | "/$lang/$station" | "/$lang/operator/$operator";
+	paramKey: "line" | "station" | "operator";
+	lang: Lang;
+}) {
+	if (!worst) return <td className="text-dimmed">—</td>;
+	return (
+		<td>
+			<Link
+				// biome-ignore lint/suspicious/noExplicitAny: route is union-typed
+				to={to as any}
+				// biome-ignore lint/suspicious/noExplicitAny: params shape varies per route
+				params={{ lang, [paramKey]: worst.slug } as any}
+				className="block no-underline hover:underline"
+			>
+				<span className="block truncate">{worst.name}</span>
+				<span className={`figures block text-meta ${tone}`}>
+					{(worst.rate * 100).toFixed(1)}%
+				</span>
+			</Link>
+		</td>
+	);
+}
+
+/** Method note. A report states how it measured; keeping it collapsed at
+ * the foot rather than under the headline means it's available without
+ * competing with the finding. */
+function Method({ lang }: { lang: Lang }) {
+	const keys = [
+		"collection",
+		"cancellation",
+		"delayed",
+		"ghost",
+		"reliability",
+		"dedup",
+		"colors",
+	] as const;
+	return (
+		<details className="group border-t border-rule pt-4">
+			<summary className="list-none [&::-webkit-details-marker]:hidden flex items-baseline gap-2 cursor-pointer select-none text-meta text-muted hover:text-ink">
+				<span className="eyebrow">{t(lang, "home.methodology_title")}</span>
+				<span className="text-micro group-open:hidden">+</span>
+				<span className="text-micro hidden group-open:block">−</span>
+			</summary>
+			{/* A list, not a sequence: these are definitions of the terms the
+			   report uses, so they carry no step numbers. */}
+			<ul className="mt-4 space-y-3 text-meta text-muted max-w-prose">
+				{keys.map((key) => (
+					<li key={key}>
+						{t(lang, `home.methodology_${key}` as `home.methodology_ghost`)}
+					</li>
+				))}
+			</ul>
+		</details>
 	);
 }

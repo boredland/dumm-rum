@@ -20,9 +20,16 @@ const translations = {
 			"Für die Linien- und Betreiberstatistiken wird jede Fahrt nur einmal gezählt, auch wenn sie mehrere erfasste Haltestellen passiert \u2014 wir deduplizieren nach Fahrtnummer. Wird eine Fahrt an mehreren Haltestellen beobachtet, werden die früheste Abfahrtszeit und der schlechteste Status (ausgefallen > verspätet > pünktlich) verwendet.",
 		"home.methodology_colors":
 			"Farben: gr\u00fcn ab 90%, orange 80\u201389%, rot unter 80%.",
+		"home.finding":
+			"Von {total} erfassten Fahrten sind {rate} p\u00fcnktlich gefahren.",
+		"home.finding_ghosts":
+			"Rechnet man Geisterfahrten als Ausfall, sind es {rate}.",
+		"home.worst_heading": "Auff\u00e4lligste Werte",
+		"home.window_today": "Heute",
+		"home.window_range": "Letzte 30 Tage",
 		"home.overall_score": "Pünktlich",
 		"home.most_cancellations": "Meiste Ausfälle",
-		"home.most_ghosts": "Meiste 👻",
+		"home.most_ghosts": "Meiste Geisterfahrten",
 		"home.most_delays": "Meiste Verspätungen",
 		"home.stations": "Haltestellen",
 		"home.operators": "Betreiber",
@@ -47,10 +54,12 @@ const translations = {
 		"nav.back_to_line": "Zur\u00fcck zur Linie",
 		"nav.back_to_operator": "Zur\u00fcck zum Betreiber",
 		"nav.github": "Quellcode auf GitHub",
-		"nav.report_bug": "🐛 Bug melden",
+		"nav.report_bug": "Fehler melden",
 
 		"operator.lines": "Linien",
 		"station.last_updated": "zuletzt aktualisiert",
+		"station.seven_day":
+			"7 Tage: {total} Fahrten · {cancelled} ausgefallen · {ghost} Geisterfahrten · {delayed} verspätet · {score} % pünktlich",
 
 		"stat.today": "Heute",
 		"stat.of_departures": "von {total} Abfahrten",
@@ -73,11 +82,11 @@ const translations = {
 		"table.total": "Gesamt",
 		"table.cancelled": "Ausfälle",
 		"table.delayed": "Verspätungen",
-		"table.th.total": "Σ",
-		"table.th.cancelled": "❌",
-		"table.th.ghost": "👻",
-		"table.th.delayed": "⏳",
-		"table.otp": "💯",
+		"table.th.total": "Fahrten",
+		"table.th.cancelled": "Ausfälle",
+		"table.th.ghost": "Geister",
+		"table.th.delayed": "Verspätet",
+		"table.otp": "Pünktlich",
 		"table.time": "Zeit",
 		"table.line": "Linie",
 		"table.direction": "Richtung",
@@ -93,7 +102,7 @@ const translations = {
 		"share.copied": "Link kopiert!",
 		"telegram.subscribe":
 			"Über Verspätungen & Ausfälle per Telegram benachrichtigen",
-		"subscribe.cta.button": "🔔 Alarm einrichten",
+		"subscribe.cta.button": "Benachrichtigen",
 		"subscribe.modal.title": "Alarm per Telegram",
 		"subscribe.modal.subtitle":
 			"Wir öffnen den Telegram-Bot mit deinen Einstellungen. Tippe dort auf /subscribe, um den Alarm zu aktivieren.",
@@ -116,11 +125,12 @@ const translations = {
 
 		"home.ghost": "Geisterfahrten",
 
-		"status.cancelled": "❌",
-		"status.ghost": "👻",
-		"status.delayed": "⏳",
-		"status.ok": "✅",
+		"status.cancelled": "ausgefallen",
+		"status.ghost": "Geisterfahrt",
+		"status.delayed": "verspätet",
+		"status.ok": "pünktlich",
 		"status.on_time": "p\u00fcnktlich",
+		"status.delayed_by": "+{min} min",
 
 		"board.reliability_index": "P\u00fcnktlichkeitsindex",
 		"board.status_monitor": "Statusanzeige",
@@ -138,7 +148,7 @@ const translations = {
 		"notfound.board.line": "404",
 		"notfound.board.destination": "irgendwohin, wo du hinwolltest",
 		"notfound.board.status": "f\u00e4llt aus",
-		"notfound.cta": "🚏 Zur\u00fcck auf den Bahnsteig",
+		"notfound.cta": "Zur\u00fcck zur \u00dcbersicht",
 		"notfound.tip":
 			"Tipp: Wenn dich ein Link innerhalb von DummRum hierher gef\u00fchrt hat, sag uns Bescheid \u2014 dann flicken wir die Wegweisung.",
 	},
@@ -160,9 +170,15 @@ const translations = {
 			"For line and operator statistics, each journey is counted once even if it passes through multiple tracked stations \u2014 we deduplicate by journey number. When a journey is observed at several stations, the earliest departure time and worst status (cancelled > delayed > on-time) are used.",
 		"home.methodology_colors":
 			"Colors: green from 90%, orange 80\u201389%, red below 80%.",
+		"home.finding": "Of {total} tracked trips, {rate} ran on time.",
+		"home.finding_ghosts":
+			"Counting ghost runs as cancellations, it is {rate}.",
+		"home.worst_heading": "Notable figures",
+		"home.window_today": "Today",
+		"home.window_range": "Last 30 days",
 		"home.overall_score": "On time",
 		"home.most_cancellations": "Most cancellations",
-		"home.most_ghosts": "Most 👻",
+		"home.most_ghosts": "Most ghost runs",
 		"home.most_delays": "Most delays",
 		"home.stations": "Stations",
 		"home.operators": "Operators",
@@ -187,10 +203,12 @@ const translations = {
 		"nav.back_to_line": "Back to line",
 		"nav.back_to_operator": "Back to operator",
 		"nav.github": "View source on GitHub",
-		"nav.report_bug": "🐛 Report a bug",
+		"nav.report_bug": "Report a bug",
 
 		"operator.lines": "Lines",
 		"station.last_updated": "last updated",
+		"station.seven_day":
+			"7 days: {total} trips · {cancelled} cancelled · {ghost} ghost · {delayed} delayed · {score} % on time",
 
 		"stat.today": "Today",
 		"stat.of_departures": "of {total} departures",
@@ -213,11 +231,11 @@ const translations = {
 		"table.total": "Total",
 		"table.cancelled": "Cancelled",
 		"table.delayed": "Delayed",
-		"table.th.total": "Σ",
-		"table.th.cancelled": "❌",
-		"table.th.ghost": "👻",
-		"table.th.delayed": "⏳",
-		"table.otp": "💯",
+		"table.th.total": "Trips",
+		"table.th.cancelled": "Cancelled",
+		"table.th.ghost": "Ghost",
+		"table.th.delayed": "Delayed",
+		"table.otp": "On time",
 		"table.time": "Time",
 		"table.line": "Line",
 		"table.direction": "Direction",
@@ -233,7 +251,7 @@ const translations = {
 		"share.copied": "Link copied!",
 		"telegram.subscribe":
 			"Get notified about delays & cancellations via Telegram",
-		"subscribe.cta.button": "🔔 Set up alert",
+		"subscribe.cta.button": "Notify me",
 		"subscribe.modal.title": "Telegram alert",
 		"subscribe.modal.subtitle":
 			"We'll open the Telegram bot with your settings. Tap /subscribe there to activate the alert.",
@@ -256,11 +274,12 @@ const translations = {
 
 		"home.ghost": "ghost departures",
 
-		"status.cancelled": "❌",
-		"status.ghost": "👻",
-		"status.delayed": "⏳",
-		"status.ok": "✅",
+		"status.cancelled": "cancelled",
+		"status.ghost": "ghost run",
+		"status.delayed": "delayed",
+		"status.ok": "on time",
 		"status.on_time": "on time",
+		"status.delayed_by": "+{min} min",
 
 		"board.reliability_index": "Reliability index",
 		"board.status_monitor": "Status monitor",
@@ -278,7 +297,7 @@ const translations = {
 		"notfound.board.line": "404",
 		"notfound.board.destination": "wherever you were headed",
 		"notfound.board.status": "not in service",
-		"notfound.cta": "🚏 Back to the platform",
+		"notfound.cta": "Back to the overview",
 		"notfound.tip":
 			"Tip: if you got here by clicking a link in DummRum itself, please report it — we'd like to fix the signage.",
 	},
@@ -298,6 +317,30 @@ export function t(
 		}
 	}
 	return text;
+}
+
+/** Split a translation into literal chunks and named placeholders so a
+ * caller can render a placeholder as an element — a toned figure, a link —
+ * instead of flattening it into the string. Keeps each sentence a single
+ * translatable unit rather than three fragments the translator has to
+ * reassemble in the right order.
+ *
+ * `tParts(l, "home.finding")` → `["Of ", {param:"total"}, " tracked trips, ", …]`
+ */
+export function tParts(
+	lang: Lang,
+	key: TranslationKey,
+): Array<string | { param: string }> {
+	const parts: Array<string | { param: string }> = [];
+	const template: string = translations[lang][key];
+	let last = 0;
+	for (const m of template.matchAll(/\{(\w+)\}/g)) {
+		if (m.index > last) parts.push(template.slice(last, m.index));
+		parts.push({ param: m[1] });
+		last = m.index + m[0].length;
+	}
+	if (last < template.length) parts.push(template.slice(last));
+	return parts;
 }
 
 export function langFromParams(

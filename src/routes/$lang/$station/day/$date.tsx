@@ -5,12 +5,9 @@ import {
 	DepartureFilterBar,
 	useDepartureFilters,
 } from "../../../../components/DepartureFilters.tsx";
+import { StatusMark } from "../../../../components/DepartureRow.tsx";
 import { EmptyState } from "../../../../components/EmptyState.tsx";
-import { StatusGlyph } from "../../../../components/LedRow.tsx";
-import {
-	BackLink,
-	SignageHeader,
-} from "../../../../components/SignageHeader.tsx";
+import { BackLink, PageHeader } from "../../../../components/PageHeader.tsx";
 import { type Lang, t } from "../../../../lib/i18n.ts";
 import {
 	findStopBySlug,
@@ -18,7 +15,6 @@ import {
 	type StopDayDeparture,
 } from "../../../../lib/queries.ts";
 import { urlFilter, urlStringFilter } from "../../../../lib/search-state.ts";
-import { categoryIcons } from "../../../../lib/stations.ts";
 import { makeSwr } from "../../../../lib/swr.ts";
 import {
 	delayMin,
@@ -110,7 +106,7 @@ export const Route = createFileRoute("/$lang/$station/day/$date")({
 });
 
 function StationDay() {
-	const { stopName, categories, date, departures } = Route.useLoaderData();
+	const { stopName, date, departures } = Route.useLoaderData();
 	const { lang, station } = Route.useParams();
 	const search = Route.useSearch();
 	const navigate = Route.useNavigate();
@@ -149,36 +145,33 @@ function StationDay() {
 	});
 
 	return (
-		<main className="mx-auto max-w-4xl p-6 space-y-6">
-			<SignageHeader
+		<main className="mx-auto max-w-3xl px-6 py-10 space-y-10">
+			<PageHeader
 				backLink={
 					<Link to="/$lang/$station" params={{ lang: l, station }}>
 						<BackLink>{shortStationName(stopName)}</BackLink>
 					</Link>
 				}
-				title={
-					<>
-						{categoryIcons(categories)} {shortStationName(stopName)}
-					</>
-				}
+				title={shortStationName(stopName)}
 			>
 				<p>{pretty}</p>
-			</SignageHeader>
+			</PageHeader>
 
-			<section>
-				<h2 className="signage-label mb-3 block">
-					{t(l, "section.all_departures")} ({filters.filtered.length}/
-					{departures.length})
+			<section className="space-y-4">
+				<h2 className="eyebrow text-ink border-b border-ink pb-2">
+					{t(l, "section.all_departures")}
 				</h2>
 
-				<DepartureFilterBar
-					lang={l}
-					{...filters}
-					lines={[...new Set(filters.filtered.map((d) => d.line))].sort()}
-				/>
+				<div className="border-b border-rule pb-4">
+					<DepartureFilterBar
+						lang={l}
+						{...filters}
+						lines={[...new Set(filters.filtered.map((d) => d.line))].sort()}
+					/>
+				</div>
 
 				{filters.filtered.length === 0 ? (
-					<EmptyState icon="🕊️" title={t(l, "table.no_departures")} />
+					<EmptyState title={t(l, "table.no_departures")} />
 				) : (
 					<>
 						{/* Mobile: stacked cards. Horizontally-scrolling tables
@@ -196,18 +189,20 @@ function StationDay() {
 								return (
 									<li
 										key={`m-${d.journeyRef}-${d.routeIdx}`}
-										className="rounded-sm border border-border-dim p-3"
+										className="border-b border-rule-dim py-3"
 									>
 										<div className="flex items-baseline justify-between gap-2">
 											<span className="tabular-nums font-bold">
 												{formatTime(d.time)}
 												{d.rtTime && d.rtTime !== d.time && (
-													<span className="ml-1 text-dimmed font-normal">
+													<span className="ml-1 text-muted">
 														→ {formatTime(d.rtTime)}
 													</span>
 												)}
 											</span>
-											<span className="text-body font-bold">{d.line}</span>
+											<span className="figures text-meta text-muted">
+												{parseLineSlug(d.line).line}
+											</span>
 										</div>
 										<div
 											className="mt-1 text-body truncate"
@@ -216,7 +211,8 @@ function StationDay() {
 											{d.direction}
 										</div>
 										<div className="mt-1 text-meta flex items-center gap-2">
-											<StatusGlyph
+											<StatusMark
+												lang={l}
 												cancelled={d.cancelled}
 												ghost={d.ghost}
 												delayMin={delay}
@@ -239,13 +235,13 @@ function StationDay() {
 
 						{/* Desktop: compact 4-column table. */}
 						<div className="hidden sm:block overflow-x-auto">
-							<table className="w-full text-body">
+							<table className="report-table">
 								<thead>
-									<tr className="text-left text-meta uppercase text-muted border-b border-border-dim">
-										<th className="py-2 pr-3">{t(l, "table.time")}</th>
-										<th className="py-2 pr-3">{t(l, "table.line")}</th>
-										<th className="py-2 pr-3">{t(l, "table.direction")}</th>
-										<th className="py-2 pr-3">{t(l, "table.status")}</th>
+									<tr>
+										<th>{t(l, "table.time")}</th>
+										<th>{t(l, "table.line")}</th>
+										<th>{t(l, "table.direction")}</th>
+										<th>{t(l, "table.status")}</th>
 									</tr>
 								</thead>
 								<tbody>
@@ -257,25 +253,28 @@ function StationDay() {
 												? `https://bahn.expert/details/${encodeURIComponent(d.line)}/${d.date}T${d.time.replace(/:/g, "%3A")}.000Z`
 												: null;
 										return (
-											<tr
-												key={`${d.journeyRef}-${d.routeIdx}`}
-												className="border-b border-border-dim"
-											>
-												<td className="py-2 pr-3 whitespace-nowrap tabular-nums">
+											<tr key={`${d.journeyRef}-${d.routeIdx}`}>
+												<td className="figures whitespace-nowrap">
 													{formatTime(d.time)}
 													{d.rtTime && d.rtTime !== d.time && (
-														<span className="ml-1 text-dimmed">
+														<span className="ml-1 text-muted">
 															→ {formatTime(d.rtTime)}
 														</span>
 													)}
 												</td>
-												<td className="py-2 pr-3 font-bold">{d.line}</td>
-												<td className="py-2 pr-3 truncate" title={d.direction}>
+												<td className="figures text-meta text-muted">
+													{parseLineSlug(d.line).line}
+												</td>
+												<td
+													className="max-w-0 w-full truncate"
+													title={d.direction}
+												>
 													{d.direction}
 												</td>
-												<td className="py-2 pr-3">
+												<td>
 													<div className="flex items-center gap-2">
-														<StatusGlyph
+														<StatusMark
+															lang={l}
 															cancelled={d.cancelled}
 															ghost={d.ghost}
 															delayMin={delay}
