@@ -163,7 +163,13 @@ export async function processPollBatch(
 					),
 				);
 
-			if (row?.pollState === "done") {
+			// "excluded" counts as terminal here too: a stale job for a
+			// tombstoned run must not poll it again. The tombstone is applied
+			// from JourneyDetails fields that vary between calls — mgate
+			// sometimes omits the operator that proves a bus is Mainz's — so a
+			// retry could otherwise find the run no longer excludable and
+			// revive it.
+			if (row?.pollState === "done" || row?.pollState === EXCLUDED_POLL_STATE) {
 				stats.skipped++;
 				continue;
 			}
@@ -434,7 +440,11 @@ async function upsertJourneyRunFromMgate(
 				destArrTime: excluded(journeyRuns.destArrTime),
 				cancelled: sql`${journeyRuns.cancelled} OR ${excluded(journeyRuns.cancelled)}`,
 				wasTracked: sql`${journeyRuns.wasTracked} OR ${excluded(journeyRuns.wasTracked)}`,
-				pollState: sql`'polling'`,
+				// A tombstone outranks a poll result. The batch guard above
+				// already skips excluded runs, but it reads before this writes,
+				// so only the write itself can make that hold.
+				pollState: sql`CASE WHEN ${journeyRuns.pollState} = ${EXCLUDED_POLL_STATE}
+					THEN ${EXCLUDED_POLL_STATE} ELSE 'polling' END`,
 				snapshotAt: excluded(journeyRuns.snapshotAt),
 			},
 		});
