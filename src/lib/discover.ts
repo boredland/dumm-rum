@@ -9,14 +9,13 @@ import {
 import { STATIONS, type Station } from "./stations.ts";
 import { nowBerlin, todayBerlin } from "./utils.ts";
 
-// Categories we never want in journey_runs. FLX / FlixTrain ride their
-// own collection pipeline (src/lib/flix-proxy.ts fetches Flix's
-// location feed directly) so letting them through here would just
-// double-count. Long-distance trains (ICE / IC / EC / ECE / NJ / EN /
-// RJ / RJX / TGV / EST) are kept because their delay + cancellation
-// stats from HAFAS are valuable even though they aren't strictly ÖPNV —
-// users asked for reliability data on the intercity services that run
-// through Rhein-Main.
+// Categories we never want in journey_runs. FLX / FlixTrain are
+// commercial long-distance coach/rail services outside the ÖPNV scope
+// this site reports on. Long-distance trains
+// (ICE / IC / EC / ECE / NJ / EN / RJ / RJX / TGV / EST) are kept
+// because their delay + cancellation stats from HAFAS are valuable even
+// though they aren't strictly ÖPNV — users asked for reliability data
+// on the intercity services that run through Rhein-Main.
 const EXCLUDE_CATEGORIES = new Set(["FLX", "FlixTrain"]);
 
 const POLL_QUEUE = "journey-poll";

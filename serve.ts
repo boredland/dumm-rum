@@ -19,9 +19,8 @@ const port = Number(process.env.PORT ?? 3000);
 
 Bun.serve({
 	port,
-	// Flix proxy cold-start (connection pool + 12 timetable fans) can
-	// exceed the 10 s Bun default. Allow 30 s for the first request after
-	// a cache miss.
+	// Cold summary aggregations (getStopSummaries runs ~5 s on prod) can
+	// exceed the 10 s Bun default when the boot warmup hasn't landed yet.
 	idleTimeout: 30,
 	async fetch(req) {
 		const url = new URL(req.url);
@@ -62,9 +61,12 @@ Bun.serve({
 
 		const res = await entry.fetch(req);
 
+		// Only successful HTML responses are cacheable. Gating on status
+		// keeps 404s (e.g. bookmarked URLs for since-removed routes),
+		// SSR errors, and redirects out of the edge cache.
 		if (
 			req.method === "GET" &&
-			!url.pathname.includes("/map") &&
+			res.ok &&
 			!url.searchParams.has("_serverFnId")
 		) {
 			const headers = new Headers(res.headers);

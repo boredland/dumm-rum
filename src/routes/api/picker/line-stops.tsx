@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { memoGet } from "../../../lib/flix-proxy.ts";
+import { memoGet } from "../../../lib/memo.ts";
 import { getDirectionsForLine, getStopsForLine } from "../../../lib/queries.ts";
 
 /** Per-line pick-lists so the subscribe modal can narrow the Haltestelle

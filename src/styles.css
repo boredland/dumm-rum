@@ -216,32 +216,6 @@ a:hover {
 	}
 }
 
-.dummrum-gps-smooth {
-	transition: transform 800ms linear;
-}
-
-@keyframes dummrum-gps-bar {
-	0%,
-	100% {
-		opacity: 0.35;
-	}
-	50% {
-		opacity: 1;
-	}
-}
-.dummrum-gps-bar {
-	animation: dummrum-gps-bar 1.5s ease-in-out infinite;
-}
-.dummrum-gps-bar-0 {
-	animation-delay: 0s;
-}
-.dummrum-gps-bar-1 {
-	animation-delay: 0.2s;
-}
-.dummrum-gps-bar-2 {
-	animation-delay: 0.4s;
-}
-
 /* Ghost Run Flickering Signage */
 @keyframes ghost-flicker {
 	0%,

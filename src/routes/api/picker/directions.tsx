@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { memoGet } from "../../../lib/flix-proxy.ts";
+import { memoGet } from "../../../lib/memo.ts";
 import { getAllDirections } from "../../../lib/queries.ts";
 
 const CACHE_CONTROL =

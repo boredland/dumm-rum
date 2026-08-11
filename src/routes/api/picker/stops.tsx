@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { memoGet } from "../../../lib/flix-proxy.ts";
+import { memoGet } from "../../../lib/memo.ts";
 import { getAllStopNames } from "../../../lib/queries.ts";
 
 /** Heavy cache: the picklist of stops changes at most once per ingest pass

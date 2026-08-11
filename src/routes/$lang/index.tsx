@@ -348,17 +348,7 @@ function Index() {
 						<h1 className="text-h1 font-black tracking-tighter">
 							{t(l, "home.title")}
 						</h1>
-						<p className="text-muted text-body">
-							{t(l, "home.subtitle")}
-							{" · "}
-							<Link
-								to="/$lang/map"
-								params={{ lang: l }}
-								className="text-accent hover:underline"
-							>
-								{t(l, "map.link")} →
-							</Link>
-						</p>
+						<p className="text-muted text-body">{t(l, "home.subtitle")}</p>
 					</div>
 					{oldestDate && (
 						<p className="text-meta text-dimmed tabular-nums">

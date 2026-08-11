@@ -4,7 +4,6 @@ import {
 	defaultStreamHandler,
 	type RequestHandler,
 } from "@tanstack/react-start/server";
-import { getAggregatedVehicles, memoGet } from "./lib/flix-proxy.ts";
 import { warmHomeSummaries } from "./lib/home.ts";
 import { startIngest } from "./lib/workers.ts";
 
@@ -13,12 +12,6 @@ import { startIngest } from "./lib/workers.ts";
 // until workers are registered — which is what we want: first request
 // hits a ready system.
 await startIngest();
-
-// Fire-and-forget Flix aggregator warmup so the first user to hit
-// `/api/flix/vehicles` gets a memo hit instead of a 15-25 s cold pool.
-memoGet("vehicles", 25, getAggregatedVehicles).catch((e) =>
-	console.warn("flix warmup failed:", e),
-);
 
 // getStopSummaries runs ~5 s on prod; seed the memo at boot so the first
 // post-deploy landing hit is served from cache.
