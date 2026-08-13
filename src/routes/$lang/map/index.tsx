@@ -882,6 +882,10 @@ function MapPage() {
 	const navigate = Route.useNavigate();
 	const mapRef = useRef<HTMLDivElement>(null);
 	const leafletMap = useRef<L.Map | null>(null);
+	// Latest view from the URL, for seeding a map build without making the
+	// build depend on values the map itself writes back on every moveend.
+	const viewRef = useRef({ lat: search.lat, lon: search.lon, z: search.z });
+	viewRef.current = { lat: search.lat, lon: search.lon, z: search.z };
 	const markersRef = useRef<
 		Map<
 			string,
@@ -1279,9 +1283,14 @@ function MapPage() {
 
 			await import("leaflet-fullscreen");
 
-			const initLat = search.lat ?? FRANKFURT_CENTER.lat;
-			const initLon = search.lon ?? FRANKFURT_CENTER.lon;
-			const initZoom = search.z ?? 13;
+			// Read through a ref: these seed the initial view only, and the
+			// map writes them back to the URL on every moveend. Reading
+			// `search` directly would put them in this effect's deps, so
+			// each pan or zoom would tear the map down and rebuild it.
+			const { lat, lon, z } = viewRef.current;
+			const initLat = lat ?? FRANKFURT_CENTER.lat;
+			const initLon = lon ?? FRANKFURT_CENTER.lon;
+			const initZoom = z ?? 13;
 
 			if (!mapRef.current) return;
 			const map = L.map(mapRef.current, {
@@ -1649,19 +1658,24 @@ function MapPage() {
 				leafletMap.current.remove();
 				leafletMap.current = null;
 			}
+			// map.remove() detaches every marker with it. Without this the
+			// next syncMarkers finds stale entries, takes the setLatLng
+			// path instead of addTo, and the vehicles never reappear —
+			// only ids first seen after the rebuild get drawn.
+			markersRef.current.clear();
+			categoryLayersRef.current.clear();
 		};
+		// search.lat/lon/z are deliberately absent: they are seeded from
+		// viewRef above, and moveend writes them back on every pan and
+		// zoom. Including them would make the map rebuild itself.
 	}, [
 		search.sched,
-		search.hide, // Merge into the existing search so moveend doesn't wipe
-		// hide/rt/sched/follow every time the user pans or zooms.
+		search.hide,
 		navigate,
 		syncMarkers,
 		search.rt,
 		stopFollowing,
-		search.lon,
 		load,
-		search.z,
-		search.lat,
 		search.gps,
 		l,
 	]);
