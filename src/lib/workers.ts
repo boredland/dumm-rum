@@ -8,8 +8,14 @@ import {
 	type PollJob,
 	processPollBatch,
 } from "./poll.ts";
+import { vacuumJobTables } from "./vacuum.ts";
 
 const DISCOVER_QUEUE = "discover";
+const VACUUM_QUEUE = "vacuum";
+/** 03:20 Berlin: after the retention window has trimmed the night's jobs
+ * and while traffic is at its lowest, so the ACCESS EXCLUSIVE lock lands
+ * where it costs least. */
+const VACUUM_CRON = process.env.VACUUM_CRON ?? "20 3 * * *";
 const DISCOVER_CRON = process.env.DISCOVER_CRON ?? "*/5 * * * *";
 const TZ = "Europe/Berlin";
 const POLL_BATCH_SIZE = 10;
@@ -81,13 +87,19 @@ export async function startIngest(): Promise<StartedIngest> {
 
 	await boss.createQueue(DISCOVER_QUEUE);
 	await boss.createQueue(POLL_QUEUE);
+	await boss.createQueue(VACUUM_QUEUE);
 
 	await boss.schedule(DISCOVER_QUEUE, DISCOVER_CRON, {}, { tz: TZ });
+	await boss.schedule(VACUUM_QUEUE, VACUUM_CRON, {}, { tz: TZ });
 
 	await boss.work(DISCOVER_QUEUE, async () => {
 		console.log("discover: start");
 		await runDiscovery(db, boss);
 		console.log("discover: done");
+	});
+
+	await boss.work(VACUUM_QUEUE, async () => {
+		await vacuumJobTables();
 	});
 
 	await boss.work<PollJob>(
@@ -99,7 +111,7 @@ export async function startIngest(): Promise<StartedIngest> {
 	);
 
 	console.log(
-		`ingest up — discovery cron "${DISCOVER_CRON}" (${TZ}), poll batch ${POLL_BATCH_SIZE}`,
+		`ingest up — discovery cron "${DISCOVER_CRON}", vacuum cron "${VACUUM_CRON}" (${TZ}), poll batch ${POLL_BATCH_SIZE}`,
 	);
 
 	// Fire one on boot so we don't wait up to a full cron interval for
