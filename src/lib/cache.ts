@@ -1,9 +1,9 @@
 /**
- * Cheap Postgres-backed KV for recomputable responses (e.g. the picker
- * pick-lists behind `memoGet`, which are stable for minutes but cost a
- * multi-second aggregation to rebuild). Backs onto the `unlogged_cache`
- * table — UNLOGGED = no WAL durability, but every value here can be
- * recovered from its source on a cache miss.
+ * Cheap Postgres-backed KV for recomputable third-party responses (e.g.
+ * bahn.expert polylines, which are stable per service day but
+ * expensive to re-fetch). Backs onto the `unlogged_cache` table —
+ * UNLOGGED = no WAL durability, but every value here can be recovered
+ * from its upstream source on a cache miss.
  *
  * Values are stored as JSON strings; callers pick their own encoding.
  * `mget` batches multi-key lookups so pulling 50 polylines at once

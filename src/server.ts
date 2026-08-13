@@ -4,7 +4,9 @@ import {
 	defaultStreamHandler,
 	type RequestHandler,
 } from "@tanstack/react-start/server";
+import { getAggregatedVehicles } from "./lib/flix-proxy.ts";
 import { warmHomeSummaries } from "./lib/home.ts";
+import { memoGet } from "./lib/memo.ts";
 import { migrationsApplied, startIngest } from "./lib/workers.ts";
 
 // Ingest startup runs alongside request handling rather than in front of
@@ -20,6 +22,12 @@ startIngest().catch((e) => {
 	console.error("fatal: ingest startup failed:", e);
 	process.exit(1);
 });
+
+// Fire-and-forget Flix aggregator warmup so the first user to hit
+// `/api/flix/vehicles` gets a memo hit instead of a 15-25 s cold pool.
+memoGet("vehicles", 25, getAggregatedVehicles).catch((e) =>
+	console.warn("flix warmup failed:", e),
+);
 
 // getStopSummaries costs ~1 s at prod scale; seed the memo at boot so the
 // first post-deploy landing hit is served from cache. Sequenced behind

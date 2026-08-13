@@ -51,7 +51,7 @@ Single Bun process runs both the **TanStack Start SSR UI** and the **pg-boss ing
 | `src/lib/workers.ts` | `startIngest()` — migrations, pg-boss setup, cron + worker registration |
 | `src/lib/discover.ts` | Station-board fan-out → journey_runs inserts → poll job enqueue |
 | `src/lib/poll.ts` | Per-journey mgate polling → upsert runs/stops → re-enqueue or mark done |
-| `src/lib/mgate.ts` | HAFAS mgate client (StationBoard + JourneyDetails batch) |
+| `src/lib/mgate.ts` | HAFAS mgate client (StationBoard + JourneyDetails batch, polyline decode) |
 | `src/lib/queries.ts` | All read queries (summaries, stats, departures) consumed by UI routes |
 | `src/lib/i18n.ts` | German/English translations, `t(lang, key, params?)` helper |
 | `src/db/schema.ts` | Drizzle schema — `journey_runs`, `journey_stops`, `known_stops` |

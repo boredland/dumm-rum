@@ -47,8 +47,10 @@ function resolveAsset(pathname: string): string | null {
 
 Bun.serve({
 	port,
-	// Cold summary aggregations (getStopSummaries runs ~5 s on prod) can
-	// exceed the 10 s Bun default when the boot warmup hasn't landed yet.
+	// Cold summary aggregations (getStopSummaries runs ~5 s on prod) and
+	// the Flix proxy cold-start (connection pool + 12 timetable fans) can
+	// each exceed the 10 s Bun default. Allow 30 s for the first request
+	// after a cache miss.
 	idleTimeout: 30,
 	async fetch(req) {
 		const url = new URL(req.url);
@@ -92,7 +94,9 @@ Bun.serve({
 
 		// Only successful HTML responses are cacheable. Gating on status
 		// keeps 404s (e.g. bookmarked URLs for since-removed routes),
-		// SSR errors, and redirects out of the edge cache.
+		// SSR errors, and redirects out of the edge cache. The live map
+		// sets its own Cache-Control, which the has() check below leaves
+		// untouched.
 		if (
 			req.method === "GET" &&
 			res.ok &&

@@ -80,7 +80,10 @@ export function parseLineSlug(slug: string): {
 }
 
 export function providerFromRef(ref: string): string {
-	return /^[12]\|/.test(ref) ? "rmv" : "unknown";
+	if (ref.startsWith("flix|")) return "flix";
+	if (ref.startsWith("ferry|")) return "ferry";
+	if (/^[12]\|/.test(ref)) return "rmv";
+	return "unknown";
 }
 
 export function lineSlug(

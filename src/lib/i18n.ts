@@ -125,6 +125,18 @@ const translations = {
 
 		"home.ghost": "Geisterfahrten",
 
+		"map.title": "Livekarte",
+		"map.link": "Live-Karte",
+		"map.vehicles": "Fahrzeuge",
+		"map.last_update": "Letztes Update",
+		"map.no_vehicles": "Keine aktiven Fahrzeuge",
+		"map.layer_gps": "GPS (Echtzeit)",
+		"map.layer_realtime": "Echtzeit (berechnet)",
+		"map.layer_schedule": "Fahrplan",
+		"map.gps_fix_now": "GPS gerade eben",
+		"map.gps_fix_ago": "GPS vor {t}",
+		"map.gps_fix_calc": "Position berechnet",
+
 		"status.cancelled": "ausgefallen",
 		"status.ghost": "Geisterfahrt",
 		"status.delayed": "verspätet",
@@ -273,6 +285,18 @@ const translations = {
 		"filter.on_time": "On time",
 
 		"home.ghost": "ghost departures",
+
+		"map.title": "Live Map",
+		"map.link": "Live Map",
+		"map.vehicles": "Vehicles",
+		"map.last_update": "Last update",
+		"map.no_vehicles": "No active vehicles",
+		"map.layer_gps": "GPS (Live)",
+		"map.layer_realtime": "Realtime (Calc)",
+		"map.layer_schedule": "Schedule",
+		"map.gps_fix_now": "GPS just now",
+		"map.gps_fix_ago": "GPS {t} ago",
+		"map.gps_fix_calc": "Position calculated",
 
 		"status.cancelled": "cancelled",
 		"status.ghost": "ghost run",

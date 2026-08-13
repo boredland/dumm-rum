@@ -470,7 +470,17 @@ function Masthead({
 				</p>
 			</div>
 			<div className="flex flex-wrap items-baseline justify-between gap-x-6 gap-y-1 text-meta text-muted">
-				<p>{t(lang, "home.subtitle")}</p>
+				<p>
+					{t(lang, "home.subtitle")}
+					{" · "}
+					<Link
+						to="/$lang/map"
+						params={{ lang }}
+						className="text-accent underline decoration-rule"
+					>
+						{t(lang, "map.link")}
+					</Link>
+				</p>
 				{oldestDate && (
 					<p>
 						{t(lang, "stat.since")}{" "}

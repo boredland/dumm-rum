@@ -40,7 +40,6 @@ const LONG_DISTANCE_CATEGORIES = new Set([
 	"D-Zug",
 	"Fernzug",
 ]);
-
 const EXCLUDE_CATEGORIES = new Set(["FLX", "FlixTrain"]);
 
 /** Mainz city buses. They reach the Wiesbaden-Mainz-Kastel board across the
