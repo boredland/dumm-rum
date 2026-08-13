@@ -1,7 +1,8 @@
 /**
- * Cheap Postgres-backed KV for recomputable third-party responses (e.g.
- * bahn.expert polylines, which are stable per service day but
- * expensive to re-fetch). Backs onto the `unlogged_cache` table —
+ * Cheap Postgres-backed KV for recomputable responses. Currently the L2
+ * layer behind `memo.ts`, which the picker endpoints use so a fresh
+ * process reuses work an earlier one already paid for. Backs onto the
+ * `unlogged_cache` table —
  * UNLOGGED = no WAL durability, but every value here can be recovered
  * from its upstream source on a cache miss.
  *

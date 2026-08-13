@@ -6,24 +6,6 @@ import "leaflet-fullscreen/dist/leaflet.fullscreen.css";
 import "leaflet.locatecontrol/dist/L.Control.Locate.min.css";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { SubscribeModal } from "../../../components/SubscribeModal.tsx";
-import {
-	fetchBahnExpertPositions,
-	isSupportedCategory as isBahnExpertCategory,
-	MAX_RMV_BAHN_EXPERT_DRIFT_M,
-	type TrainIdentity,
-} from "../../../lib/bahn-expert.ts";
-import {
-	distanceMeters,
-	type GpsPath,
-	locationAtPercent,
-} from "../../../lib/gps-path.ts";
-import {
-	fetchHeagVehicles,
-	heagGpsPath,
-	heagHeadingToDirGeo,
-	matchHeagToRmv,
-	parseHeagFixTime,
-} from "../../../lib/heag.ts";
 import { type Lang, t } from "../../../lib/i18n.ts";
 import {
 	AUTH,
@@ -64,29 +46,20 @@ interface Vehicle {
 	occupancy: "L" | "M" | "H" | null;
 	hasRT: boolean;
 	/** True when the vehicle's `lat`/`lon` come from a real position
-	 * report. As of 2026-04-18 only Flix is surfacing real GPS to this
-	 * app — RMV's public mgate `JourneyGeoPos` doesn't expose `aPos`
-	 * under any `trainPosMode`, so RMV entries are always false. Kept as
-	 * a per-vehicle flag so the indicator logic can light up the moment
-	 * any source starts providing it. */
+	 * report. RMV's public mgate `JourneyGeoPos` doesn't expose `aPos`
+	 * under any `trainPosMode` (probed 2026-04-18), so in practice this
+	 * is always false today. Kept as a per-vehicle flag so the indicator
+	 * logic lights up the moment RMV starts providing it. */
 	hasGps: boolean;
 	/** Unix-ms timestamp of the last real position fix. Null when the
 	 * vehicle has no GPS source (either schedule-interpolated or no age
-	 * report returned). HAFAS gives us `aPos` seconds-since-fix; Flix
-	 * publishes `location.updated_at` directly. Shown in the popup as a
-	 * human-readable age. */
+	 * report returned). Derived from HAFAS's `aPos` seconds-since-fix.
+	 * Shown in the popup as a human-readable age. */
 	gpsFixAt: number | null;
-	/** Forward trajectory for mid-poll animation of GPS-enriched
-	 * vehicles. Walked by `locationAtPercent` at
-	 * `(now - gpsFixAt) / windowMs * 100`. Absent or null when the
-	 * source hasn't published a trajectory (Flix falls back
-	 * to the `waypoints` array — see that instead). */
-	gpsPath?: GpsPath | null;
 	stationary?: boolean;
 	externalTrackingUrl: string | null;
 	/** HAFAS service date (`YYYY-MM-DD`). Used to deep-link the popup into
-	 * this app's `/$lang/line/:line/day/:date?jid=…` page. Only set for
-	 * RMV-sourced vehicles since Flix doesn't live in `journey_runs`. */
+	 * this app's `/$lang/line/:line/day/:date?jid=…` page. */
 	serviceDate: string | null;
 	waypoints: Waypoint[];
 	fetchedAt: number;
@@ -114,8 +87,6 @@ function classifyProduct(cls: number): string {
 const CATEGORY_COLORS: Record<string, string> = {
 	Fernverkehr: "#EC0016",
 	Regionalverkehr: "#EC0016",
-	Flixtrain: "#73D700",
-	Flixbus: "#44A12C",
 	"S-Bahn": "#009757",
 	"U-Bahn": "#0065ae",
 	Tram: "#ef7d00",
@@ -184,9 +155,8 @@ const fetchVehicles = createServerFn({ method: "GET" })
 			// request rect is below ~8 km on either axis — probed
 			// 2026-04-19 over Siegburg, empty rows under 4-5 km, partial
 			// over 8-10 km, full only above ~15 km. At z=15 a typical
-			// desktop viewport is ~4-6 km, which made GPS-enriched DB
-			// trains vanish (nothing for bahn.expert to attach to while
-			// Flix kept rendering independently). Expand the rect around
+			// desktop viewport is ~4-6 km, which made trains vanish
+			// entirely. Expand the rect around
 			// its centre to a floor that's reliably above HAFAS's cutoff;
 			// off-viewport markers just sit outside Leaflet's map
 			// container, costing nothing visually.
@@ -270,18 +240,11 @@ const fetchVehicles = createServerFn({ method: "GET" })
 				auth: AUTH,
 			};
 
-			// Kick off HEAG in parallel with mgate. HEAG supplies real AVL
-			// positions for Darmstadt-area trams/buses — we'll match them
-			// onto the RMV vehicles further down. Its timeout (see heag.ts)
-			// guarantees it can't slow down the main response path.
-			const [resp, heagVehicles] = await Promise.all([
-				fetch(MGATE_URL, {
-					method: "POST",
-					headers: { "Content-Type": "application/json" },
-					body: JSON.stringify(body),
-				}),
-				fetchHeagVehicles(),
-			]);
+			const resp = await fetch(MGATE_URL, {
+				method: "POST",
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify(body),
+			});
 
 			if (!resp.ok) return { vehicles: [], serverTime };
 
@@ -338,12 +301,7 @@ const fetchVehicles = createServerFn({ method: "GET" })
 
 			const decodedPolys = new Map<number, [number, number][]>();
 
-			// Collected during the vehicle-map pass: one entry per
-			// long-distance DB train so we can batch-enrich them with
-			// real GPS from bahn.expert after the mgate parse finishes.
-			const bahnExpertInputs: TrainIdentity[] = [];
-
-			const vehicles: Vehicle[] = jnyL.map((j, rmvIndex) => {
+			const vehicles: Vehicle[] = jnyL.map((j) => {
 				const prod = j.prodX != null ? prodL[j.prodX] : undefined;
 				const oprIdx = prod?.oprX;
 				const category = classifyProduct(prod?.cls ?? 0);
@@ -443,25 +401,6 @@ const fetchVehicles = createServerFn({ method: "GET" })
 						if (trainName) {
 							externalTrackingUrl = `https://bahn.expert/details/${encodeURIComponent(trainName)}/${y}-${mo}-${dy}T${hh}:${mm}:00.000Z`;
 						}
-						// Same prodCtx info feeds the bahn.expert live-GPS
-						// enrichment. Filter to Fernverkehr categories — DB
-						// Regio (RE/RB) and S-Bahn journeys resolve cleanly
-						// but never have `lastKnownPosition` populated, so
-						// querying them wastes round-trip time.
-						const journeyNumber = Number(tripNum);
-						if (
-							Number.isFinite(journeyNumber) &&
-							journeyNumber > 0 &&
-							cat &&
-							isBahnExpertCategory(cat)
-						) {
-							bahnExpertInputs.push({
-								rmvIndex,
-								category: cat,
-								journeyNumber,
-								serviceDate: `${y}-${mo}-${dy}`,
-							});
-						}
 					}
 				}
 
@@ -485,7 +424,6 @@ const fetchVehicles = createServerFn({ method: "GET" })
 					hasRT,
 					hasGps,
 					gpsFixAt,
-					gpsPath: null,
 					externalTrackingUrl,
 					serviceDate: j.date
 						? `${j.date.slice(0, 4)}-${j.date.slice(4, 6)}-${j.date.slice(6, 8)}`
@@ -495,105 +433,9 @@ const fetchVehicles = createServerFn({ method: "GET" })
 				};
 			});
 
-			// Kick off bahn.expert lookups for any DB long-distance trains
-			// we found. Runs after the mgate parse because it depends on
-			// the `bahnExpertInputs` list the parse populates, but we
-			// await it at the end in parallel with the HEAG enrichment
-			// pass so the two GPS sources merge without extra latency.
-			const bahnExpertPromise = fetchBahnExpertPositions(bahnExpertInputs);
-
-			// Clear the polyline-derived waypoints on enriched vehicles so
-			// the client renders the real GPS fix verbatim. The earlier
-			// "shift polyline onto fix" trick preserved smooth motion but
-			// introduced off-rail artifacts: HAFAS's calc position and
-			// bahn.expert's real GPS can disagree by hundreds of meters
-			// (fix staleness × train speed), so a parallel-shifted polyline
-			// slides the marker along a line parallel to — but off — the
-			// actual rails. Better to show the real position statically
-			// between polls and let the marker-div CSS transition smooth
-			// the per-poll snaps.
-			const clearWaypointsForGps = (v: (typeof vehicles)[number]): void => {
-				v.waypoints = [];
-			};
-
-			if (heagVehicles.length) {
-				const matches = matchHeagToRmv(
-					vehicles.map((v) => ({
-						name: v.name,
-						direction: v.direction,
-						lat: v.lat,
-						lon: v.lon,
-					})),
-					heagVehicles,
-				);
-				for (const m of matches) {
-					const v = vehicles[m.rmvIndex];
-					const fixAt = parseHeagFixTime(m.heag.date);
-					v.lat = m.heag.latitude;
-					v.lon = m.heag.longitude;
-					v.heading = heagHeadingToDirGeo(m.heag.bearing);
-					v.hasGps = true;
-					v.gpsFixAt = fixAt;
-					v.gpsPath = heagGpsPath(m.heag);
-					clearWaypointsForGps(v);
-					// HEAG's `deviation` is in seconds; convert to the minute
-					// scale RMV/Flix use for the `delay` field. Only overwrite
-					// when RMV didn't already have a realtime delay so we
-					// don't erase a 30-second value that the RMV feed
-					// surfaced but HEAG rounded to 0.
-					if (v.delay == null && m.heag.deviation != null) {
-						v.delay = Math.round(m.heag.deviation / 60);
-					}
-					// Operator tag so the popup attributes the source
-					// correctly — matches the cache-attribution line the
-					// Leaflet map already shows for RMV.
-					if (!v.operator) v.operator = "HEAG mobilo";
-				}
-			}
-
-			// Same for DB long-distance trains via bahn.expert, plus any
-			// RE / RB that happen to be indexed on adjacent national
-			// networks. bahn.expert's `journey.find` matches on
-			// `{category, journeyNumber}` without a country hint, so an
-			// RB 15 on our list can sometimes resolve against an SNCB
-			// service in Belgium. Reject matches whose GPS fix is wildly
-			// far from the RMV calc position — the threshold absorbs
-			// normal HAFAS-vs-GPS drift while rejecting the cross-border
-			// false positives.
-			const bahnExpertPositions = await bahnExpertPromise;
-			for (const p of bahnExpertPositions) {
-				const v = vehicles[p.rmvIndex];
-				if (!v) continue;
-				const drift = distanceMeters([v.lat, v.lon], [p.lat, p.lon]);
-				if (drift > MAX_RMV_BAHN_EXPERT_DRIFT_M) continue;
-				v.lat = p.lat;
-				v.lon = p.lon;
-				v.hasGps = true;
-				v.gpsFixAt = p.timeMs;
-				v.gpsPath = p.gpsPath;
-				clearWaypointsForGps(v);
-			}
-
 			return { vehicles, serverTime };
 		},
 	);
-
-async function fetchFlixVehicles(): Promise<{
-	vehicles: Vehicle[];
-	serverTime: number;
-}> {
-	const resp = await fetch("/api/flix/vehicles");
-	if (!resp.ok) throw new Error(`flix vehicles HTTP ${resp.status}`);
-	return (await resp.json()) as { vehicles: Vehicle[]; serverTime: number };
-}
-
-async function fetchFlixRoute(
-	uuid: string,
-): Promise<[number, number][] | null> {
-	const resp = await fetch(`/api/flix/route/${encodeURIComponent(uuid)}`);
-	if (!resp.ok) return null;
-	return (await resp.json()) as [number, number][] | null;
-}
 
 type MapSearch = {
 	z?: number;
@@ -655,10 +497,6 @@ function resolveIconType(category: string): IconType {
 			return "train";
 		case "Regionalverkehr":
 			return "R";
-		case "Flixtrain":
-			return "train";
-		case "Flixbus":
-			return "bus";
 		default:
 			return null;
 	}
@@ -729,8 +567,7 @@ function buildVehicleIcon(
 
 	// Real-GPS badge: three ascending signal bars at the pin's top-right
 	// so users can tell at a glance which markers are ground-truth AVL
-	// fixes (Flix live feed, HEAG mobilo, bahn.expert for DB Fernverkehr)
-	// vs the polyline-calc interpolation we render for everything else.
+	// fixes vs the polyline-calc interpolation we render otherwise.
 	// Bars light up sequentially via CSS keyframes, mirroring phone cell-
 	// reception animations so the intent reads as "live signal."
 	let gpsBadge = "";
@@ -923,26 +760,9 @@ function MapPage() {
 		}
 	}, []);
 
-	const drawFollowedPolyline = useCallback(async (v: Vehicle) => {
-		if (v.category !== "Flixtrain" && v.category !== "Flixbus") return;
-		const coords = await fetchFlixRoute(v.id);
-		if (!coords || !leafletMap.current) return;
-		if (followIdRef.current !== v.id) return;
-		const L = await import("leaflet");
-		if (followIdRef.current !== v.id || !leafletMap.current) return;
-		if (followedPolylineRef.current) followedPolylineRef.current.remove();
-		followedPolylineRef.current = L.polyline(coords, {
-			color: v.bg,
-			weight: 4,
-			opacity: 0.55,
-			dashArray: "6 6",
-		}).addTo(leafletMap.current);
-	}, []);
-
 	// Start following a vehicle: bump the ref, show the "Following X"
-	// badge, draw its route polyline if we have one, and persist the
-	// vehicle id to the URL so a refresh / share-link restores the
-	// state. Keeps the click handler and the on-mount restore
+	// badge, and persist the vehicle id to the URL so a refresh /
+	// share-link restores the state. Keeps the click handler and the on-mount restore
 	// symmetrical — no duplicated state-setting logic.
 	const startFollowing = useCallback(
 		(v: Vehicle) => {
@@ -954,7 +774,6 @@ function MapPage() {
 			setFollowName(v.name);
 			userPanRef.current = false;
 			clearFollowedPolyline();
-			drawFollowedPolyline(v);
 			// On a click Leaflet auto-opens the popup; on a URL-restore
 			// the user never clicked, so open it manually if the marker
 			// is already on the map — saves ~15 s of waiting for the
@@ -984,7 +803,7 @@ function MapPage() {
 		// Listing navigate/clearFollowedPolyline would cascade-invalidate
 		// load → the polling effect on every render since TanStack's
 		// useNavigate is not stable across renders.
-		[drawFollowedPolyline, navigate, clearFollowedPolyline],
+		[navigate, clearFollowedPolyline],
 	);
 
 	const stopFollowing = useCallback(() => {
@@ -1029,19 +848,11 @@ function MapPage() {
 			seen.add(v.id);
 			const nowAdj = Date.now() + timeDeltaRef.current;
 			// Poll-time snap mirrors the animate-loop precedence:
-			//   1. gpsPath (HEAG encodedPath, bahn.expert polyline
-			//      slice) — walk by elapsed-time percentage.
-			//   2. waypoints (calc RMV, Flix) — interpolate by
-			//      wall clock. Calc entries also pass through
-			//      clampForward to suppress HAFAS's downward-jitter.
-			//   3. hasGps without a path — hold at the raw fix.
+			//   1. waypoints (calc RMV) — interpolate by wall clock,
+			//      then clampForward to suppress HAFAS's downward-jitter.
+			//   2. hasGps — hold at the raw fix.
 			let pos: { lat: number; lon: number; heading: number };
-			if (v.gpsPath && v.gpsFixAt != null) {
-				const elapsed = nowAdj - v.gpsFixAt;
-				const pct = (elapsed / v.gpsPath.windowMs) * 100;
-				const [pLat, pLon] = locationAtPercent(v.gpsPath.points, pct);
-				pos = { lat: pLat, lon: pLon, heading: v.heading };
-			} else if (v.hasGps || v.waypoints.length < 2) {
+			if (v.hasGps || v.waypoints.length < 2) {
 				pos = { lat: v.lat, lon: v.lon, heading: v.heading };
 			} else {
 				const rawPos = interpolateVehicle(v, nowAdj);
@@ -1101,27 +912,21 @@ function MapPage() {
 			const entryNow = existing.get(v.id);
 			if (!entryNow) return;
 			const m = entryNow.marker;
-			const isFlix = v.category === "Flixtrain" || v.category === "Flixbus";
 			const showTracking =
-				v.externalTrackingUrl && (isFlix || (v.delay != null && v.delay > 2));
+				v.externalTrackingUrl && v.delay != null && v.delay > 2;
 			const trackingLink = showTracking
 				? `<br/><a href="${v.externalTrackingUrl}" target="_blank" rel="noopener" style="font-size:11px;color:var(--accent,#0969da)">Tracking info →</a>`
 				: "";
 			// Deep-link into our own /line/$line/day/$date?jid=… page so
 			// clicking the popup jumps to the journey's per-day detail with
-			// the correct row highlighted. Only emit for RMV-sourced vehicles
-			// (Flix isn't in journey_runs).
-			const lineDetailsLink =
-				!isFlix && v.serviceDate
-					? `<br/><a href="/${l}/line/${encodeURIComponent(v.name.trim())}/day/${v.serviceDate}?jid=${encodeURIComponent(v.id)}" style="font-size:11px;color:var(--accent,#0969da)">Line details →</a>`
-					: "";
-			// Subscribe link (RMV only) — clicked via event delegation up
-			// to the MapPage's subscribeInitial state, which renders the
-			// SubscribeModal. Flix isn't in journey_runs so subscriptions
-			// for it wouldn't fire anything.
-			const subscribeLink = !isFlix
-				? `<br/><a href="#" data-subscribe-line="${escapeHtml(v.name.trim())}" data-subscribe-direction="${escapeHtml(v.direction)}" style="font-size:11px;color:var(--accent,#0969da)">${t(l, "subscribe.cta.button")}</a>`
+			// the correct row highlighted.
+			const lineDetailsLink = v.serviceDate
+				? `<br/><a href="/${l}/line/${encodeURIComponent(v.name.trim())}/day/${v.serviceDate}?jid=${encodeURIComponent(v.id)}" style="font-size:11px;color:var(--accent,#0969da)">Line details →</a>`
 				: "";
+			// Subscribe link — clicked via event delegation up to the
+			// MapPage's subscribeInitial state, which renders the
+			// SubscribeModal.
+			const subscribeLink = `<br/><a href="#" data-subscribe-line="${escapeHtml(v.name.trim())}" data-subscribe-direction="${escapeHtml(v.direction)}" style="font-size:11px;color:var(--accent,#0969da)">${t(l, "subscribe.cta.button")}</a>`;
 			// Position-source line. Real GPS fixes get a green dot + a
 			// "GPS <age>" label that ticks every second via the
 			// dummrum-gps-age DOM updater (see its useEffect). We
@@ -1189,30 +994,17 @@ function MapPage() {
 		const sw = bounds.getSouthWest();
 		const ne = bounds.getNorthEast();
 		try {
-			const [rmvRes, flixRes] = await Promise.allSettled([
-				fetchVehicles({
-					data: {
-						swLat: sw.lat,
-						swLon: sw.lng,
-						neLat: ne.lat,
-						neLon: ne.lng,
-						products: 1023,
-					},
-				}),
-				fetchFlixVehicles(),
-			]);
-
-			const vehicles: Vehicle[] = [];
-			let serverTime = Date.now();
-			if (rmvRes.status === "fulfilled") {
-				vehicles.push(...rmvRes.value.vehicles);
-				serverTime = rmvRes.value.serverTime;
-			}
-			if (flixRes.status === "fulfilled") {
-				vehicles.push(...flixRes.value.vehicles);
-			} else {
-				console.warn("flix fetch failed:", flixRes.reason);
-			}
+			// RMV is the only upstream now, so a failure here is a failure
+			// of the whole load — the outer catch keeps the stale data.
+			const { vehicles, serverTime } = await fetchVehicles({
+				data: {
+					swLat: sw.lat,
+					swLon: sw.lng,
+					neLat: ne.lat,
+					neLon: ne.lng,
+					products: 1023,
+				},
+			});
 			timeDeltaRef.current = serverTime - Date.now();
 			// No carryover: each fetch's waypoints are HAFAS's authoritative
 			// animation for the new horizon starting at serverTime. Mixing
@@ -1306,8 +1098,6 @@ function MapPage() {
 			const CATS = [
 				"Fernverkehr",
 				"Regionalverkehr",
-				"Flixtrain",
-				"Flixbus",
 				"S-Bahn",
 				"U-Bahn",
 				"Tram",
@@ -1315,32 +1105,11 @@ function MapPage() {
 				"AST",
 				"Other",
 			];
-			// Each LayerGroup declares the credit for its data source. The
-			// default attribution control dedupes identical strings, so the
-			// same string across 16 groups shows up once; removing all groups
-			// for a source (e.g. both Flix categories toggled off) drops the
-			// credit until something from that source is re-added.
-			const FLIX_CATS = new Set(["Flixtrain", "Flixbus"]);
-			// Attribution per category. The RMV base string is shared across
-			// every calc-only layer (Leaflet dedupes identical strings); the
-			// enriched categories append their live-GPS source so credits
-			// appear whenever that layer has markers on screen. Tram + Bus
-			// carry the HEAG credit globally because we can't predict at
-			// layer-create time whether the current viewport will happen to
-			// include Darmstadt — a small overclaim we accept to keep the
-			// attribution text stable as users pan across the region.
-			const RMV_BASE = 'Vehicles © <a href="https://www.rmv.de">RMV</a>';
-			const attrFor = (cat: string) => {
-				if (FLIX_CATS.has(cat))
-					return 'Vehicles © <a href="https://www.flixbus.com">FlixBus</a>';
-				if (cat === "Fernverkehr")
-					return `${RMV_BASE} · live GPS via <a href="https://bahn.expert">bahn.expert</a>`;
-				if (cat === "Tram" || cat === "Bus")
-					return `${RMV_BASE} · Darmstadt GPS © <a href="https://www.heagmobilo.de">HEAG mobilo</a>`;
-				return RMV_BASE;
-			};
+			// RMV is the only vehicle source, so every LayerGroup carries
+			// the same credit. Leaflet's attribution control dedupes
+			// identical strings, so it renders once.
+			const attribution = 'Vehicles © <a href="https://www.rmv.de">RMV</a>';
 			for (const cat of CATS) {
-				const attribution = attrFor(cat);
 				layers.set(cat, L.layerGroup([], { attribution }).addTo(map));
 				layers.set(
 					`${cat} (gps)`,
@@ -1714,21 +1483,11 @@ function MapPage() {
 				const entry = existing.get(v.id);
 				if (!entry) continue;
 				// Animation source precedence:
-				//   1. gpsPath — HEAG / bahn.expert forward trajectory,
-				//      walked by elapsed-time percentage.
-				//   2. waypoints — HAFAS ani frames (calc RMV) or
-				//      Flix-computed forward waypoints.
-				//   3. static fix — GPS vehicle without a path (HEAG
-				//      offline, bahn.expert speed=0 / polyline mismatch),
+				//   1. waypoints — HAFAS ani frames (calc RMV).
+				//   2. static fix — GPS vehicle without waypoints,
 				//      already placed by syncMarkers, no per-frame work.
 				let pos: { lat: number; lon: number } | null = null;
-				if (v.gpsPath && v.gpsFixAt != null) {
-					const elapsed = now - v.gpsFixAt;
-					const pct = (elapsed / v.gpsPath.windowMs) * 100;
-					const [pLat, pLon] = locationAtPercent(v.gpsPath.points, pct);
-					pos = { lat: pLat, lon: pLon };
-					entry.marker.setLatLng([pos.lat, pos.lon]);
-				} else if (v.waypoints.length >= 2) {
+				if (v.waypoints.length >= 2) {
 					const rawPos = interpolateVehicle(v, now);
 					// clampForward guards against HAFAS's occasional
 					// downward re-prediction jitter; real GPS vehicles

@@ -47,10 +47,8 @@ function resolveAsset(pathname: string): string | null {
 
 Bun.serve({
 	port,
-	// Cold summary aggregations (getStopSummaries runs ~5 s on prod) and
-	// the Flix proxy cold-start (connection pool + 12 timetable fans) can
-	// each exceed the 10 s Bun default. Allow 30 s for the first request
-	// after a cache miss.
+	// Cold summary aggregations (getStopSummaries runs ~5 s on prod) can
+	// exceed the 10 s Bun default when the boot warmup hasn't landed yet.
 	idleTimeout: 30,
 	async fetch(req) {
 		const url = new URL(req.url);

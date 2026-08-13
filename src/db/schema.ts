@@ -108,9 +108,9 @@ export const knownStops = pgTable(
 );
 
 /**
- * Key-value cache used as a cheap KV store — currently backs the
- * bahn.expert polyline cache but intended as a general-purpose spot for
- * third-party responses we want to hold beyond a process restart. The
+ * Key-value cache used as a cheap KV store — currently backs the memo
+ * layer behind the picker endpoints, and intended as a general-purpose
+ * spot for responses we want to hold beyond a process restart. The
  * table name intentionally starts with `unlogged_` to signal the
  * migration should be hand-edited to `CREATE UNLOGGED TABLE` (drizzle
  * doesn't emit that modifier). Unlogged = no WAL churn, lower
