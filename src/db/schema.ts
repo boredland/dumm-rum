@@ -53,6 +53,13 @@ export const journeyRuns = pgTable(
 		// Declared here to stop that; the summary queries filter on
 		// category_norm and the poller re-checks it per run.
 		index("idx_journey_runs_cat_norm_day").on(t.categoryNorm, t.dayOfOperation),
+		// idx_journey_runs_line_cover and idx_journey_runs_operator_cover —
+		// covering indexes with INCLUDE payloads for the entity detail
+		// pages — are created by
+		// drizzle/20260813193000_entity_page_covering. Same reason as the
+		// journey_stops one: this drizzle version's index builder has no
+		// .include(), so declaring them here would drop the payload and make
+		// every later `generate` plan to recreate them.
 	],
 );
 
