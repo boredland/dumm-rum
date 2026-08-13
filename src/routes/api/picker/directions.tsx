@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { memoGet } from "../../../lib/memo.ts";
+import { memoGet, PICKER_TTL_SEC } from "../../../lib/memo.ts";
 import { getAllDirections } from "../../../lib/queries.ts";
 
 const CACHE_CONTROL =
@@ -9,7 +9,11 @@ export const Route = createFileRoute("/api/picker/directions")({
 	server: {
 		handlers: {
 			GET: async () => {
-				const body = await memoGet("picker:directions", 300, getAllDirections);
+				const body = await memoGet(
+					"picker:directions",
+					PICKER_TTL_SEC,
+					getAllDirections,
+				);
 				return new Response(body, {
 					headers: {
 						"Content-Type": "application/json",

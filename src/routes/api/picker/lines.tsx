@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { memoGet } from "../../../lib/memo.ts";
+import { memoGet, PICKER_TTL_SEC } from "../../../lib/memo.ts";
 import { getAllLineNames } from "../../../lib/queries.ts";
 
 const CACHE_CONTROL =
@@ -9,7 +9,11 @@ export const Route = createFileRoute("/api/picker/lines")({
 	server: {
 		handlers: {
 			GET: async () => {
-				const body = await memoGet("picker:lines", 300, getAllLineNames);
+				const body = await memoGet(
+					"picker:lines",
+					PICKER_TTL_SEC,
+					getAllLineNames,
+				);
 				return new Response(body, {
 					headers: {
 						"Content-Type": "application/json",

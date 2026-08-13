@@ -49,3 +49,42 @@ export async function memoGet(
 		});
 	return body;
 }
+
+/** The process-wide picker lists, with the TTL their endpoints use.
+ *
+ * Declared here so the boot warmup and the request handlers cannot drift
+ * onto different keys — a warmup that seeded `picker:stop` while the
+ * handler read `picker:stops` would look fine and do nothing. */
+export const PICKER_TTL_SEC = 300;
+
+/** Seeds the global picker memos so the first request after a deploy is a
+ * cache hit rather than a cold aggregate.
+ *
+ * getAllStopNames scans every known stop and cost ~29 s on the first
+ * post-restart request in production, which is the last cold path the
+ * per-key caches do not cover: the three lists below are process-wide, so
+ * exactly one unlucky user paid for each after every deploy.
+ *
+ * Failures are swallowed per key. A warmup is an optimisation — if one
+ * list cannot be built at boot the endpoint still builds it on demand, and
+ * taking the process down for that would trade a slow request for an
+ * outage. */
+export async function warmPickerLists(builders: {
+	stops: () => Promise<unknown>;
+	lines: () => Promise<unknown>;
+	directions: () => Promise<unknown>;
+}): Promise<void> {
+	await Promise.all(
+		(
+			[
+				["picker:stops", builders.stops],
+				["picker:lines", builders.lines],
+				["picker:directions", builders.directions],
+			] as const
+		).map(([key, build]) =>
+			memoGet(key, PICKER_TTL_SEC, build).catch((e) =>
+				console.warn(`picker warmup failed for ${key}:`, e),
+			),
+		),
+	);
+}

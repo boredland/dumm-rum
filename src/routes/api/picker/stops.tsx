@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { memoGet } from "../../../lib/memo.ts";
+import { memoGet, PICKER_TTL_SEC } from "../../../lib/memo.ts";
 import { getAllStopNames } from "../../../lib/queries.ts";
 
 /** Heavy cache: the picklist of stops changes at most once per ingest pass
@@ -13,7 +13,11 @@ export const Route = createFileRoute("/api/picker/stops")({
 	server: {
 		handlers: {
 			GET: async () => {
-				const body = await memoGet("picker:stops", 300, getAllStopNames);
+				const body = await memoGet(
+					"picker:stops",
+					PICKER_TTL_SEC,
+					getAllStopNames,
+				);
 				return new Response(body, {
 					headers: {
 						"Content-Type": "application/json",

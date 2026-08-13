@@ -5,6 +5,12 @@ import {
 	type RequestHandler,
 } from "@tanstack/react-start/server";
 import { warmHomeSummaries } from "./lib/home.ts";
+import { warmPickerLists } from "./lib/memo.ts";
+import {
+	getAllDirections,
+	getAllLineNames,
+	getAllStopNames,
+} from "./lib/queries.ts";
 import { migrationsApplied, startIngest } from "./lib/workers.ts";
 
 // Ingest startup runs alongside request handling rather than in front of
@@ -27,6 +33,21 @@ startIngest().catch((e) => {
 migrationsApplied()
 	.then(warmHomeSummaries)
 	.catch((e) => console.warn("home warmup failed:", e));
+
+// The subscribe modal's three global pick-lists. getAllStopNames scans
+// every known stop and cost ~29 s on the first request after a deploy —
+// the one cold path the per-key caches never cover, because these keys are
+// process-wide rather than per stop or line. Seeded alongside the home
+// summaries so the first user after a restart hits a warm memo.
+migrationsApplied()
+	.then(() =>
+		warmPickerLists({
+			stops: getAllStopNames,
+			lines: getAllLineNames,
+			directions: getAllDirections,
+		}),
+	)
+	.catch((e) => console.warn("picker warmup failed:", e));
 
 const fetch = createStartHandler(defaultStreamHandler);
 
