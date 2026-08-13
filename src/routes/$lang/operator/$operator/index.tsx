@@ -82,11 +82,21 @@ function OperatorIndex() {
 		onChange: setDaysValue,
 	});
 
-	const total = stats.days.reduce((a, d) => a + d.total, 0);
-	const canc = stats.days.reduce((a, d) => a + d.cancelled, 0);
-	const ghost = stats.days.reduce((a, d) => a + d.ghost, 0);
-	const delayed = stats.days.reduce((a, d) => a + d.delayed, 0);
+	// Reduced over the day selection, not every day on record: the figures
+	// carry no window of their own, so a reader takes them as describing
+	// whatever the toggle below says is selected.
+	const shown = daysFilter.filtered;
+	const total = shown.reduce((a, d) => a + d.total, 0);
+	const canc = shown.reduce((a, d) => a + d.cancelled, 0);
+	const ghost = shown.reduce((a, d) => a + d.ghost, 0);
+	const delayed = shown.reduce((a, d) => a + d.delayed, 0);
 	const score = onTimeRate(canc, delayed, total);
+	// A selection can be empty (weekends before the first weekend of
+	// collection, "today" before the first poll). onTimeRate answers 100 for
+	// zero departures, which would read as a perfect day rather than no
+	// data, so the rates render as a dash instead.
+	const pctOf = (n: number) =>
+		total === 0 ? "—" : `${((n / total) * 100).toFixed(1)}%`;
 
 	return (
 		<main className="mx-auto max-w-3xl px-6 py-10 space-y-10">
@@ -121,17 +131,17 @@ function OperatorIndex() {
 				<Figure label={t(l, "stat.departures")} value={String(total)} />
 				<Figure
 					label={t(l, "home.cancelled")}
-					value={`${((canc / (total || 1)) * 100).toFixed(1)}%`}
+					value={pctOf(canc)}
 					tone={toneForCancRate(canc / (total || 1))}
 				/>
 				<Figure
 					label={t(l, "home.ghost")}
-					value={`${((ghost / (total || 1)) * 100).toFixed(1)}%`}
+					value={pctOf(ghost)}
 					tone={ghost > 0 ? "text-ghost" : "text-muted"}
 				/>
 				<Figure
 					label={t(l, "stat.reliability")}
-					value={`${score}%`}
+					value={total === 0 ? "—" : `${score}%`}
 					tone={toneForScore(score)}
 				/>
 			</Figures>
