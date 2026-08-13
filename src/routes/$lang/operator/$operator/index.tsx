@@ -8,26 +8,17 @@ import {
 import { EmptyState } from "../../../../components/EmptyState.tsx";
 import { Figure, Figures } from "../../../../components/Figures.tsx";
 import { BackLink, PageHeader } from "../../../../components/PageHeader.tsx";
+import { operatorSwr } from "../../../../lib/entity-cache.ts";
 import { type Lang, t } from "../../../../lib/i18n.ts";
-import {
-	getOperatorStats,
-	type OperatorStats,
-} from "../../../../lib/queries.ts";
 import { urlFilter } from "../../../../lib/search-state.ts";
 import {
 	toneForCancRate,
 	toneForCount,
 	toneForScore,
 } from "../../../../lib/status.ts";
-import { makeSwr } from "../../../../lib/swr.ts";
 import { onTimeRate, parseLineSlug } from "../../../../lib/utils.ts";
 
 const DAYS_FILTER_OPTS = ["all", "today", "weekdays", "weekends"] as const;
-
-const operatorSwr = makeSwr<{ operator: string; stats: OperatorStats }>(
-	async (operator) => ({ operator, stats: await getOperatorStats(operator) }),
-	{ freshMs: 60_000, staleMs: 15 * 60_000 },
-);
 
 const loadOperator = createServerFn({ method: "GET" })
 	.inputValidator((op: unknown): string => {

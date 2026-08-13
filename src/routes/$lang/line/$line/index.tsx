@@ -14,23 +14,17 @@ import {
 	PageHeader,
 } from "../../../../components/PageHeader.tsx";
 import { SubscribeModal } from "../../../../components/SubscribeModal.tsx";
+import { lineSwr } from "../../../../lib/entity-cache.ts";
 import { type Lang, t } from "../../../../lib/i18n.ts";
-import { getLineStats, type LineStats } from "../../../../lib/queries.ts";
 import { urlFilter } from "../../../../lib/search-state.ts";
 import {
 	toneForCancRate,
 	toneForCount,
 	toneForScore,
 } from "../../../../lib/status.ts";
-import { makeSwr } from "../../../../lib/swr.ts";
 import { onTimeRate, parseLineSlug } from "../../../../lib/utils.ts";
 
 const DAYS_FILTER_OPTS = ["all", "today", "weekdays", "weekends"] as const;
-
-const lineSwr = makeSwr<{ line: string; stats: LineStats }>(
-	async (line) => ({ line, stats: await getLineStats(line) }),
-	{ freshMs: 60_000, staleMs: 15 * 60_000 },
-);
 
 const loadLine = createServerFn({ method: "GET" })
 	.inputValidator((line: unknown): string => {

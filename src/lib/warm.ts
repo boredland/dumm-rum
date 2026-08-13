@@ -1,9 +1,5 @@
-import {
-	getAllLineNames,
-	getLineStats,
-	getOperatorStats,
-	getOperatorSummaries,
-} from "./queries.ts";
+import { lineSwr, operatorSwr } from "./entity-cache.ts";
+import { getAllLineNames, getOperatorSummaries } from "./queries.ts";
 
 /** Pace between entity queries, so the sweep cannot starve real requests
  * of the connection pool on a small host. At ~10 ms per entity the whole
@@ -17,20 +13,20 @@ function sleep(ms: number): Promise<void> {
 }
 
 /**
- * Reads every line and operator once at boot so their pages are served
- * from Postgres's buffer cache rather than from disk.
+ * Populates the line and operator SWR memos at boot, so the first visitor
+ * to an entity page after a deploy gets a cache hit rather than paying for
+ * the aggregate.
  *
- * The app's own SWR memos already cover repeat visits, but they are
- * per-key and in-process: the first visitor to each of ~106 lines and 16
- * operators still paid for a cold read. Measured against production with
- * an empty buffer cache that was 2-5 s, and 0.12-0.16 s once the same
- * pages had been touched — the gap is disk I/O, not query shape, because
- * shared_buffers is at its 128 MB default and cannot hold the working set.
+ * The memos are per-key and per-process, so every deploy emptied them and
+ * the first request for each of ~106 lines and 16 operators ran the query
+ * cold. Measured against production: 1.0-4.5 s on an untouched key against
+ * 0.14-0.18 s once populated, with the worst cases on the operators that
+ * carry the most runs.
  *
- * So this warms the *database* rather than the app: the entity pages'
- * index and heap pages end up resident, which also helps every other
- * query that touches the same rows. It is a mitigation, not a substitute
- * for sizing shared_buffers to the host — see the note in CLAUDE.md.
+ * It goes through the memos deliberately, not the query functions. An
+ * earlier version called the queries directly, which warmed Postgres's
+ * cache but left the memos empty — and the memo miss, not the disk read,
+ * is what the first visitor actually waits for.
  *
  * Deliberately sequential and paced. The point is to populate a cache in
  * the background, not to race the first user; hammering the pool with 120
@@ -46,7 +42,7 @@ export async function warmEntityPages(): Promise<void> {
 		const operators = await getOperatorSummaries({ days: "all" });
 		for (const o of operators) {
 			try {
-				await getOperatorStats(o.operator);
+				await operatorSwr.get(o.operator);
 				warmed++;
 			} catch {
 				/* one entity failing must not stop the sweep */
@@ -57,7 +53,7 @@ export async function warmEntityPages(): Promise<void> {
 		const lines = await getAllLineNames();
 		for (const line of lines) {
 			try {
-				await getLineStats(line);
+				await lineSwr.get(line);
 				warmed++;
 			} catch {
 				/* as above */
