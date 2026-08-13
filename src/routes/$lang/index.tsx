@@ -836,8 +836,17 @@ function Notables({
 				))}
 			</div>
 
+			{/* Fixed layout is load-bearing: with the default `auto`, a long
+			   station or operator name widens the table past the section
+			   rule and the truncation below never engages. */}
 			<div className="hidden sm:block">
-				<table className="report-table">
+				<table className="report-table table-fixed">
+					<colgroup>
+						<col className="w-[27%]" />
+						<col className="w-[11%]" />
+						<col className="w-[32%]" />
+						<col className="w-[30%]" />
+					</colgroup>
 					<thead>
 						<tr>
 							<th />
@@ -849,7 +858,10 @@ function Notables({
 					<tbody>
 						{rows.map((row) => (
 							<tr key={row.key}>
-								<th scope="row" className="text-muted font-normal normal-case">
+								<th
+									scope="row"
+									className="text-muted font-normal normal-case pr-4 align-top"
+								>
 									{row.label}
 								</th>
 								<WorstCell
@@ -942,7 +954,9 @@ function WorstCell({
 				params={{ lang, [paramKey]: worst.slug } as any}
 				className="block no-underline hover:underline"
 			>
-				<span className="block truncate">{worst.name}</span>
+				<span className="block truncate" title={worst.name}>
+					{worst.name}
+				</span>
 				<span className={`figures block text-meta ${tone}`}>
 					{(worst.rate * 100).toFixed(1)}%
 				</span>
