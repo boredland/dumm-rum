@@ -1,18 +1,57 @@
-/** TTL memo for JSON API responses, layered over the Postgres
- * `unlogged_cache` table so a fresh process (or a second replica) reuses
- * work an earlier one already paid for. Used by the picker endpoints
- * backing the subscribe modal. */
+/** Stale-while-revalidate memo for JSON API responses, layered over the
+ * Postgres `unlogged_cache` table so a fresh process (or a second replica)
+ * reuses work an earlier one already paid for. Used by the picker
+ * endpoints backing the subscribe modal.
+ *
+ * Past `expires` an entry is served anyway and refreshed in the
+ * background. It used to block instead, which meant the caller who
+ * happened to arrive after the TTL lapsed paid the full rebuild:
+ * getAllStopNames scans every known stop and was measured at 28 s in
+ * production, once every 300 s, on a process that had been up for
+ * quarter of an hour. The data behind these lists changes at most once
+ * per ingest pass and the modal accepts freeform text anyway, so serving
+ * one stale response beats making somebody wait for a fresh one. */
 
 interface MemoEntry {
 	body: string;
+	/** Serve without refreshing up to this timestamp. */
 	expires: number;
 }
 
 const memo = new Map<string, MemoEntry>();
+/** In-flight rebuilds, so a stale key refreshes once rather than once per
+ * caller that arrives while it is running. */
+const inflight = new Map<string, Promise<string>>();
 
-/** Returns cached JSON string when fresh; otherwise runs `build`,
- * JSON-encodes the result, stores, and returns. Errors from `build` are
- * not cached — they bubble up to the handler. */
+/** Rebuilds `key` and stores the result, coalescing concurrent callers
+ * onto one build. Errors are not cached — they reject every waiter and
+ * leave whatever was memoized in place. */
+function rebuild(
+	key: string,
+	ttlSec: number,
+	build: () => Promise<unknown>,
+): Promise<string> {
+	const existing = inflight.get(key);
+	if (existing) return existing;
+	const p = (async () => {
+		const value = await build();
+		const body = JSON.stringify(value);
+		memo.set(key, { body, expires: Date.now() + ttlSec * 1000 });
+		import("./cache.ts")
+			.then(({ cachePut }) => cachePut(`memo:${key}`, value, ttlSec * 1000))
+			.catch(() => {
+				/* persistence failure is cosmetic — the memo still holds the
+				 * response for this process's lifetime. */
+			});
+		return body;
+	})().finally(() => inflight.delete(key));
+	inflight.set(key, p);
+	return p;
+}
+
+/** Returns the cached JSON string, refreshing in the background once it is
+ * past its TTL. Only a caller that finds nothing cached at all waits for a
+ * build. */
 export async function memoGet(
 	key: string,
 	ttlSec: number,
@@ -20,7 +59,16 @@ export async function memoGet(
 ): Promise<string> {
 	const now = Date.now();
 	const hit = memo.get(key);
-	if (hit && hit.expires > now) return hit.body;
+	if (hit) {
+		// Stale is fine: hand back what we have and let the refresh land for
+		// whoever comes next.
+		if (hit.expires <= now) {
+			rebuild(key, ttlSec, build).catch((e) =>
+				console.warn(`memo refresh failed for ${key}:`, e),
+			);
+		}
+		return hit.body;
+	}
 
 	// L2 lookup is lazy-imported so client bundles (which transitively
 	// touch route modules importing this file) don't pull in the DB
@@ -37,17 +85,7 @@ export async function memoGet(
 		/* DB blip → fall through to upstream; surfaces as a cache miss */
 	}
 
-	const value = await build();
-	const body = JSON.stringify(value);
-	memo.set(key, { body, expires: now + ttlSec * 1000 });
-	import("./cache.ts")
-		.then(({ cachePut }) => cachePut(`memo:${key}`, value, ttlSec * 1000))
-		.catch(() => {
-			/* persistence failure is cosmetic — memo still holds the
-			 * response for the process lifetime, subsequent polls just
-			 * re-fetch on a cache miss. */
-		});
-	return body;
+	return rebuild(key, ttlSec, build);
 }
 
 /** The process-wide picker lists, with the TTL their endpoints use.
