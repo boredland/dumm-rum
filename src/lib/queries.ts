@@ -12,7 +12,12 @@ import {
 	sql,
 } from "drizzle-orm";
 import { db } from "../db/client.ts";
-import { journeyRuns, journeyStops, knownStops } from "../db/schema.ts";
+import {
+	journeyRuns,
+	journeyStops,
+	knownStops,
+	stopDayStats,
+} from "../db/schema.ts";
 import {
 	DELAY_THRESHOLD_MIN,
 	lineSlug,
@@ -336,31 +341,26 @@ export async function getStopSummaries(): Promise<StopSummary[]> {
 	const runDayWindow = sql`${journeyRuns.dayOfOperation} >= ${sinceDays(7)}`;
 
 	const [countsRows, linesRows] = await Promise.all([
+		// Counts come from the rollup: one row per stop-day instead of one
+		// per stop visit, which is the same 7-day window over ~150x fewer
+		// rows and no join to journey_runs.
 		db
 			.select({
-				stopId: journeyStops.stopId,
-				stopName: sql<string>`MIN(${journeyStops.stopName})`.as("stop_name"),
-				journeyCount: sql<number>`COUNT(*)`.as("journey_count"),
-				cancelled:
-					sql<number>`SUM(CASE WHEN ${journeyStops.cancelled} THEN 1 ELSE 0 END)`.as(
-						"cancelled",
-					),
-				ghost: sql<number>`SUM(${ghostCaseSql})`.as("ghost"),
-				delayed: sql<number>`SUM(CASE WHEN NOT ${journeyStops.cancelled}
-					AND ${journeyStops.delayMin} >= ${DELAY_THRESHOLD_MIN}
-				THEN 1 ELSE 0 END)`.as("delayed"),
-			})
-			.from(journeyStops)
-			.leftJoin(
-				journeyRuns,
-				and(
-					eq(journeyRuns.journeyRef, journeyStops.journeyRef),
-					eq(journeyRuns.dayOfOperation, journeyStops.dayOfOperation),
+				stopId: stopDayStats.stopId,
+				stopName: sql<string>`MIN(${stopDayStats.stopName})`.as("stop_name"),
+				journeyCount: sql<number>`SUM(${stopDayStats.total})`.as(
+					"journey_count",
 				),
-			)
-			.where(and(dayWindow, runDayWindow, COLLECTED_TRAFFIC))
-			.groupBy(journeyStops.stopId)
-			.orderBy(desc(sql`COUNT(*)`)),
+				cancelled: sql<number>`SUM(${stopDayStats.cancelled})`.as("cancelled"),
+				ghost: sql<number>`SUM(${stopDayStats.ghost})`.as("ghost"),
+				delayed: sql<number>`SUM(${stopDayStats.delayed})`.as("delayed"),
+			})
+			.from(stopDayStats)
+			.where(sql`${stopDayStats.dayOfOperation} >= ${sinceDays(7)}`)
+			.groupBy(stopDayStats.stopId)
+			.orderBy(desc(sql`SUM(${stopDayStats.total})`)),
+		// Line lists still need journey_runs: the rollup keeps categories but
+		// not the per-line breakdown, which only this query reads.
 		db.execute(sql<{
 			stop_id: string;
 			lines: string | null;
@@ -726,70 +726,61 @@ export interface StopStats {
  * (it now matches every row) and picks a parallel seq scan over the runs.
  * Left as is: the route memoizes this for 60 s, so it is paid once per
  * stop per minute, not per request. */
+/** Per-day stats for one stop, read from the stop_day_stats rollup.
+ *
+ * This used to aggregate journey_stops joined to journey_runs across the
+ * stop's entire history on every cache miss — ~390k stop-visit rows against
+ * 1.25M runs at prod scale, with the hash join spilling to disk, which is
+ * what made an uncached stop page cost seconds. The rollup answers the same
+ * question with one row per stop-day.
+ *
+ * Full history is preserved: the rollup is written for every day, and
+ * getStopDayDepartures still reads the raw rows for per-departure detail. */
 export async function getStopStats(stopIds: string[]): Promise<StopStats> {
 	if (stopIds.length === 0) {
 		return { days: [], lastChange: null, categories: [] };
 	}
 
-	const [dayRows, metaRows] = await Promise.all([
-		db
-			.select({
-				date: journeyStops.dayOfOperation,
-				total: count().as("total"),
-				cancelled:
-					sql<number>`SUM(CASE WHEN ${journeyStops.cancelled} THEN 1 ELSE 0 END)`.as(
-						"cancelled",
-					),
-				ghost: sql<number>`SUM(${ghostCaseSql})`.as("ghost"),
-				delayed: sql<number>`
-					SUM(CASE WHEN NOT ${journeyStops.cancelled}
-						AND ${journeyStops.delayMin} >= ${DELAY_THRESHOLD_MIN}
-					THEN 1 ELSE 0 END)
-				`.as("delayed"),
-			})
-			.from(journeyStops)
-			.innerJoin(
-				journeyRuns,
-				and(
-					eq(journeyRuns.journeyRef, journeyStops.journeyRef),
-					eq(journeyRuns.dayOfOperation, journeyStops.dayOfOperation),
-				),
-			)
-			.where(and(inArray(journeyStops.stopId, stopIds), COLLECTED_TRAFFIC))
-			.groupBy(journeyStops.dayOfOperation)
-			.orderBy(desc(journeyStops.dayOfOperation)),
-		db
-			.select({
-				lastChange: sql<string | null>`MAX(${journeyRuns.snapshotAt})`.as(
-					"last_change",
-				),
-				categories:
-					sql<string>`STRING_AGG(DISTINCT ${normalizedCategorySql}, ',' ORDER BY ${normalizedCategorySql})`.as(
-						"categories",
-					),
-			})
-			.from(journeyStops)
-			.innerJoin(
-				journeyRuns,
-				and(
-					eq(journeyRuns.journeyRef, journeyStops.journeyRef),
-					eq(journeyRuns.dayOfOperation, journeyStops.dayOfOperation),
-				),
-			)
-			.where(and(inArray(journeyStops.stopId, stopIds), COLLECTED_TRAFFIC)),
-	]);
+	// Several stop ids can share one platform group, so a day can appear
+	// once per id and the counts have to be summed back together.
+	const rows = await db
+		.select({
+			date: stopDayStats.dayOfOperation,
+			total: sql<number>`SUM(${stopDayStats.total})`.as("total"),
+			cancelled: sql<number>`SUM(${stopDayStats.cancelled})`.as("cancelled"),
+			ghost: sql<number>`SUM(${stopDayStats.ghost})`.as("ghost"),
+			delayed: sql<number>`SUM(${stopDayStats.delayed})`.as("delayed"),
+			lastChange: sql<string | null>`MAX(${stopDayStats.lastChange})`.as(
+				"last_change",
+			),
+			categories: sql<
+				string | null
+			>`STRING_AGG(${stopDayStats.categories}, ',')`.as("categories"),
+		})
+		.from(stopDayStats)
+		.where(inArray(stopDayStats.stopId, stopIds))
+		.groupBy(stopDayStats.dayOfOperation)
+		.orderBy(desc(stopDayStats.dayOfOperation));
 
-	const meta = metaRows[0];
+	let lastChange: string | null = null;
+	const categories: string[] = [];
+	for (const r of rows) {
+		if (r.lastChange && (!lastChange || r.lastChange > lastChange)) {
+			lastChange = r.lastChange;
+		}
+		if (r.categories) categories.push(r.categories);
+	}
+
 	return {
-		days: dayRows.map((d) => ({
+		days: rows.map((d) => ({
 			date: d.date,
 			total: Number(d.total),
 			cancelled: Number(d.cancelled),
 			ghost: Number(d.ghost),
 			delayed: Number(d.delayed),
 		})),
-		lastChange: meta?.lastChange ?? null,
-		categories: meta?.categories ? dedupeCsv(meta.categories) : [],
+		lastChange,
+		categories: categories.length ? dedupeCsv(categories.join(",")) : [],
 	};
 }
 

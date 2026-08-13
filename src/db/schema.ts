@@ -48,6 +48,11 @@ export const journeyRuns = pgTable(
 		index("idx_journey_runs_poll_state").on(t.pollState, t.dayOfOperation),
 		index("idx_journey_runs_line").on(t.line, t.dayOfOperation),
 		index("idx_journey_runs_operator").on(t.operator, t.dayOfOperation),
+		// Present in the database since 20260811105622 but missing from this
+		// file, so every later `drizzle-kit generate` planned to drop it.
+		// Declared here to stop that; the summary queries filter on
+		// category_norm and the poller re-checks it per run.
+		index("idx_journey_runs_cat_norm_day").on(t.categoryNorm, t.dayOfOperation),
 	],
 );
 
@@ -88,6 +93,50 @@ export const journeyStops = pgTable(
 		index("idx_journey_stops_delay_min")
 			.on(t.journeyRef, t.dayOfOperation)
 			.where(sql`${t.delayMin} >= 7.5`),
+	],
+);
+
+/**
+ * Per-(stop, day) aggregate of journey_stops, joined against journey_runs
+ * at write time so reads never have to.
+ *
+ * The stat pages only ever count stop visits — total / cancelled / ghost /
+ * delayed per day. Computing that from the raw rows means joining a stop's
+ * entire history against journey_runs on every SWR miss, which is what made
+ * an uncached stop page cost seconds in prod: ~390k stop-visit rows per stop
+ * against 1.25M runs, with the hash join spilling to disk. Rolled up, one
+ * stop-day is a single row — measured 149x fewer rows locally (449k -> 3k),
+ * and the ratio grows with history because a stop sees roughly the same
+ * number of departures every day.
+ *
+ * Raw journey_stops rows are NOT deleted: `getStopDayDepartures` still reads
+ * them for the per-departure drill-down, at any date. This table is a read
+ * accelerator, not a retention policy.
+ *
+ * `ghost` counts runs that were never tracked and not cancelled, so it is a
+ * property of the run rather than the stop visit — which is why the rollup
+ * has to be computed across the join rather than from journey_stops alone.
+ */
+export const stopDayStats = pgTable(
+	"stop_day_stats",
+	{
+		stopId: text("stop_id").notNull(),
+		dayOfOperation: text("day_of_operation").notNull(),
+		stopName: text("stop_name").notNull(),
+		total: integer().notNull().default(0),
+		cancelled: integer().notNull().default(0),
+		ghost: integer().notNull().default(0),
+		delayed: integer().notNull().default(0),
+		/** Newest journey_runs.snapshot_at across the stop-day, so
+		 * getStopStats can report "last updated" without touching runs. */
+		lastChange: text("last_change"),
+		/** Comma-separated normalized categories seen at this stop-day.
+		 * Aggregated across days in JS, same shape dedupeCsv already takes. */
+		categories: text(),
+	},
+	(t) => [
+		primaryKey({ columns: [t.stopId, t.dayOfOperation] }),
+		index("idx_stop_day_stats_day").on(t.dayOfOperation),
 	],
 );
 

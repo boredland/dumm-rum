@@ -2,7 +2,12 @@ import { and, eq, sql } from "drizzle-orm";
 import type PgBoss from "pg-boss";
 import type { Db } from "../db/client.ts";
 import { excluded } from "../db/helpers.ts";
-import { journeyRuns, journeyStops, knownStops } from "../db/schema.ts";
+import {
+	journeyRuns,
+	journeyStops,
+	knownStops,
+	stopDayStats,
+} from "../db/schema.ts";
 import {
 	isExcludedOperator,
 	isLongDistanceCategory,
@@ -44,6 +49,25 @@ async function markRunDone(
 		);
 }
 
+/** The stops a run visits, read before a tombstone deletes them so the
+ * rollup for those stop-days can be recomputed afterwards. */
+async function stopIdsOfRun(
+	db: Db,
+	journeyRef: string,
+	dayOfOperation: string,
+): Promise<string[]> {
+	const rows = await db
+		.selectDistinct({ stopId: journeyStops.stopId })
+		.from(journeyStops)
+		.where(
+			and(
+				eq(journeyStops.journeyRef, journeyRef),
+				eq(journeyStops.dayOfOperation, dayOfOperation),
+			),
+		);
+	return rows.map((r) => r.stopId);
+}
+
 /** Drops the stop visits of a run that a poll revealed to be long-distance
  * traffic, and tombstones the run itself.
  *
@@ -59,6 +83,7 @@ async function tombstoneLongDistanceRun(
 	dayOfOperation: string,
 	category: string | null,
 ): Promise<void> {
+	const affected = await stopIdsOfRun(db, journeyRef, dayOfOperation);
 	await db
 		.delete(journeyStops)
 		.where(
@@ -67,6 +92,7 @@ async function tombstoneLongDistanceRun(
 				eq(journeyStops.dayOfOperation, dayOfOperation),
 			),
 		);
+	await refreshStopDayStats(db, affected, dayOfOperation);
 	await db
 		.update(journeyRuns)
 		.set({ category, pollState: "done" })
@@ -97,6 +123,7 @@ async function tombstoneExcludedRun(
 	journeyRef: string,
 	dayOfOperation: string,
 ): Promise<void> {
+	const affected = await stopIdsOfRun(db, journeyRef, dayOfOperation);
 	await db
 		.delete(journeyStops)
 		.where(
@@ -105,6 +132,7 @@ async function tombstoneExcludedRun(
 				eq(journeyStops.dayOfOperation, dayOfOperation),
 			),
 		);
+	await refreshStopDayStats(db, affected, dayOfOperation);
 	await db
 		.update(journeyRuns)
 		.set({ pollState: EXCLUDED_POLL_STATE })
@@ -266,6 +294,11 @@ export async function processPollBatch(
 				now,
 			);
 			await upsertMgateStops(db, journeyRef, dayOfOperation, mgStops);
+			await refreshStopDayStats(
+				db,
+				mgStops.map((st) => st.extId),
+				dayOfOperation,
+			);
 			await upsertStopSlugs(
 				db,
 				mgStops.map((s) => ({ stopId: s.extId, stopName: s.name })),
@@ -541,6 +574,72 @@ async function upsertStopSlugs(
 				slug: excluded(knownStops.slug),
 			},
 		});
+}
+
+/** Recomputes the stop_day_stats rows for the given stop-days from the raw
+ * journey_stops / journey_runs data.
+ *
+ * Recompute rather than increment: the poller re-polls a journey many times
+ * and the tombstone paths delete its stop visits outright, so a running
+ * total would drift. Reading the truth back is idempotent under both.
+ *
+ * The filter has to stay in step with COLLECTED_TRAFFIC in queries.ts —
+ * importing it here would pull the read layer into the writer, so it is
+ * repeated instead. A stop-day that ends up with no matching rows is
+ * deleted rather than left at its old counts, which is what makes the
+ * tombstone paths converge. */
+async function refreshStopDayStats(
+	db: Db,
+	stopIds: string[],
+	dayOfOperation: string,
+): Promise<void> {
+	if (stopIds.length === 0) return;
+	const ids = [...new Set(stopIds)];
+
+	await db.execute(sql`
+		WITH agg AS (
+			SELECT
+				${journeyStops.stopId} AS stop_id,
+				MIN(${journeyStops.stopName}) AS stop_name,
+				COUNT(*)::int AS total,
+				SUM(CASE WHEN ${journeyStops.cancelled} THEN 1 ELSE 0 END)::int AS cancelled,
+				SUM(CASE WHEN NOT ${journeyRuns.wasTracked} AND NOT ${journeyRuns.cancelled} THEN 1 ELSE 0 END)::int AS ghost,
+				SUM(CASE WHEN NOT ${journeyStops.cancelled} AND ${journeyStops.delayMin} >= 7.5 THEN 1 ELSE 0 END)::int AS delayed,
+				MAX(${journeyRuns.snapshotAt}) AS last_change,
+				STRING_AGG(DISTINCT ${journeyRuns.categoryNorm}, ',' ORDER BY ${journeyRuns.categoryNorm}) AS categories
+			FROM ${journeyStops}
+			JOIN ${journeyRuns}
+				ON ${journeyRuns.journeyRef} = ${journeyStops.journeyRef}
+				AND ${journeyRuns.dayOfOperation} = ${journeyStops.dayOfOperation}
+			WHERE ${journeyStops.stopId} IN ${ids}
+				AND ${journeyStops.dayOfOperation} = ${dayOfOperation}
+				AND ${journeyRuns.categoryNorm} <> 'Fernverkehr'
+				AND (${journeyRuns.operator} IS NULL OR ${journeyRuns.operator} <> 'Mainzer Mobilität')
+				AND (${journeyRuns.pollState} IS NULL OR ${journeyRuns.pollState} <> ${EXCLUDED_POLL_STATE})
+			GROUP BY ${journeyStops.stopId}
+		), upserted AS (
+			INSERT INTO ${stopDayStats} (
+				stop_id, day_of_operation, stop_name, total, cancelled, ghost,
+				delayed, last_change, categories
+			)
+			SELECT stop_id, ${dayOfOperation}, stop_name, total, cancelled, ghost,
+				delayed, last_change, categories
+			FROM agg
+			ON CONFLICT (stop_id, day_of_operation) DO UPDATE SET
+				stop_name = EXCLUDED.stop_name,
+				total = EXCLUDED.total,
+				cancelled = EXCLUDED.cancelled,
+				ghost = EXCLUDED.ghost,
+				delayed = EXCLUDED.delayed,
+				last_change = EXCLUDED.last_change,
+				categories = EXCLUDED.categories
+			RETURNING stop_id
+		)
+		DELETE FROM ${stopDayStats}
+		WHERE ${stopDayStats.dayOfOperation} = ${dayOfOperation}
+			AND ${stopDayStats.stopId} IN ${ids}
+			AND ${stopDayStats.stopId} NOT IN (SELECT stop_id FROM upserted)
+	`);
 }
 
 async function upsertMgateStops(
