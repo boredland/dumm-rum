@@ -24,7 +24,6 @@ const ghostCaseSql = sql<number>`CASE WHEN NOT ${journeyRuns.wasTracked} AND NOT
 
 const sourceSql = sql<string>`CASE
 	WHEN ${journeyRuns.journeyRef} LIKE 'flix|%' THEN 'flix'
-	WHEN ${journeyRuns.journeyRef} LIKE 'ferry|%' THEN 'ferry'
 	WHEN ${journeyRuns.journeyRef} ~ '^[12]\|' THEN 'rmv'
 	ELSE 'unknown'
 END`;
