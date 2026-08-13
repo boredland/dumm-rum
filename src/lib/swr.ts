@@ -7,8 +7,9 @@ interface Entry<T> {
 	value: T;
 	/** Return without refresh up to this timestamp. */
 	fresh: number;
-	/** Return cached + trigger background refresh up to this timestamp.
-	 * Past it, the next caller blocks on a fresh fetch. */
+	/** Past this the value is old enough to be worth logging about, but it
+	 * is still served — a cached answer beats making somebody wait for the
+	 * aggregate. Retained for eviction ordering and diagnostics. */
 	stale: number;
 }
 
@@ -28,12 +29,13 @@ export function makeSwr<T>(
 	const memo = new Map<string, Entry<T>>();
 	const inflight = new Map<string, Promise<T>>();
 
-	/** Drops entries `get` can no longer use, then the oldest survivors if
-	 * the map is still over cap. Past `stale` an entry is already dead
-	 * weight — `get` blocks on a fresh fetch rather than return it — so
-	 * sweeping those first evicts nothing anyone could have read. */
-	function evict(now: number): void {
-		for (const [k, e] of memo) if (e.stale <= now) memo.delete(k);
+	/** Drops the least recently refreshed entries once the map is over cap.
+	 *
+	 * Purely capacity-based. It used to sweep everything past `stale` first,
+	 * on the grounds that `get` would not return those anyway — but `get`
+	 * now does return them while a refresh runs, so dropping them would
+	 * reintroduce the blocking rebuild this cache exists to avoid. */
+	function evict(): void {
 		// Map iterates in insertion order and refresh re-inserts, so the
 		// front of the map is the least recently refreshed.
 		for (const k of memo.keys()) {
@@ -57,7 +59,7 @@ export function makeSwr<T>(
 					stale: now + opts.staleMs,
 				});
 				inflight.delete(key);
-				if (memo.size > MAX_ENTRIES) evict(now);
+				if (memo.size > MAX_ENTRIES) evict();
 				return value;
 			})
 			.catch((e) => {
@@ -72,7 +74,12 @@ export function makeSwr<T>(
 		const now = Date.now();
 		const hit = memo.get(key);
 		if (hit && hit.fresh > now) return hit.value;
-		if (hit && hit.stale > now) {
+		if (hit) {
+			// Stale, or past `stale` entirely: hand back what we have and let
+			// the refresh land for whoever comes next. Blocking here meant any
+			// page nobody had opened for staleMs paid the full aggregate —
+			// which is most of the site most of the time, since there are ~154
+			// entity pages and a 15 minute window.
 			refresh(key).catch(() => {});
 			return hit.value;
 		}
