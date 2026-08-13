@@ -14,6 +14,26 @@ const DISCOVER_CRON = process.env.DISCOVER_CRON ?? "*/5 * * * *";
 const TZ = "Europe/Berlin";
 const POLL_BATCH_SIZE = 10;
 
+/** Job bookkeeping retention.
+ *
+ * The poll queue enqueues one job per journey per cycle — ~580k rows/day
+ * measured, which under pg-boss's defaults (archive completed after 12 h,
+ * delete from archive after 7 days) settles at millions of rows. Observed
+ * locally at 975k archive rows / 470 MB after two days, i.e. the job
+ * bookkeeping outgrew journey_stops itself and shares the same disk and
+ * buffer cache as every read query.
+ *
+ * Nothing reads a completed poll job: the durable record is the
+ * journey_runs / journey_stops row the handler wrote. The archive is only
+ * a short forensic window for inspecting a recent failure, so an hour of
+ * it is plenty and a day in the archive is generous.
+ *
+ * Maintenance (expire → archive → drop) runs on pg-boss's own 120 s
+ * interval, so these bounds are enforced continuously rather than at
+ * boot. */
+const ARCHIVE_COMPLETED_AFTER_SECONDS = 60 * 60;
+const DELETE_ARCHIVED_AFTER_HOURS = 24;
+
 export interface StartedIngest {
 	boss: PgBoss;
 	shutdown: () => Promise<void>;
@@ -51,7 +71,11 @@ export async function startIngest(): Promise<StartedIngest> {
 	const backfilled = await backfillKnownStops(db);
 	if (backfilled > 0) console.log(`known_stops: backfilled ${backfilled}`);
 
-	const boss = new PgBoss({ connectionString: url });
+	const boss = new PgBoss({
+		connectionString: url,
+		archiveCompletedAfterSeconds: ARCHIVE_COMPLETED_AFTER_SECONDS,
+		deleteAfterHours: DELETE_ARCHIVED_AFTER_HOURS,
+	});
 	boss.on("error", (err) => console.error("pg-boss error:", err));
 	await boss.start();
 
