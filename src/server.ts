@@ -11,6 +11,7 @@ import {
 	getAllLineNames,
 	getAllStopNames,
 } from "./lib/queries.ts";
+import { warmEntityPages } from "./lib/warm.ts";
 import { migrationsApplied, startIngest } from "./lib/workers.ts";
 
 // Ingest startup runs alongside request handling rather than in front of
@@ -48,6 +49,16 @@ migrationsApplied()
 		}),
 	)
 	.catch((e) => console.warn("picker warmup failed:", e));
+
+// Pull every line and operator into Postgres's buffer cache. shared_buffers
+// sits at its 128 MB default, too small to hold the working set, so the
+// first visitor to each entity page paid a disk read: 2-5 s against
+// production with a cold cache, against 0.12-0.16 s once the same page had
+// been touched. Runs last and paced, so it fills the cache behind the
+// warmups that serve the landing page.
+migrationsApplied()
+	.then(warmEntityPages)
+	.catch((e) => console.warn("entity warmup failed:", e));
 
 const fetch = createStartHandler(defaultStreamHandler);
 
