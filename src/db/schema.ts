@@ -100,12 +100,14 @@ export const journeyStops = pgTable(
 		index("idx_journey_stops_delay_min")
 			.on(t.journeyRef, t.dayOfOperation)
 			.where(sql`${t.delayMin} >= 7.5`),
-		// idx_journey_stops_ref_day_name — a covering index with an INCLUDE
-		// payload — is created by drizzle/20260813190000_line_stops_covering.
-		// It is not declared here because this drizzle version's index
-		// builder has no .include(), and declaring it without the payload
-		// would make every later `generate` plan to drop and recreate it.
-		// See that migration for what it does and why.
+		// idx_journey_stops_ref_day_name and idx_journey_stops_origin_rt —
+		// covering indexes with INCLUDE payloads — are created by
+		// drizzle/20260813190000_line_stops_covering and
+		// drizzle/20260813200000_entity_day_origin_rt.
+		// They are not declared here because this drizzle version's index
+		// builder has no .include(), and declaring them without the payload
+		// would make every later `generate` plan to drop and recreate them.
+		// See those migrations for what they do and why.
 	],
 );
 
