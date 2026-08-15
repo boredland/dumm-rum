@@ -68,25 +68,25 @@ export async function ogHtml(): Promise<string> {
 	return `<!doctype html><html lang="de"><meta charset="utf-8"><style>
 ${fonts}
 *{margin:0;padding:0;box-sizing:border-box}
-body{width:1200px;height:630px;background:#fcfbf9;color:#16171a;
+body{width:1200px;height:630px;background:#fbfcfd;color:#12141c;
 	font-family:"Fira Sans",sans-serif;display:flex;flex-direction:column;
 	justify-content:space-between;padding:64px 76px;
 	-webkit-font-smoothing:antialiased}
 .eyebrow{font-size:21px;font-weight:500;text-transform:uppercase;
-	letter-spacing:.1em;color:#5a5d64}
+	letter-spacing:.1em;color:#545a6b}
 h1{font-size:68px;line-height:1.1;letter-spacing:-.02em;font-weight:700;
 	margin-top:18px}
-.sub{font-size:26px;color:#5a5d64;margin-top:20px;max-width:40ch;
+.sub{font-size:26px;color:#545a6b;margin-top:20px;max-width:40ch;
 	line-height:1.45}
-.rule{border-top:2px solid #16171a;padding-top:24px;display:flex;gap:56px}
+.rule{border-top:2px solid #12141c;padding-top:24px;display:flex;gap:56px}
 .metric{display:flex;flex-direction:column;gap:6px}
 .metric .label{font-size:18px;text-transform:uppercase;letter-spacing:.08em;
-	color:#5a5d64}
+	color:#545a6b}
 .metric .word{font-family:"Fira Mono",monospace;font-size:30px}
-.bad{color:#a11b1b}.ghost{color:#4b3f8f}.mixed{color:#7a5200}
+.bad{color:#b81e40}.ghost{color:#4b3f8f}.mixed{color:#a35a00}
 footer{display:flex;justify-content:space-between;align-items:baseline;
-	font-size:22px;color:#5a5d64;border-top:1px solid #ddd9d2;padding-top:20px}
-footer .host{font-family:"Fira Mono",monospace;color:#16171a;font-size:24px}
+	font-size:22px;color:#545a6b;border-top:1px solid #d3d9e6;padding-top:20px}
+footer .host{font-family:"Fira Mono",monospace;color:#12141c;font-size:24px}
 </style>
 <body>
 	<div>

@@ -29,7 +29,7 @@ export const Route = createRootRoute({
 			{ property: "og:image:alt", content: "DummRum" },
 			{ name: "twitter:card", content: "summary_large_image" },
 			{ name: "twitter:image", content: OG_IMAGE },
-			{ name: "theme-color", content: "#fcfbf9" },
+			{ name: "theme-color", content: "#fbfcfd" },
 			{
 				"script:ld+json": {
 					"@context": "https://schema.org",

@@ -10,8 +10,8 @@
 	"scope": "/",
 	"display": "standalone",
 	"orientation": "portrait-primary",
-	"background_color": "#fcfbf9",
-	"theme_color": "#fcfbf9",
+	"background_color": "#fbfcfd",
+	"theme_color": "#fbfcfd",
 	"icons": [
 		{
 			"src": "/icon-192.png",
@@ -60,19 +60,34 @@
 			"name": "Live-Karte",
 			"short_name": "Karte",
 			"url": "/de/map",
-			"icons": [{ "src": "/icon-192.png", "sizes": "192x192" }]
+			"icons": [
+				{
+					"src": "/icon-192.png",
+					"sizes": "192x192"
+				}
+			]
 		},
 		{
 			"name": "Frankfurt (Main) Hauptbahnhof",
 			"short_name": "Hauptbahnhof",
 			"url": "/de/hauptbahnhof",
-			"icons": [{ "src": "/icon-192.png", "sizes": "192x192" }]
+			"icons": [
+				{
+					"src": "/icon-192.png",
+					"sizes": "192x192"
+				}
+			]
 		},
 		{
 			"name": "Konstablerwache",
 			"short_name": "Konstabler",
 			"url": "/de/konstablerwache",
-			"icons": [{ "src": "/icon-192.png", "sizes": "192x192" }]
+			"icons": [
+				{
+					"src": "/icon-192.png",
+					"sizes": "192x192"
+				}
+			]
 		}
 	]
 }

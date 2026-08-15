@@ -65,35 +65,50 @@
 :root {
 	color-scheme: light dark;
 
-	--paper: #fcfbf9;
-	--ink: #16171a;
-	--muted: #5a5d64;
-	--dimmed: #8b8e95;
-	--rule: #ddd9d2;
-	--rule-dim: #eceae5;
-	--surface: #f5f3ef;
-	--accent: #003399;
+	/* Neutrals carry a cool cast off --rmv-blue rather than the warm grey
+	 * they used to, so the page reads as belonging to the network it
+	 * reports on. The tint stays in the greys: the report is about the
+	 * RMV, not published by it, and a page in full brand livery would
+	 * claim otherwise. */
+	--paper: #fbfcfd;
+	--ink: #12141c;
+	--muted: #545a6b;
+	--dimmed: #858ca0;
+	--rule: #d3d9e6;
+	--rule-dim: #e7ebf3;
+	--surface: #eff4fa;
+	/* RMV's own --rmv-blue. */
+	--accent: #162a6b;
 
 	/* Verdict tones. Desaturated enough to sit inside running text at
-	 * body weight without turning the page into a status board. */
-	--bad: #a11b1b;
-	--mixed: #7a5200;
-	--good: #1d6b38;
+	 * body weight without turning the page into a status board.
+	 *
+	 * "Good" is RMV's --rmv-green and "bad" their alert red, so a verdict
+	 * is stated in the network's own vocabulary. Ghost keeps its violet:
+	 * it marks a trip that was never confirmed either way, which is not a
+	 * state the RMV palette has a colour for. */
+	--bad: #b81e40;
+	--mixed: #a35a00;
+	--good: #008671;
 	--ghost: #4b3f8f;
 
 	@media (prefers-color-scheme: dark) {
-		--paper: #14151a;
-		--ink: #e6e4e0;
-		--muted: #9a9ba2;
-		--dimmed: #6b6d75;
-		--rule: #2c2e35;
-		--rule-dim: #21232a;
-		--surface: #1b1d23;
-		--accent: #7d9dff;
+		/* RMV publishes a light-mode palette only: --rmv-blue on this
+		 * background is 1.4:1, unreadable. Dark mode therefore keeps the
+		 * hues and lifts the lightness until each clears AA, rather than
+		 * copying values that were never meant for an inverted page. */
+		--paper: #12151d;
+		--ink: #e4e7ee;
+		--muted: #98a0b4;
+		--dimmed: #69708a;
+		--rule: #2a3042;
+		--rule-dim: #1e2331;
+		--surface: #1a1f2b;
+		--accent: #8fa8e8;
 
 		--bad: #f28b82;
 		--mixed: #e0b354;
-		--good: #79c98f;
+		--good: #4fc3ae;
 		--ghost: #a99cf5;
 	}
 }
