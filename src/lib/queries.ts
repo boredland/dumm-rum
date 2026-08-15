@@ -981,6 +981,63 @@ export async function getStopsForLine(slug: string): Promise<string[]> {
 	return rows.map((r) => r.name).filter(Boolean);
 }
 
+export interface SitemapEntities {
+	stations: string[];
+	lines: string[];
+	operators: string[];
+}
+
+/** Every entity that has a page worth crawling: the routing slug for each,
+ * windowed to the last 30 days so the sitemap never advertises a stop or
+ * line whose page would render "no data yet".
+ *
+ * Station slugs come from the `known_stops` rollup, which materializes what
+ * `slugForStop` produces on write — deriving them here would duplicate the
+ * transliteration and could drift from what `findStopBySlug` resolves. */
+export async function getSitemapEntities(): Promise<SitemapEntities> {
+	const [stationRows, lineSlugs, operatorRows] = await Promise.all([
+		db
+			.selectDistinct({ slug: knownStops.slug })
+			.from(knownStops)
+			.where(
+				and(
+					isNotNull(knownStops.slug),
+					sql`EXISTS (
+						SELECT 1 FROM ${journeyStops}
+						JOIN ${journeyRuns}
+							ON ${journeyRuns.journeyRef} = ${journeyStops.journeyRef}
+							AND ${journeyRuns.dayOfOperation} = ${journeyStops.dayOfOperation}
+						WHERE ${journeyStops.stopId} = ${knownStops.stopId}
+							AND ${journeyStops.dayOfOperation} >= ${sinceDays(30)}
+							AND ${COLLECTED_TRAFFIC}
+					)`,
+				),
+			)
+			.orderBy(knownStops.slug),
+		getAllLineNames(),
+		db
+			.selectDistinct({ operator: journeyRuns.operator })
+			.from(journeyRuns)
+			.where(
+				and(
+					isNotNull(journeyRuns.operator),
+					ne(journeyRuns.operator, ""),
+					COLLECTED_TRAFFIC,
+					last30DaysSql(),
+				),
+			)
+			.orderBy(journeyRuns.operator),
+	]);
+
+	return {
+		stations: stationRows.map((r) => r.slug).filter((s): s is string => !!s),
+		lines: lineSlugs,
+		operators: operatorRows
+			.map((r) => r.operator)
+			.filter((o): o is string => !!o),
+	};
+}
+
 function dedupeCsv(s: string): string[] {
 	return [...new Set(s.split(","))].filter(Boolean);
 }

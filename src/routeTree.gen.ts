@@ -9,6 +9,8 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as SitemapDotxmlRouteImport } from './routes/sitemap[.]xml'
+import { Route as RobotsDottxtRouteImport } from './routes/robots[.]txt'
 import { Route as LangRouteRouteImport } from './routes/$lang/route'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as LangIndexRouteImport } from './routes/$lang/index'
@@ -26,6 +28,16 @@ import { Route as LangStationDayDateRouteImport } from './routes/$lang/$station/
 import { Route as LangOperatorOperatorDayDateRouteImport } from './routes/$lang/operator/$operator/day/$date'
 import { Route as LangLineLineDayDateRouteImport } from './routes/$lang/line/$line/day/$date'
 
+const SitemapDotxmlRoute = SitemapDotxmlRouteImport.update({
+  id: '/sitemap.xml',
+  path: '/sitemap.xml',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const RobotsDottxtRoute = RobotsDottxtRouteImport.update({
+  id: '/robots.txt',
+  path: '/robots.txt',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const LangRouteRoute = LangRouteRouteImport.update({
   id: '/$lang',
   path: '/$lang',
@@ -112,6 +124,8 @@ const LangLineLineDayDateRoute = LangLineLineDayDateRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/$lang': typeof LangRouteRouteWithChildren
+  '/robots.txt': typeof RobotsDottxtRoute
+  '/sitemap.xml': typeof SitemapDotxmlRoute
   '/$lang/$station': typeof LangStationRouteRouteWithChildren
   '/$lang/$': typeof LangSplatRoute
   '/$lang/': typeof LangIndexRoute
@@ -129,6 +143,8 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/robots.txt': typeof RobotsDottxtRoute
+  '/sitemap.xml': typeof SitemapDotxmlRoute
   '/$lang/$': typeof LangSplatRoute
   '/$lang': typeof LangIndexRoute
   '/api/picker/directions': typeof ApiPickerDirectionsRoute
@@ -147,6 +163,8 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/$lang': typeof LangRouteRouteWithChildren
+  '/robots.txt': typeof RobotsDottxtRoute
+  '/sitemap.xml': typeof SitemapDotxmlRoute
   '/$lang/$station': typeof LangStationRouteRouteWithChildren
   '/$lang/$': typeof LangSplatRoute
   '/$lang/': typeof LangIndexRoute
@@ -167,6 +185,8 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/$lang'
+    | '/robots.txt'
+    | '/sitemap.xml'
     | '/$lang/$station'
     | '/$lang/$'
     | '/$lang/'
@@ -184,6 +204,8 @@ export interface FileRouteTypes {
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
+    | '/robots.txt'
+    | '/sitemap.xml'
     | '/$lang/$'
     | '/$lang'
     | '/api/picker/directions'
@@ -201,6 +223,8 @@ export interface FileRouteTypes {
     | '__root__'
     | '/'
     | '/$lang'
+    | '/robots.txt'
+    | '/sitemap.xml'
     | '/$lang/$station'
     | '/$lang/$'
     | '/$lang/'
@@ -220,6 +244,8 @@ export interface FileRouteTypes {
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   LangRouteRoute: typeof LangRouteRouteWithChildren
+  RobotsDottxtRoute: typeof RobotsDottxtRoute
+  SitemapDotxmlRoute: typeof SitemapDotxmlRoute
   ApiPickerDirectionsRoute: typeof ApiPickerDirectionsRoute
   ApiPickerLineStopsRoute: typeof ApiPickerLineStopsRoute
   ApiPickerLinesRoute: typeof ApiPickerLinesRoute
@@ -228,6 +254,20 @@ export interface RootRouteChildren {
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/sitemap.xml': {
+      id: '/sitemap.xml'
+      path: '/sitemap.xml'
+      fullPath: '/sitemap.xml'
+      preLoaderRoute: typeof SitemapDotxmlRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/robots.txt': {
+      id: '/robots.txt'
+      path: '/robots.txt'
+      fullPath: '/robots.txt'
+      preLoaderRoute: typeof RobotsDottxtRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/$lang': {
       id: '/$lang'
       path: '/$lang'
@@ -385,6 +425,8 @@ const LangRouteRouteWithChildren = LangRouteRoute._addFileChildren(
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   LangRouteRoute: LangRouteRouteWithChildren,
+  RobotsDottxtRoute: RobotsDottxtRoute,
+  SitemapDotxmlRoute: SitemapDotxmlRoute,
   ApiPickerDirectionsRoute: ApiPickerDirectionsRoute,
   ApiPickerLineStopsRoute: ApiPickerLineStopsRoute,
   ApiPickerLinesRoute: ApiPickerLinesRoute,
