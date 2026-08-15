@@ -97,6 +97,36 @@ const translations = {
 
 		"search.placeholder": "Linie, Haltestelle oder Betreiber suchen\u2026",
 
+		// Copy that only ever reaches a search engine or a link preview.
+		// Titles stay short — the brand suffix is appended in pageHead — and
+		// every description carries a figure, so a result reads as a finding
+		// rather than as a category name.
+		"seo.home.title": "Pünktlichkeit im Frankfurter Nahverkehr",
+		"seo.home.description":
+			"Wie zuverlässig fährt Frankfurts Nahverkehr wirklich? Ausfälle, Geisterfahrten und Verspätungen für jede Haltestelle, Linie und jeden Betreiber.",
+		"seo.map.description":
+			"Live-Karte aller Busse, Bahnen und Züge im Frankfurter Nahverkehr, mit Echtzeitposition und Verspätung.",
+		"seo.station.description":
+			"Haltestelle {name}: {total} erfasste Abfahrten, davon {score} % pünktlich.",
+		"seo.station.empty":
+			"Noch keine Abfahrten an der Haltestelle {name} erfasst.",
+		"seo.station.day": "{name}, {date}",
+		"seo.station.day_description":
+			"Alle Abfahrten an {name} am {date}, mit Ausfällen, Geisterfahrten und Verspätungen.",
+		"seo.line.title": "Linie {name}",
+		"seo.line.description":
+			"Linie {name}: {total} erfasste Fahrten, davon {score} % pünktlich.",
+		"seo.line.empty": "Noch keine Fahrten der Linie {name} erfasst.",
+		"seo.line.day": "Linie {name}, {date}",
+		"seo.line.day_description":
+			"Alle Fahrten der Linie {name} am {date}, mit Ausfällen, Geisterfahrten und Verspätungen.",
+		"seo.operator.description":
+			"Betreiber {name}: {total} erfasste Fahrten, davon {score} % pünktlich.",
+		"seo.operator.empty": "Noch keine Fahrten von {name} erfasst.",
+		"seo.operator.day": "{name}, {date}",
+		"seo.operator.day_description":
+			"Alle Fahrten von {name} am {date}, mit Ausfällen, Geisterfahrten und Verspätungen.",
+
 		"share.button": "Teilen",
 		"share.copied": "Link kopiert!",
 		"telegram.subscribe":
@@ -256,6 +286,31 @@ const translations = {
 		"table.no_departures": "No departures",
 
 		"search.placeholder": "Search lines, stations, or operators\u2026",
+
+		"seo.home.title": "On-time performance of Frankfurt public transport",
+		"seo.home.description":
+			"How reliable is Frankfurt's public transport really? Cancellations, ghost departures and delays for every stop, line and operator.",
+		"seo.map.description":
+			"Live map of every bus, tram and train in Frankfurt's public transport, with realtime position and delay.",
+		"seo.station.description":
+			"Stop {name}: {total} tracked departures, {score} % of them on time.",
+		"seo.station.empty": "No departures tracked at stop {name} yet.",
+		"seo.station.day": "{name}, {date}",
+		"seo.station.day_description":
+			"Every departure at {name} on {date}, with cancellations, ghost departures and delays.",
+		"seo.line.title": "Line {name}",
+		"seo.line.description":
+			"Line {name}: {total} tracked trips, {score} % of them on time.",
+		"seo.line.empty": "No trips tracked on line {name} yet.",
+		"seo.line.day": "Line {name}, {date}",
+		"seo.line.day_description":
+			"Every trip on line {name} on {date}, with cancellations, ghost departures and delays.",
+		"seo.operator.description":
+			"Operator {name}: {total} tracked trips, {score} % of them on time.",
+		"seo.operator.empty": "No trips tracked for {name} yet.",
+		"seo.operator.day": "{name}, {date}",
+		"seo.operator.day_description":
+			"Every trip run by {name} on {date}, with cancellations, ghost departures and delays.",
 
 		"share.button": "Share",
 		"share.copied": "Link copied!",

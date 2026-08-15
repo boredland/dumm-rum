@@ -15,7 +15,7 @@ import {
 	PageHeader,
 } from "../../../components/PageHeader.tsx";
 import { SubscribeModal } from "../../../components/SubscribeModal.tsx";
-import { type Lang, t } from "../../../lib/i18n.ts";
+import { type Lang, langFromParams, t } from "../../../lib/i18n.ts";
 import {
 	type DayStats,
 	findStopBySlug,
@@ -24,6 +24,13 @@ import {
 	type StopDayDeparture,
 } from "../../../lib/queries.ts";
 import { urlFilter } from "../../../lib/search-state.ts";
+import {
+	breadcrumbJsonLd,
+	entityDescription,
+	entityJsonLd,
+	entityRoute,
+	pageHead,
+} from "../../../lib/seo.ts";
 import {
 	toneForCancRate,
 	toneForCount,
@@ -120,14 +127,29 @@ export const Route = createFileRoute("/$lang/$station/")({
 	validateSearch: (search: Record<string, unknown>): { days?: string } => ({
 		days: typeof search.days === "string" ? search.days : undefined,
 	}),
-	head: ({ loaderData }) => {
-		const name = loaderData?.stopName ?? "Station";
-		return {
-			meta: [
-				{ title: `${name} — DummRum` },
-				{ property: "og:title", content: `${name} — DummRum` },
+	head: ({ params, loaderData }) => {
+		const l = langFromParams(params);
+		const name = shortStationName(loaderData?.stopName ?? params.station);
+		const route = entityRoute("station", params.station);
+		const description = entityDescription(
+			l,
+			"station",
+			name,
+			loaderData?.days ?? [],
+		);
+		return pageHead({
+			lang: l,
+			title: name,
+			description,
+			route,
+			jsonLd: [
+				entityJsonLd({ lang: l, name, description, route }),
+				breadcrumbJsonLd(l, [
+					{ name: t(l, "home.title"), route: "" },
+					{ name, route },
+				]),
 			],
-		};
+		});
 	},
 	component: StationIndex,
 });

@@ -8,18 +8,20 @@ import {
 import { StatusMark } from "../../../../components/DepartureRow.tsx";
 import { EmptyState } from "../../../../components/EmptyState.tsx";
 import { BackLink, PageHeader } from "../../../../components/PageHeader.tsx";
-import { type Lang, t } from "../../../../lib/i18n.ts";
+import { type Lang, langFromParams, t } from "../../../../lib/i18n.ts";
 import {
 	findStopBySlug,
 	getStopDayDepartures,
 	type StopDayDeparture,
 } from "../../../../lib/queries.ts";
 import { urlFilter, urlStringFilter } from "../../../../lib/search-state.ts";
+import { entityRoute, pageHead } from "../../../../lib/seo.ts";
 import { makeSwr } from "../../../../lib/swr.ts";
 import {
 	delayMin,
 	formatTime,
 	parseLineSlug,
+	prettyDate,
 	shortStationName,
 	todayBerlin,
 } from "../../../../lib/utils.ts";
@@ -95,6 +97,21 @@ const loadDay = createServerFn({ method: "GET" })
 export const Route = createFileRoute("/$lang/$station/day/$date")({
 	loader: async ({ params }) =>
 		await loadDay({ data: { slug: params.station, date: params.date } }),
+	// Per-day lists are one page per entity per day and go stale the
+	// moment the day ends — they carry the crawler onward to the entity
+	// pages without adding thousands of near-identical URLs to the index.
+	head: ({ params, loaderData }) => {
+		const l = langFromParams(params);
+		const name = shortStationName(loaderData?.stopName ?? params.station);
+		const date = prettyDate(l, params.date);
+		return pageHead({
+			lang: l,
+			title: t(l, "seo.station.day", { name, date }),
+			description: t(l, "seo.station.day_description", { name, date }),
+			route: `${entityRoute("station", params.station)}/day/${params.date}`,
+			noindex: true,
+		});
+	},
 	validateSearch: (
 		search: Record<string, unknown>,
 	): { status?: string; hours?: string; dir?: string } => ({
@@ -137,12 +154,7 @@ function StationDay() {
 		dir: { value: dir, onChange: setDir },
 	});
 
-	const pretty = new Date(`${date}T00:00:00`).toLocaleDateString(l, {
-		weekday: "long",
-		year: "numeric",
-		month: "long",
-		day: "numeric",
-	});
+	const pretty = prettyDate(l, date);
 
 	return (
 		<main className="mx-auto max-w-3xl px-6 py-10 space-y-10">

@@ -15,8 +15,15 @@ import {
 } from "../../../../components/PageHeader.tsx";
 import { SubscribeModal } from "../../../../components/SubscribeModal.tsx";
 import { lineSwr } from "../../../../lib/entity-cache.ts";
-import { type Lang, t } from "../../../../lib/i18n.ts";
+import { type Lang, langFromParams, t } from "../../../../lib/i18n.ts";
 import { urlFilter } from "../../../../lib/search-state.ts";
+import {
+	breadcrumbJsonLd,
+	entityDescription,
+	entityJsonLd,
+	entityRoute,
+	pageHead,
+} from "../../../../lib/seo.ts";
 import {
 	toneForCancRate,
 	toneForCount,
@@ -47,14 +54,30 @@ export const Route = createFileRoute("/$lang/line/$line/")({
 	validateSearch: (search: Record<string, unknown>): { days?: string } => ({
 		days: typeof search.days === "string" ? search.days : undefined,
 	}),
-	head: ({ loaderData }) => {
-		const name = loaderData?.line ?? "Line";
-		return {
-			meta: [
-				{ title: `${name} — DummRum` },
-				{ property: "og:title", content: `${name} — DummRum` },
+	head: ({ params, loaderData }) => {
+		const l = langFromParams(params);
+		const name = parseLineSlug(params.line).line;
+		const route = entityRoute("line", params.line);
+		const description = entityDescription(
+			l,
+			"line",
+			name,
+			loaderData?.stats.days ?? [],
+		);
+		const title = t(l, "seo.line.title", { name });
+		return pageHead({
+			lang: l,
+			title,
+			description,
+			route,
+			jsonLd: [
+				entityJsonLd({ lang: l, name: title, description, route }),
+				breadcrumbJsonLd(l, [
+					{ name: t(l, "home.title"), route: "" },
+					{ name: title, route },
+				]),
 			],
-		};
+		});
 	},
 	component: LineIndex,
 });

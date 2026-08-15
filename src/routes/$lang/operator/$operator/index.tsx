@@ -9,8 +9,15 @@ import { EmptyState } from "../../../../components/EmptyState.tsx";
 import { Figure, Figures } from "../../../../components/Figures.tsx";
 import { BackLink, PageHeader } from "../../../../components/PageHeader.tsx";
 import { operatorSwr } from "../../../../lib/entity-cache.ts";
-import { type Lang, t } from "../../../../lib/i18n.ts";
+import { type Lang, langFromParams, t } from "../../../../lib/i18n.ts";
 import { urlFilter } from "../../../../lib/search-state.ts";
+import {
+	breadcrumbJsonLd,
+	entityDescription,
+	entityJsonLd,
+	entityRoute,
+	pageHead,
+} from "../../../../lib/seo.ts";
 import {
 	toneForCancRate,
 	toneForCount,
@@ -39,14 +46,29 @@ export const Route = createFileRoute("/$lang/operator/$operator/")({
 	validateSearch: (search: Record<string, unknown>): { days?: string } => ({
 		days: typeof search.days === "string" ? search.days : undefined,
 	}),
-	head: ({ loaderData }) => {
-		const name = loaderData?.operator ?? "Operator";
-		return {
-			meta: [
-				{ title: `${name} — DummRum` },
-				{ property: "og:title", content: `${name} — DummRum` },
+	head: ({ params, loaderData }) => {
+		const l = langFromParams(params);
+		const name = loaderData?.operator ?? params.operator;
+		const route = entityRoute("operator", params.operator);
+		const description = entityDescription(
+			l,
+			"operator",
+			name,
+			loaderData?.stats.days ?? [],
+		);
+		return pageHead({
+			lang: l,
+			title: name,
+			description,
+			route,
+			jsonLd: [
+				entityJsonLd({ lang: l, name, description, route }),
+				breadcrumbJsonLd(l, [
+					{ name: t(l, "home.title"), route: "" },
+					{ name, route },
+				]),
 			],
-		};
+		});
 	},
 	component: OperatorIndex,
 });

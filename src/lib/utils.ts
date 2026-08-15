@@ -58,6 +58,17 @@ export function delayMin(
 	return Math.round((actual - planned) / 60_000);
 }
 
+/** Long-form date for the per-day pages. Shared because the page heading
+ * and the document title have to name the same day the same way. */
+export function prettyDate(lang: string, date: string): string {
+	return new Date(`${date}T00:00:00`).toLocaleDateString(lang, {
+		weekday: "long",
+		year: "numeric",
+		month: "long",
+		day: "numeric",
+	});
+}
+
 export function shortStationName(name: string): string {
 	return name
 		.replace(/^Frankfurt \(Main\)\s*/i, "FFM ")

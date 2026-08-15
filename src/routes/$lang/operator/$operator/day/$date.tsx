@@ -8,14 +8,20 @@ import {
 import { StatusMark } from "../../../../../components/DepartureRow.tsx";
 import { EmptyState } from "../../../../../components/EmptyState.tsx";
 import { BackLink, PageHeader } from "../../../../../components/PageHeader.tsx";
-import { type Lang, t } from "../../../../../lib/i18n.ts";
+import { type Lang, langFromParams, t } from "../../../../../lib/i18n.ts";
 import {
 	getOperatorDayJourneys,
 	type OperatorDayJourney,
 } from "../../../../../lib/queries.ts";
 import { urlFilter, urlStringFilter } from "../../../../../lib/search-state.ts";
+import { entityRoute, pageHead } from "../../../../../lib/seo.ts";
 import { makeSwr } from "../../../../../lib/swr.ts";
-import { delayMin, formatTime, todayBerlin } from "../../../../../lib/utils.ts";
+import {
+	delayMin,
+	formatTime,
+	prettyDate,
+	todayBerlin,
+} from "../../../../../lib/utils.ts";
 
 const STATUS_OPTS = ["all", "issues", "on_time"] as const;
 const HOURS_OPTS = ["all", "core"] as const;
@@ -70,6 +76,18 @@ const loadDay = createServerFn({ method: "GET" })
 export const Route = createFileRoute("/$lang/operator/$operator/day/$date")({
 	loader: async ({ params }) =>
 		await loadDay({ data: { operator: params.operator, date: params.date } }),
+	head: ({ params }) => {
+		const l = langFromParams(params);
+		const name = params.operator;
+		const date = prettyDate(l, params.date);
+		return pageHead({
+			lang: l,
+			title: t(l, "seo.operator.day", { name, date }),
+			description: t(l, "seo.operator.day_description", { name, date }),
+			route: `${entityRoute("operator", params.operator)}/day/${params.date}`,
+			noindex: true,
+		});
+	},
 	validateSearch: (
 		search: Record<string, unknown>,
 	): { status?: string; hours?: string; dir?: string } => ({
@@ -112,12 +130,7 @@ function OperatorDay() {
 		dir: { value: dir, onChange: setDir },
 	});
 
-	const pretty = new Date(`${date}T00:00:00`).toLocaleDateString(l, {
-		weekday: "long",
-		year: "numeric",
-		month: "long",
-		day: "numeric",
-	});
+	const pretty = prettyDate(l, date);
 
 	return (
 		<main className="mx-auto max-w-3xl px-6 py-10 space-y-10">

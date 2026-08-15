@@ -4,13 +4,14 @@ import { setResponseHeader } from "@tanstack/react-start/server";
 import { useEffect, useRef, useState } from "react";
 import { FilterGroup } from "../../components/FilterGroup.tsx";
 import { type HomePayload, loadHomeSummaries } from "../../lib/home.ts";
-import { type Lang, t, tParts } from "../../lib/i18n.ts";
+import { type Lang, langFromParams, t, tParts } from "../../lib/i18n.ts";
 import type {
 	DaysFilter,
 	LineSummary,
 	OperatorSummary,
 	StopSummary,
 } from "../../lib/queries.ts";
+import { pageHead } from "../../lib/seo.ts";
 import { slugForStop } from "../../lib/stations.ts";
 import { toneForCount, toneForScore } from "../../lib/status.ts";
 import {
@@ -98,9 +99,6 @@ function parseCatFilter(input: unknown): string[] | undefined {
 
 export const Route = createFileRoute("/$lang/")({
 	staleTime: STALE_TIME,
-	head: () => ({
-		meta: [{ title: "DummRum" }],
-	}),
 	validateSearch: (search: Record<string, unknown>): SearchParams => ({
 		days:
 			typeof search.days === "string" &&
@@ -112,6 +110,17 @@ export const Route = createFileRoute("/$lang/")({
 	loaderDeps: ({ search }) => ({ days: search.days }),
 	loader: async ({ deps }) =>
 		await getHomeSummaries({ data: { days: deps.days ?? "today" } }),
+	head: ({ params }) => {
+		const l = langFromParams(params);
+		return {
+			...pageHead({
+				lang: l,
+				title: t(l, "seo.home.title"),
+				description: t(l, "seo.home.description"),
+				route: "",
+			}),
+		};
+	},
 	component: Index,
 });
 

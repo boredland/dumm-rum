@@ -6,7 +6,7 @@ import "leaflet-fullscreen/dist/leaflet.fullscreen.css";
 import "leaflet.locatecontrol/dist/L.Control.Locate.min.css";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { SubscribeModal } from "../../../components/SubscribeModal.tsx";
-import { type Lang, t } from "../../../lib/i18n.ts";
+import { type Lang, langFromParams, t } from "../../../lib/i18n.ts";
 import {
 	AUTH,
 	CLIENT,
@@ -14,6 +14,7 @@ import {
 	decodeEncodedPolyline,
 	MGATE_URL,
 } from "../../../lib/mgate.ts";
+import { pageHead } from "../../../lib/seo.ts";
 
 const FRANKFURT_CENTER = { lat: 50.1109, lon: 8.6821 };
 const POLL_INTERVAL = 15_000;
@@ -463,9 +464,15 @@ type MapSearch = {
 };
 
 export const Route = createFileRoute("/$lang/map/")({
-	head: () => ({
-		meta: [{ title: "DummRum — Live Map" }],
-	}),
+	head: ({ params }) => {
+		const l = langFromParams(params);
+		return pageHead({
+			lang: l,
+			title: t(l, "map.title"),
+			description: t(l, "seo.map.description"),
+			route: "/map",
+		});
+	},
 	validateSearch: (search: Record<string, unknown>): MapSearch => ({
 		z: typeof search.z === "number" ? search.z : undefined,
 		lat: typeof search.lat === "number" ? search.lat : undefined,
