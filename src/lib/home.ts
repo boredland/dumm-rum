@@ -10,6 +10,7 @@ import {
 	type StopSummary,
 } from "./queries.ts";
 import { makeSwr } from "./swr.ts";
+import { yesterdayBerlin } from "./utils.ts";
 
 export interface HomePayload {
 	lines: LineSummary[];
@@ -53,8 +54,14 @@ export function loadHomeSummaries(
 	return homeSwr.get(key);
 }
 
-/** Preload "today" summaries at server startup so the first user after
- * a deploy lands on a warm memo instead of paying the 5–7 s DB cost. */
+/** Preload the summaries the home page opens on, so the first user after
+ * a deploy lands on a warm memo instead of paying the 5–7 s DB cost.
+ *
+ * Goes through loadHomeSummaries rather than refreshing a hand-written
+ * key: the route pins every non-"today" window to yesterday for
+ * cacheability, so the key it asks for is `all:<yesterday>`. Seeding a
+ * bare `all` would warm a key nobody requests and leave the first visitor
+ * waiting on the cold aggregate anyway. */
 export function warmHomeSummaries(): Promise<HomePayload> {
-	return homeSwr.refresh("today");
+	return loadHomeSummaries("all", yesterdayBerlin());
 }

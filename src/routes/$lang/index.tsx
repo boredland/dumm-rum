@@ -53,7 +53,7 @@ const getHomeSummaries = createServerFn({ method: "GET" })
 				};
 			}
 		}
-		return { days: "today" };
+		return { days: "all" };
 	})
 	.handler(async ({ data }): Promise<HomePayload> => {
 		// For non-"today" queries, use yesterday as the "until" date for cacheability
@@ -109,7 +109,7 @@ export const Route = createFileRoute("/$lang/")({
 	}),
 	loaderDeps: ({ search }) => ({ days: search.days }),
 	loader: async ({ deps }) =>
-		await getHomeSummaries({ data: { days: deps.days ?? "today" } }),
+		await getHomeSummaries({ data: { days: deps.days ?? "all" } }),
 	head: ({ params }) => {
 		const l = langFromParams(params);
 		return {
@@ -132,8 +132,8 @@ const DAY_FILTERS: {
 	key: DaysFilter;
 	labelKey: "days.today" | "days.all" | "days.weekdays" | "days.weekends";
 }[] = [
-	{ key: "today", labelKey: "days.today" },
 	{ key: "all", labelKey: "days.all" },
+	{ key: "today", labelKey: "days.today" },
 	{ key: "weekdays", labelKey: "days.weekdays" },
 	{ key: "weekends", labelKey: "days.weekends" },
 ];
@@ -317,7 +317,7 @@ function Index() {
 								params: { lang: l },
 								search: (prev) => ({
 									...prev,
-									days: key === "today" ? undefined : key,
+									days: key === "all" ? undefined : key,
 								}),
 							})}
 						/>
