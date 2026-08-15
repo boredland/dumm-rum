@@ -23,6 +23,10 @@ bun run check                 # tsc --noEmit && biome check
 # Format
 bun run format                # biome check --write
 
+# Share + install assets (needs a running server; commit the PNGs)
+bun scripts/assets.ts http://localhost:3000   # og.png + manifest screenshots
+bun scripts/maskable-icon.ts                  # icon-maskable-512.png from icon-512.png
+
 # Schema changes
 # 1. Edit src/db/schema.ts
 # 2. bun run db:generate     # drizzle-kit generate
@@ -54,6 +58,7 @@ Single Bun process runs both the **TanStack Start SSR UI** and the **pg-boss ing
 | `src/lib/mgate.ts` | HAFAS mgate client (StationBoard + JourneyDetails batch, polyline decode) |
 | `src/lib/queries.ts` | All read queries (summaries, stats, departures) consumed by UI routes |
 | `src/lib/i18n.ts` | German/English translations, `t(lang, key, params?)` helper |
+| `src/lib/seo.ts` | `pageHead()` — title/description/canonical/hreflang/JSON-LD per route |
 | `src/db/schema.ts` | Drizzle schema — `journey_runs`, `journey_stops`, `known_stops` |
 | `src/server.ts` | TanStack Start server entry — starts workers + exports fetch handler |
 | `serve.ts` | Bun.serve bootstrap — static file serving + SSR handler (outside src/) |
@@ -80,6 +85,29 @@ POST to `https://www.rmv.de/auskunft/bin/jp/mgate.exe` with `{ svcReqL: [...], c
 - `JourneyDetails` — per-journey enrichment. Up to 10 refs per POST with per-item error isolation.
 - Error `LOCATION` = terminal (bad ref, mark done). `PARAMETER` = transient (can flip back to OK on the next call — retry up to 5 times).
 - HAFAS service date is in the ref as `DA#DDMMYY` — prefer this over the response's `j.date` for overnight routes.
+
+## SEO
+
+Every indexable route builds its head through `pageHead()` in `src/lib/seo.ts`:
+title, meta description, `og:*`/`twitter:*`, a self-referencing canonical, and
+`hreflang` alternates for `de`/`en` plus `x-default`. Meta is deduplicated by
+`name`/`property` with the deepest match winning, so `__root.tsx` carries only
+site-wide defaults (og:image, twitter card, `WebSite` JSON-LD) and each route
+names just what it changes. Links are *not* deduplicated — only leaf routes may
+emit a canonical.
+
+- Entity pages add `Dataset` + `BreadcrumbList` JSON-LD via the `jsonLd` option.
+  Descriptions carry real figures (`entityDescription`), so a result reads as a
+  finding rather than a category name.
+- Per-day departure pages are `noindex, follow`: one page per entity per day is
+  unbounded and goes stale immediately, but the links onward still count.
+- Canonical URLs must be built with `entityRoute()`, which encodes slugs exactly
+  as `Link` does (`rmv%3ABus%3A30`, operator names with `%20`). A canonical that
+  differs from the crawled URL points at a redirect.
+- `/robots.txt` and `/sitemap.xml` are server routes (`src/routes/*[.]*.tsx`), not
+  static files, so they stay tied to `SITE_ORIGIN`. The sitemap lists every stop,
+  line and operator active in the last 30 days, in both languages, behind an SWR
+  memo.
 
 ## Deployment
 
