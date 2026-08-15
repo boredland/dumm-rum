@@ -1,21 +1,78 @@
 {
-	"name": "DummRum",
+	"id": "/",
+	"name": "DummRum — Pünktlichkeit im Frankfurter Nahverkehr",
 	"short_name": "DummRum",
-	"description": "Frankfurt public transport reliability tracker",
+	"description": "Ausfälle, Geisterfahrten und Verspätungen im Frankfurter Nahverkehr — täglich aus dem RMV-Echtzeitfeed gemessen.",
+	"lang": "de",
+	"dir": "ltr",
+	"categories": ["travel", "navigation", "utilities"],
 	"start_url": "/de",
+	"scope": "/",
 	"display": "standalone",
+	"orientation": "portrait-primary",
 	"background_color": "#fcfbf9",
 	"theme_color": "#fcfbf9",
 	"icons": [
 		{
 			"src": "/icon-192.png",
 			"sizes": "192x192",
-			"type": "image/png"
+			"type": "image/png",
+			"purpose": "any"
 		},
 		{
 			"src": "/icon-512.png",
 			"sizes": "512x512",
-			"type": "image/png"
+			"type": "image/png",
+			"purpose": "any"
+		},
+		{
+			"src": "/icon-maskable-512.png",
+			"sizes": "512x512",
+			"type": "image/png",
+			"purpose": "maskable"
+		}
+	],
+	"screenshots": [
+		{
+			"src": "/screenshot-wide.png",
+			"sizes": "1280x800",
+			"type": "image/png",
+			"form_factor": "wide",
+			"label": "Tagesbericht: Ausfälle, Geisterfahrten und Verspätungen"
+		},
+		{
+			"src": "/screenshot-narrow.png",
+			"sizes": "430x932",
+			"type": "image/png",
+			"form_factor": "narrow",
+			"label": "Tagesbericht mit den auffälligsten Werten"
+		},
+		{
+			"src": "/screenshot-narrow-station.png",
+			"sizes": "430x932",
+			"type": "image/png",
+			"form_factor": "narrow",
+			"label": "Haltestellenseite mit den nächsten Abfahrten"
+		}
+	],
+	"shortcuts": [
+		{
+			"name": "Live-Karte",
+			"short_name": "Karte",
+			"url": "/de/map",
+			"icons": [{ "src": "/icon-192.png", "sizes": "192x192" }]
+		},
+		{
+			"name": "Frankfurt (Main) Hauptbahnhof",
+			"short_name": "Hauptbahnhof",
+			"url": "/de/hauptbahnhof",
+			"icons": [{ "src": "/icon-192.png", "sizes": "192x192" }]
+		},
+		{
+			"name": "Konstablerwache",
+			"short_name": "Konstabler",
+			"url": "/de/konstablerwache",
+			"icons": [{ "src": "/icon-192.png", "sizes": "192x192" }]
 		}
 	]
 }
