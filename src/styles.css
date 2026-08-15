@@ -20,7 +20,9 @@
 
    Fira Sans / Fira Mono are Spiekermann faces, the same lineage as German
    rail wayfinding — the subject's own typography, without imitating the
-   signage itself.
+   signage itself. The palette follows the same principle: it is built from
+   the VGF's own brand tokens, tinting the greys rather than dressing the
+   page in their livery.
 */
 
 @theme inline {
@@ -65,50 +67,54 @@
 :root {
 	color-scheme: light dark;
 
-	/* Neutrals carry a cool cast off --rmv-blue rather than the warm grey
-	 * they used to, so the page reads as belonging to the network it
-	 * reports on. The tint stays in the greys: the report is about the
-	 * RMV, not published by it, and a page in full brand livery would
-	 * claim otherwise. */
-	--paper: #fbfcfd;
-	--ink: #12141c;
-	--muted: #545a6b;
-	--dimmed: #858ca0;
-	--rule: #d3d9e6;
-	--rule-dim: #e7ebf3;
-	--surface: #eff4fa;
-	/* RMV's own --rmv-blue. */
-	--accent: #162a6b;
+	/* Neutrals carry a cool cast off the VGF teal rather than a neutral
+	 * grey, so the page reads as belonging to the network it reports on.
+	 * The tint stays in the greys: this is a report *about* the VGF, not
+	 * one published by them, and a page in full brand livery would claim
+	 * otherwise. */
+	--paper: #fafcfc;
+	--ink: #11191a;
+	--muted: #4f6163;
+	--dimmed: #7f9799;
+	--rule: #cfdedf;
+	--rule-dim: #e6eff0;
+	/* VGF's own --bs-light. */
+	--surface: #eef5f5;
+	/* VGF's --bs-dark, not their --bs-primary: the primary teal (#00838c)
+	 * measures 4.41:1 on this paper, which fails AA for body text, and
+	 * links here are body text. The deeper teal is the same hue at 6.95. */
+	--accent: #006265;
 
 	/* Verdict tones. Desaturated enough to sit inside running text at
 	 * body weight without turning the page into a status board.
 	 *
-	 * "Good" is RMV's --rmv-green and "bad" their alert red, so a verdict
-	 * is stated in the network's own vocabulary. Ghost keeps its violet:
-	 * it marks a trip that was never confirmed either way, which is not a
-	 * state the RMV palette has a colour for. */
-	--bad: #b81e40;
-	--mixed: #a35a00;
-	--good: #008671;
+	 * "Good" is VGF's --bs-primary itself: the house colour reads as the
+	 * approving one, and it only ever renders at figure size, where its
+	 * 4.41:1 clears the large-text threshold. Ghost keeps its violet — a
+	 * trip never confirmed either way is not a state the VGF palette has
+	 * a colour for. */
+	--bad: #b3261e;
+	--mixed: #8a5300;
+	--good: #00838c;
 	--ghost: #4b3f8f;
 
 	@media (prefers-color-scheme: dark) {
-		/* RMV publishes a light-mode palette only: --rmv-blue on this
-		 * background is 1.4:1, unreadable. Dark mode therefore keeps the
+		/* VGF publishes a light-mode palette only: --bs-dark on this
+		 * background is 2.6:1, unreadable. Dark mode therefore keeps the
 		 * hues and lifts the lightness until each clears AA, rather than
 		 * copying values that were never meant for an inverted page. */
-		--paper: #12151d;
-		--ink: #e4e7ee;
-		--muted: #98a0b4;
-		--dimmed: #69708a;
-		--rule: #2a3042;
-		--rule-dim: #1e2331;
-		--surface: #1a1f2b;
-		--accent: #8fa8e8;
+		--paper: #101617;
+		--ink: #e2e9ea;
+		--muted: #93a8aa;
+		--dimmed: #647a7c;
+		--rule: #263234;
+		--rule-dim: #1b2426;
+		--surface: #182122;
+		--accent: #4cc2c9;
 
 		--bad: #f28b82;
 		--mixed: #e0b354;
-		--good: #4fc3ae;
+		--good: #5fd0c4;
 		--ghost: #a99cf5;
 	}
 }
