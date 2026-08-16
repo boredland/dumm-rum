@@ -220,7 +220,7 @@ function StationDay() {
 											className="mt-1 text-body truncate"
 											title={d.direction}
 										>
-											{d.direction}
+											{shortStationName(d.direction)}
 										</div>
 										<div className="mt-1 text-meta flex items-center gap-2">
 											<StatusMark
@@ -281,7 +281,7 @@ function StationDay() {
 													className="max-w-0 w-full truncate"
 													title={d.direction}
 												>
-													{d.direction}
+													{shortStationName(d.direction)}
 												</td>
 												<td>
 													<div className="flex items-center gap-2">

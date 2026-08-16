@@ -211,6 +211,63 @@ button {
 	padding-left: 1.25rem;
 }
 
+/* Name columns (stop, direction) on the per-day tables. Two cells both
+ * asking for the remaining width used to split it by content, so the
+ * longer name lost and truncated to "Frankfur…" while its neighbour kept
+ * room to spare. A fixed equal share makes them shrink in step, and the
+ * table lays out from those widths rather than from the text.
+ *
+ * The padding is tighter here than the 1.25rem the numeric columns get:
+ * on a phone every 4 px of gutter is a character of station name. */
+.report-table--departures {
+	table-layout: fixed;
+}
+.report-table--departures :is(th, td):not(:first-child) {
+	padding-left: 0.75rem;
+}
+/* Fixed layout splits the width evenly unless told otherwise, which would
+ * hand a five-character line number as much room as a station name. The
+ * three short columns are sized to their content instead, and whatever
+ * remains is what the two name columns share. */
+.report-table--departures .col-time {
+	width: 3.4rem;
+}
+/* The realtime time sits under the scheduled one on a phone. Side by side
+ * ("07:33 → 07:44") it needs almost twice the column, and that width comes
+ * straight out of the station names. */
+.report-table--departures .col-time .rt {
+	display: block;
+	margin-left: 0;
+}
+.report-table--departures .col-line {
+	width: 3rem;
+}
+.report-table--departures .col-status {
+	width: 5.5rem;
+}
+/* Past the phone the short columns can afford their comfortable widths;
+ * the names still take everything left over. */
+@media (min-width: 40rem) {
+	.report-table--departures .col-time .rt {
+		display: inline;
+		margin-left: 0.25rem;
+	}
+	.report-table--departures .col-time {
+		width: 5.5rem;
+	}
+	.report-table--departures .col-line {
+		width: 3.5rem;
+	}
+	.report-table--departures .col-status {
+		width: 6rem;
+	}
+}
+.report-table--departures .name {
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
 *:focus-visible {
 	outline: 2px solid var(--accent);
 	outline-offset: 2px;

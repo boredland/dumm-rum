@@ -20,6 +20,7 @@ import {
 	delayMin,
 	formatTime,
 	prettyDate,
+	shortStationName,
 	todayBerlin,
 } from "../../../../../lib/utils.ts";
 
@@ -156,14 +157,14 @@ function OperatorDay() {
 					<EmptyState title={t(l, "table.no_departures")} />
 				) : (
 					<div className="overflow-x-auto">
-						<table className="report-table">
+						<table className="report-table report-table--departures">
 							<thead>
 								<tr>
-									<th>{t(l, "table.time")}</th>
-									<th>{t(l, "table.line")}</th>
-									<th>{t(l, "table.station")}</th>
-									<th>{t(l, "table.direction")}</th>
-									<th>{t(l, "table.status")}</th>
+									<th className="col-time">{t(l, "table.time")}</th>
+									<th className="col-line">{t(l, "table.line")}</th>
+									<th className="name">{t(l, "table.station")}</th>
+									<th className="name">{t(l, "table.direction")}</th>
+									<th className="col-status">{t(l, "table.status")}</th>
 								</tr>
 							</thead>
 							<tbody>
@@ -171,23 +172,22 @@ function OperatorDay() {
 									const delay = delayMin(j.date, j.time, j.rtTime);
 									return (
 										<tr key={`${j.time}-${j.line}-${j.direction}-${j.stop}`}>
-											<td className="figures whitespace-nowrap">
+											<td className="figures col-time">
 												{formatTime(j.time)}
 												{j.rtTime && j.rtTime !== j.time && (
-													<span className="ml-1 text-muted">
+													<span className="rt text-muted">
 														→ {formatTime(j.rtTime)}
 													</span>
 												)}
 											</td>
-											<td className="figures text-meta text-muted">{j.line}</td>
-											<td className="max-w-0 w-full truncate" title={j.stop}>
-												{j.stop}
+											<td className="figures col-line text-meta text-muted">
+												{j.line}
 											</td>
-											<td
-												className="max-w-0 w-full truncate"
-												title={j.direction}
-											>
-												{j.direction}
+											<td className="name" title={j.stop}>
+												{shortStationName(j.stop)}
+											</td>
+											<td className="name" title={j.direction}>
+												{shortStationName(j.direction)}
 											</td>
 											<td>
 												<StatusMark
