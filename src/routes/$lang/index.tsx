@@ -554,7 +554,51 @@ function Finding({ lines, lang }: { lines: LineSummary[]; lang: Lang }) {
 					{t(lang, "home.finding_ghosts", { rate: `${withGhosts}%` })}
 				</p>
 			)}
+			{/* The sentence above gives the verdict as a rate; these give it
+			    as a headcount. A percentage hides how many trips that is,
+			    and "1.8 % cancelled" reads very differently once it says
+			    438 buses. Counts, not rates, because the rate is already
+			    said — printing both of the same number twice would be the
+			    dashboard this report is trying not to be. */}
+			<dl className="grid grid-cols-3 gap-x-6 border-y border-rule py-4">
+				<CountFigure
+					label={t(lang, "stat.departures")}
+					value={total.toLocaleString(lang)}
+				/>
+				<CountFigure
+					label={t(lang, "home.cancelled")}
+					value={cancelled.toLocaleString(lang)}
+					tone={toneForCount(cancelled, "bad")}
+				/>
+				<CountFigure
+					label={t(lang, "home.delayed")}
+					value={delayed.toLocaleString(lang)}
+					tone={toneForCount(delayed, "mixed")}
+				/>
+			</dl>
 		</section>
+	);
+}
+
+/** One count under the finding. Smaller than the entity pages' `Figure`:
+ * those four numbers are the page, here they are a footnote to a sentence
+ * that already said the important thing. */
+function CountFigure({
+	label,
+	value,
+	tone,
+}: {
+	label: string;
+	value: string;
+	tone?: string;
+}) {
+	return (
+		<div className="space-y-0.5">
+			<dt className="text-micro uppercase tracking-[0.08em] text-muted">
+				{label}
+			</dt>
+			<dd className={`figures text-lead ${tone ?? ""}`}>{value}</dd>
+		</div>
 	);
 }
 
