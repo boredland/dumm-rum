@@ -7,3 +7,5 @@ pre-commit:
       glob: "*.{ts,json}"
       run: bunx biome check --write {staged_files}
       stage_fixed: true
+    - name: test
+      run: bun test
