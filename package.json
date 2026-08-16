@@ -12,6 +12,7 @@
 		"lint": "biome check",
 		"format": "biome check --write",
 		"check": "tsc --noEmit && biome check",
+		"test": "bun test",
 		"db:generate": "drizzle-kit generate",
 		"db:studio": "drizzle-kit studio",
 		"prepare": "lefthook install"
