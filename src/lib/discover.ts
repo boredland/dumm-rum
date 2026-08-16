@@ -1,4 +1,4 @@
-import { and, eq, sql } from "drizzle-orm";
+import { and, inArray, sql } from "drizzle-orm";
 import type PgBoss from "pg-boss";
 import type { Db } from "../db/client.ts";
 import { journeyRuns } from "../db/schema.ts";
@@ -7,7 +7,7 @@ import {
 	mgateStationBoardBatch,
 } from "./mgate.ts";
 import { STATIONS, type Station } from "./stations.ts";
-import { nowBerlin, todayBerlin } from "./utils.ts";
+import { nowBerlin, todayBerlin, yesterdayBerlin } from "./utils.ts";
 
 // Categories we never want in journey_runs. FLX / FlixTrain and the
 // long-distance trains are commercial services outside the ÖPNV scope
@@ -153,10 +153,13 @@ async function discoverStationJourneys(
 	return rows.length;
 }
 
+/** Enqueue unpolled journeys discovered for the given service dates. HAFAS
+ * stamps overnight journeys with the prior service date, so after midnight
+ * newly discovered runs legitimately belong to yesterday. */
 async function enqueueNewJourneys(
 	db: Db,
 	boss: PgBoss,
-	today: string,
+	days: string[],
 ): Promise<number> {
 	const candidates = await db
 		.select({
@@ -166,7 +169,7 @@ async function enqueueNewJourneys(
 		.from(journeyRuns)
 		.where(
 			and(
-				eq(journeyRuns.dayOfOperation, today),
+				inArray(journeyRuns.dayOfOperation, days),
 				sql`${journeyRuns.pollState} IS NULL`,
 			),
 		);
@@ -179,7 +182,7 @@ async function enqueueNewJourneys(
 		.set({ pollState: "queued" })
 		.where(
 			and(
-				eq(journeyRuns.dayOfOperation, today),
+				inArray(journeyRuns.dayOfOperation, days),
 				sql`${journeyRuns.pollState} IS NULL`,
 			),
 		);
@@ -231,6 +234,9 @@ export async function runDiscovery(db: Db, boss: PgBoss): Promise<void> {
 		console.log(`${station.slug}: discovered ${count} journeys`);
 	}
 
-	const enqueued = await enqueueNewJourneys(db, boss, today);
+	const enqueued = await enqueueNewJourneys(db, boss, [
+		today,
+		yesterdayBerlin(),
+	]);
 	if (enqueued > 0) console.log(`enqueued ${enqueued} journeys for polling`);
 }
