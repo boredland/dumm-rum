@@ -14,6 +14,7 @@ import {
 	isUnattributedMainzBus,
 } from "./discover.ts";
 import { type MgateJourneyDetail, mgateJourneyDetailsBatch } from "./mgate.ts";
+import { isHardCapReached } from "./poll-cap.ts";
 import { slugForStop } from "./stations.ts";
 import { notifyJourneyIssues } from "./telegram.ts";
 import { berlinTime, nowBerlin } from "./utils.ts";
@@ -347,20 +348,6 @@ export async function processPollBatch(
 	console.log(
 		`poll: batch=${jobs.length} ok=${stats.ok} skipped=${stats.skipped} transient=${stats.transient} terminal=${stats.terminal} done=${stats.done}`,
 	);
-}
-
-function isHardCapReached(
-	originDep?: string,
-	destArr?: string,
-	dayOfOp?: string,
-): boolean {
-	if (!destArr || !dayOfOp) return false;
-	const arr = berlinTime(dayOfOp, destArr);
-	const durationMin = originDep
-		? arr.diff(berlinTime(dayOfOp, originDep), "minute")
-		: 0;
-	const buffer = Math.max(durationMin, 15);
-	return nowBerlin().isAfter(arr.add(buffer, "minute"));
 }
 
 async function handlePollResult(
