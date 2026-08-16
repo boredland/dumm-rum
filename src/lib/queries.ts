@@ -867,35 +867,43 @@ export interface StopPickerEntry {
 	name: string;
 }
 
+/**
+ * Condition matching `known_stops` that had collected traffic in the last `days` days.
+ *
+ * Built on `stop_day_stats` instead of a correlated EXISTS across `journey_stops`
+ * joined with `journey_runs`. This substitution is sound because `refreshStopDayStats`
+ * in `src/lib/poll.ts` populates `stop_day_stats` using the exact same three
+ * `COLLECTED_TRAFFIC` filters (categoryNorm <> 'Fernverkehr', operator <> 'Mainzer Mobilität',
+ * and pollState <> 'excluded'), and explicitly deletes rollup rows for stop-days that
+ * end up with zero matching visits. A stop reachable only by long-distance traffic
+ * never enters `stop_day_stats`.
+ */
+function hasCollectedTrafficInDays(days = 30) {
+	return inArray(
+		knownStops.stopId,
+		db
+			.select({ stopId: stopDayStats.stopId })
+			.from(stopDayStats)
+			.where(gte(stopDayStats.dayOfOperation, sinceDays(days))),
+	);
+}
+
 /** Stop names served in the last 30 days, deduped case-insensitively.
  * Intended for client-side fuzzy search in the subscribe modal — heavy cache
  * at the HTTP layer.
  *
  * Names come from the known_stops rollup, which holds one row per stop id,
  * rather than from grouping the 1.9M-row journey_stops table: 14 ms against
- * 224 ms. The EXISTS keeps the 30-day window, because the rollup itself
- * never expires an entry — without it the picker would slowly fill with
- * stops that stopped running. */
+ * 224 ms. The 30-day window filter on stop_day_stats keeps the picker from
+ * slowly filling with stops that stopped running, and excludes stops reachable
+ * only by long-distance traffic. */
 export async function getAllStopNames(): Promise<StopPickerEntry[]> {
 	const rows = await db
 		.select({
 			name: sql<string>`MIN(${knownStops.stopName})`.as("name"),
 		})
 		.from(knownStops)
-		.where(
-			// EXISTS over the run join rather than a plain visit check: a stop
-			// reachable only by long-distance traffic must not enter the picker
-			// if that traffic ever comes back.
-			sql`EXISTS (
-				SELECT 1 FROM ${journeyStops}
-				JOIN ${journeyRuns}
-					ON ${journeyRuns.journeyRef} = ${journeyStops.journeyRef}
-					AND ${journeyRuns.dayOfOperation} = ${journeyStops.dayOfOperation}
-				WHERE ${journeyStops.stopId} = ${knownStops.stopId}
-					AND ${journeyStops.dayOfOperation} >= ${sinceDays(30)}
-					AND ${COLLECTED_TRAFFIC}
-			)`,
-		)
+		.where(hasCollectedTrafficInDays(30))
 		.groupBy(sql`LOWER(${knownStops.stopName})`)
 		.orderBy(sql`MIN(${knownStops.stopName})`);
 	return rows.map((r) => ({ name: r.name })).filter((r) => r.name);
@@ -999,20 +1007,7 @@ export async function getSitemapEntities(): Promise<SitemapEntities> {
 		db
 			.selectDistinct({ slug: knownStops.slug })
 			.from(knownStops)
-			.where(
-				and(
-					isNotNull(knownStops.slug),
-					sql`EXISTS (
-						SELECT 1 FROM ${journeyStops}
-						JOIN ${journeyRuns}
-							ON ${journeyRuns.journeyRef} = ${journeyStops.journeyRef}
-							AND ${journeyRuns.dayOfOperation} = ${journeyStops.dayOfOperation}
-						WHERE ${journeyStops.stopId} = ${knownStops.stopId}
-							AND ${journeyStops.dayOfOperation} >= ${sinceDays(30)}
-							AND ${COLLECTED_TRAFFIC}
-					)`,
-				),
-			)
+			.where(and(isNotNull(knownStops.slug), hasCollectedTrafficInDays(30)))
 			.orderBy(knownStops.slug),
 		getAllLineNames(),
 		db
