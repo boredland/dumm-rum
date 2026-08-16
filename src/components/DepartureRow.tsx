@@ -1,13 +1,19 @@
 import type { ReactNode } from "react";
 import { type Lang, t } from "../lib/i18n.ts";
+import { DELAY_THRESHOLD_MIN } from "../lib/utils.ts";
 
 export type Status = "cancelled" | "ghost" | "delayed" | "ok";
 
+/** The verdict a row displays. Shares `DELAY_THRESHOLD_MIN` with the
+ * `issues` filter and with every query that counts a delay: the two used
+ * to disagree by half a minute, so a departure delayed by exactly 7.5 or
+ * 8 minutes passed the filter and then rendered as on time — a row in a
+ * list of problems with nothing marking the problem. */
 function deriveStatus(
 	cancelled: boolean,
 	ghost: boolean | number,
 	delayMin: number | null,
-	threshold = 8,
+	threshold = DELAY_THRESHOLD_MIN,
 ): Status {
 	if (cancelled) return "cancelled";
 	if (ghost) return "ghost";
@@ -68,7 +74,7 @@ export function DepartureRow({
 	cancelled,
 	ghost,
 	delayMin,
-	threshold = 8,
+	threshold = DELAY_THRESHOLD_MIN,
 }: {
 	lang: Lang;
 	time: string;
