@@ -2,7 +2,7 @@
 	"id": "/",
 	"name": "DummRum — Pünktlichkeit im Frankfurter Nahverkehr",
 	"short_name": "DummRum",
-	"description": "Ausfälle, Geisterfahrten und Verspätungen im Frankfurter Nahverkehr — täglich aus dem RMV-Echtzeitfeed gemessen.",
+	"description": "Ausfälle, Geisterfahrten und Verspätungen im Frankfurter Nahverkehr, täglich aus dem RMV-Echtzeitfeed gemessen.",
 	"lang": "de",
 	"dir": "ltr",
 	"categories": ["travel", "navigation", "utilities"],
@@ -38,7 +38,7 @@
 			"sizes": "1280x800",
 			"type": "image/png",
 			"form_factor": "wide",
-			"label": "Tagesbericht: Ausfälle, Geisterfahrten und Verspätungen"
+			"label": "Tagesbericht mit Ausfällen, Geisterfahrten und Verspätungen"
 		},
 		{
 			"src": "/screenshot-narrow.png",

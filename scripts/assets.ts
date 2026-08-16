@@ -92,7 +92,7 @@ footer .host{font-family:"Fira Mono",monospace;color:#11191a;font-size:24px}
 	<div>
 		<div class="eyebrow">DummRum</div>
 		<h1>Wissen, ob man dumm rumsteht</h1>
-		<p class="sub">Ausfälle, Geisterfahrten und Verspätungen im Frankfurter Nahverkehr — täglich gemessen.</p>
+		<p class="sub">Ausfälle, Geisterfahrten und Verspätungen im Frankfurter Nahverkehr, jeden Tag gemessen.</p>
 	</div>
 	<div class="rule">
 		<div class="metric"><span class="label">Ausfälle</span><span class="word bad">gestrichen</span></div>

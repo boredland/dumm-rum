@@ -7,17 +7,17 @@ const translations = {
 		"home.subtitle": "Wissen, ob man dumm rumsteht",
 		"home.methodology_title": "Wie wir messen",
 		"home.methodology_collection":
-			"Alle 5 Minuten rufen wir den RMV-Echtzeit-Feed f\u00fcr alle erfassten Haltestellen ab und speichern die Abfahrtszeiten. Anschlie\u00dfend wird jede Fahrt einzeln alle 60 Sekunden \u00fcber die HAFAS-API f\u00fcr Fahrtdetails abgefragt, um Echtzeitdaten f\u00fcr jede Haltestelle und Ausf\u00e4lle zu erfassen.",
+			"Alle 5 Minuten rufen wir den RMV-Echtzeit-Feed f\u00fcr alle erfassten Haltestellen ab und speichern die Abfahrtszeiten. Danach fragen wir jede Fahrt einzeln alle 60 Sekunden \u00fcber die HAFAS-API ab, um Echtzeitdaten pro Haltestelle und Ausf\u00e4lle zu erfassen.",
 		"home.methodology_cancellation":
 			"Die Ausfallquote ist der Anteil der ausgefallenen Abfahrten an der Gesamtzahl.",
 		"home.methodology_ghost":
-			"Geisterfahrten (👻) sind geplante Abfahrten, die nie Echtzeitdaten erhalten haben. Laut RMV ist das Fehlen von Echtzeitdaten \u201eein sehr starkes Indiz, dass dieser Bus mit hoher Wahrscheinlichkeit ausfallen wird\u201c \u2014 das System empfängt keine Live-Position, weil schlicht kein Bus auf dieser Fahrt unterwegs ist. Diese werden getrennt von bestätigten Ausfällen erfasst.",
+			"Geisterfahrten (👻) sind geplante Abfahrten, die nie Echtzeitdaten erhalten haben. Laut RMV ist das Fehlen von Echtzeitdaten \u201eein sehr starkes Indiz, dass dieser Bus mit hoher Wahrscheinlichkeit ausfallen wird\u201c. Das System empfängt keine Live-Position, weil schlicht kein Bus auf dieser Fahrt unterwegs ist. Wir zählen sie getrennt von bestätigten Ausfällen.",
 		"home.methodology_delayed":
-			"Als verspätet gilt eine nicht ausgefallene Abfahrt, wenn die Echtzeit \u22657,5 Minuten nach dem Fahrplan liegt \u2014 gemessen an der Abfahrtszeit, ersatzweise an der Ankunftszeit (z. B. an Endhaltestellen).",
+			"Als verspätet gilt eine nicht ausgefallene Abfahrt, wenn die Echtzeit \u22657,5 Minuten nach dem Fahrplan liegt. Gemessen wird die Abfahrtszeit, ersatzweise die Ankunftszeit (z. B. an Endhaltestellen).",
 		"home.methodology_reliability":
-			"Die P\u00fcnktlichkeitsquote (OTP) ist der Anteil der Abfahrten, die weder ausgefallen noch versp\u00e4tet sind \u2014 ein g\u00e4ngiger Standard im \u00d6PNV.",
+			"Die P\u00fcnktlichkeitsquote (OTP) ist der Anteil der Abfahrten, die weder ausgefallen noch versp\u00e4tet sind, ein g\u00e4ngiger Standard im \u00d6PNV.",
 		"home.methodology_dedup":
-			"Für die Linien- und Betreiberstatistiken wird jede Fahrt nur einmal gezählt, auch wenn sie mehrere erfasste Haltestellen passiert \u2014 wir deduplizieren nach Fahrtnummer. Wird eine Fahrt an mehreren Haltestellen beobachtet, werden die früheste Abfahrtszeit und der schlechteste Status (ausgefallen > verspätet > pünktlich) verwendet.",
+			"Für die Linien- und Betreiberstatistiken zählen wir jede Fahrt nur einmal, auch wenn sie mehrere erfasste Haltestellen passiert: wir deduplizieren nach Fahrtnummer. Sehen wir eine Fahrt an mehreren Haltestellen, nehmen wir die früheste Abfahrtszeit und den schlechtesten Status (ausgefallen > verspätet > pünktlich).",
 		"home.methodology_colors":
 			"Farben: gr\u00fcn ab 90%, orange 80\u201389%, rot unter 80%.",
 		"home.finding":
@@ -191,7 +191,7 @@ const translations = {
 		"notfound.board.status": "f\u00e4llt aus",
 		"notfound.cta": "Zur\u00fcck zur \u00dcbersicht",
 		"notfound.tip":
-			"Tipp: Wenn dich ein Link innerhalb von DummRum hierher gef\u00fchrt hat, sag uns Bescheid \u2014 dann flicken wir die Wegweisung.",
+			"Tipp: Wenn dich ein Link innerhalb von DummRum hierher gef\u00fchrt hat, sag uns Bescheid. Dann flicken wir die Wegweisung.",
 	},
 	en: {
 		"home.title": "DummRum",
@@ -202,13 +202,13 @@ const translations = {
 		"home.methodology_cancellation":
 			"The cancellation rate is the share of cancelled departures out of the total.",
 		"home.methodology_ghost":
-			"Ghost departures (👻) are scheduled trips that never received realtime data. According to RMV, the absence of realtime data is \u201ca very strong indicator that the bus will very likely not run\u201d \u2014 the system cannot receive a live position because there simply is no bus on that route. These are tracked separately from confirmed cancellations.",
+			"Ghost departures (👻) are scheduled trips that never received realtime data. According to RMV, the absence of realtime data is \u201ca very strong indicator that the bus will very likely not run\u201d. The system cannot receive a live position because there simply is no bus on that route. We count them separately from confirmed cancellations.",
 		"home.methodology_delayed":
-			"A non-cancelled departure counts as delayed when its realtime is \u22657.5 minutes behind schedule \u2014 measured on departure time, falling back to arrival time (e.g. at terminus stops).",
+			"A non-cancelled departure counts as delayed when its realtime is \u22657.5 minutes behind schedule. We measure departure time, falling back to arrival time (e.g. at terminus stops).",
 		"home.methodology_reliability":
-			"On-time performance (OTP) is the share of departures that were neither cancelled nor delayed \u2014 a standard metric in public transport.",
+			"On-time performance (OTP) is the share of departures that were neither cancelled nor delayed, a standard metric in public transport.",
 		"home.methodology_dedup":
-			"For line and operator statistics, each journey is counted once even if it passes through multiple tracked stations \u2014 we deduplicate by journey number. When a journey is observed at several stations, the earliest departure time and worst status (cancelled > delayed > on-time) are used.",
+			"For line and operator statistics we count each journey once, even if it passes through several tracked stations: we deduplicate by journey number. When we see a journey at more than one stop, we take the earliest departure time and the worst status (cancelled > delayed > on-time).",
 		"home.methodology_colors":
 			"Colors: green from 90%, orange 80\u201389%, red below 80%.",
 		"home.finding": "Of {total} tracked trips, {rate} ran on time.",
@@ -376,7 +376,7 @@ const translations = {
 		"notfound.board.status": "not in service",
 		"notfound.cta": "Back to the overview",
 		"notfound.tip":
-			"Tip: if you got here by clicking a link in DummRum itself, please report it — we'd like to fix the signage.",
+			"Tip: if you got here by clicking a link in DummRum itself, please report it. We'd like to fix the signage.",
 	},
 } as const;
 
