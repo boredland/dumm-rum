@@ -10,6 +10,7 @@ import {
 	normalizedCategorySql,
 	sinceDays,
 } from "./queries.ts";
+import { escapeHtml } from "./telegram-escape.ts";
 import {
 	DELAY_THRESHOLD_MIN,
 	nowBerlin,
@@ -118,11 +119,11 @@ export async function handleTelegramWebhook(
 			if (timeRanges) cmd += ` ${timeRanges}`;
 			if (weekdays) cmd += ` ${weekdays}`;
 			const desc = direction
-				? `<b>${line}</b> → ${direction}`
-				: `<b>${line}</b>`;
-			const stopBit = stopName ? ` @ <b>${stopName}</b>` : "";
+				? `<b>${escapeHtml(line)}</b> → ${escapeHtml(direction)}`
+				: `<b>${escapeHtml(line)}</b>`;
+			const stopBit = stopName ? ` @ <b>${escapeHtml(stopName)}</b>` : "";
 			await reply(
-				`🚏 Subscribe to ${desc}${stopBit} alerts:\n\n<code>${cmd}</code>\n\nTap the command above to copy, then send it here.\n\nYou can add options before sending:\n⏰ Time: <code>${cmd} 06:00-09:00,16:00-19:00</code>\n📅 Days: <code>${cmd} Mo-Fr</code>\n⏰📅 Both: <code>${cmd} 06:00-09:00 Mo-Fr</code>`,
+				`🚏 Subscribe to ${desc}${stopBit} alerts:\n\n<code>${escapeHtml(cmd)}</code>\n\nTap the command above to copy, then send it here.\n\nYou can add options before sending:\n⏰ Time: <code>${escapeHtml(cmd)} 06:00-09:00,16:00-19:00</code>\n📅 Days: <code>${escapeHtml(cmd)} Mo-Fr</code>\n⏰📅 Both: <code>${escapeHtml(cmd)} 06:00-09:00 Mo-Fr</code>`,
 			);
 		} catch {
 			await reply("Invalid link. Try /help");
@@ -136,10 +137,12 @@ export async function handleTelegramWebhook(
 		const dirs = knownDirs.map((d) => d.direction);
 		const exampleDir =
 			dirs.length >= 2
-				? `${dirs[0]}+${dirs[1]}`
-				: (dirs[0] ?? "&lt;direction&gt;");
+				? `${escapeHtml(dirs[0])}+${escapeHtml(dirs[1])}`
+				: dirs[0]
+					? escapeHtml(dirs[0])
+					: "&lt;direction&gt;";
 		await reply(
-			`🚏 To subscribe to <b>${line}</b> alerts, send:\n\n<code>/subscribe ${line}</code> — to see destinations\n<code>/subscribe ${line} ${dirs[0] ?? "&lt;direction&gt;"}</code> — to subscribe\n\nOptions: time range, weekdays, multiple directions with +\n<code>/subscribe ${line} ${exampleDir} 06:00-09:00,16:00-19:00 Mo-Fr</code>`,
+			`🚏 To subscribe to <b>${escapeHtml(line)}</b> alerts, send:\n\n<code>/subscribe ${escapeHtml(line)}</code> — to see destinations\n<code>/subscribe ${escapeHtml(line)} ${dirs[0] ? escapeHtml(dirs[0]) : "&lt;direction&gt;"}</code> — to subscribe\n\nOptions: time range, weekdays, multiple directions with +\n<code>/subscribe ${escapeHtml(line)} ${exampleDir} 06:00-09:00,16:00-19:00 Mo-Fr</code>`,
 		);
 		return;
 	}
@@ -175,12 +178,17 @@ export async function handleTelegramWebhook(
 			const knownDirs = await fetchDirections(line);
 			if (knownDirs.length > 0) {
 				const list = knownDirs
-					.map((d) => `• <code>/subscribe ${line} ${d.direction}</code>`)
+					.map(
+						(d) =>
+							`• <code>/subscribe ${escapeHtml(line)} ${escapeHtml(d.direction)}</code>`,
+					)
 					.join("\n");
-				await reply(`Pick a direction for <b>${line}</b>:\n\n${list}`);
+				await reply(
+					`Pick a direction for <b>${escapeHtml(line)}</b>:\n\n${list}`,
+				);
 			} else {
 				await reply(
-					`Unknown line <b>${line}</b>.\n\nUsage: /subscribe &lt;line&gt; &lt;direction&gt; [HH:MM-HH:MM,...] [Mo,Di,...]`,
+					`Unknown line <b>${escapeHtml(line)}</b>.\n\nUsage: /subscribe &lt;line&gt; &lt;direction&gt; [HH:MM-HH:MM,...] [Mo,Di,...]`,
 				);
 			}
 			return;
@@ -213,7 +221,9 @@ export async function handleTelegramWebhook(
 			) {
 				weekdays = parseWeekdays(arg);
 				if (!weekdays) {
-					await reply(`Invalid weekdays: ${arg}\nUse: Mo,Di,Mi,Do,Fr,Sa,So`);
+					await reply(
+						`Invalid weekdays: ${escapeHtml(arg)}\nUse: Mo,Di,Mi,Do,Fr,Sa,So`,
+					);
 					return;
 				}
 			} else {
@@ -247,12 +257,14 @@ export async function handleTelegramWebhook(
 		if (unmatched.length > 0) {
 			if (knownDirs.length === 0) {
 				await reply(
-					`Unknown line <b>${line}</b>. Check the line name and try again.`,
+					`Unknown line <b>${escapeHtml(line)}</b>. Check the line name and try again.`,
 				);
 			} else {
-				const list = knownDirs.map((d) => `• ${d.direction}`).join("\n");
+				const list = knownDirs
+					.map((d) => `• ${escapeHtml(d.direction)}`)
+					.join("\n");
 				await reply(
-					`No direction matching "${unmatched.join(", ")}" for <b>${line}</b>.\n\nKnown destinations:\n${list}`,
+					`No direction matching "${unmatched.map(escapeHtml).join(", ")}" for <b>${escapeHtml(line)}</b>.\n\nKnown destinations:\n${list}`,
 				);
 			}
 			return;
@@ -283,7 +295,7 @@ export async function handleTelegramWebhook(
 				);
 			if (stopRows.length === 0) {
 				await reply(
-					`No stop matching "<b>${stopFilter}</b>".\n\nTry a different name or omit @stop to subscribe to all stops.`,
+					`No stop matching "<b>${escapeHtml(stopFilter)}</b>".\n\nTry a different name or omit @stop to subscribe to all stops.`,
 				);
 				return;
 			}
@@ -292,10 +304,12 @@ export async function handleTelegramWebhook(
 					.slice(0, 10)
 					.map(
 						(s) =>
-							`• <code>/subscribe ${line} ${direction} @${s.stopName.replace(/Frankfurt \(Main\) /i, "")}</code>`,
+							`• <code>/subscribe ${escapeHtml(line)} ${escapeHtml(direction)} @${escapeHtml(s.stopName.replace(/Frankfurt \(Main\) /i, ""))}</code>`,
 					)
 					.join("\n");
-				await reply(`Multiple stops match "<b>${stopFilter}</b>":\n\n${list}`);
+				await reply(
+					`Multiple stops match "<b>${escapeHtml(stopFilter)}</b>":\n\n${list}`,
+				);
 				return;
 			}
 			resolvedStopId = stopRows[0].stopId;
@@ -341,9 +355,9 @@ export async function handleTelegramWebhook(
 				});
 		}
 
-		let details = `<b>${line}</b> → ${matched.join(" + ")}`;
+		let details = `<b>${escapeHtml(line)}</b> → ${matched.map(escapeHtml).join(" + ")}`;
 		if (resolvedStopName)
-			details += `\n📍 ${resolvedStopName.replace(/Frankfurt \(Main\) /i, "")}`;
+			details += `\n📍 ${escapeHtml(resolvedStopName.replace(/Frankfurt \(Main\) /i, ""))}`;
 		if (timeRanges.length > 0) details += `\n⏰ ${timeRanges.join(", ")}`;
 		if (weekdays) details += `\n📅 ${formatWeekdays(weekdays)}`;
 		await reply(`✅ ${updated ? "Updated" : "Subscribed"}:\n${details}`);
@@ -367,7 +381,8 @@ export async function handleTelegramWebhook(
 			await reply("No subscriptions to remove.");
 		} else {
 			const list = subs.map(
-				(s) => `• <code>/unsubscribe ${s.line} ${s.direction}</code>`,
+				(s) =>
+					`• <code>/unsubscribe ${escapeHtml(s.line)} ${escapeHtml(s.direction)}</code>`,
 			);
 			await reply(`Which subscription to remove?\n\n${list.join("\n")}`);
 		}
@@ -397,7 +412,9 @@ export async function handleTelegramWebhook(
 			.limit(1);
 
 		if (existing.length === 0) {
-			await reply(`No subscription found for <b>${line}</b> → ${direction}`);
+			await reply(
+				`No subscription found for <b>${escapeHtml(line)}</b> → ${escapeHtml(direction)}`,
+			);
 			return;
 		}
 
@@ -411,7 +428,9 @@ export async function handleTelegramWebhook(
 				),
 			);
 
-		await reply(`✅ Removed subscription for <b>${line}</b> → ${direction}`);
+		await reply(
+			`✅ Removed subscription for <b>${escapeHtml(line)}</b> → ${escapeHtml(direction)}`,
+		);
 		return;
 	}
 
@@ -446,8 +465,8 @@ export async function handleTelegramWebhook(
 		}
 
 		const lines = subs.map((s) => {
-			let desc = `• <b>${s.line}</b> → ${s.direction}`;
-			if (s.stopId) desc += ` 📍 ${s.stopId}`;
+			let desc = `• <b>${escapeHtml(s.line)}</b> → ${escapeHtml(s.direction)}`;
+			if (s.stopId) desc += ` 📍 ${escapeHtml(s.stopId)}`;
 			if (s.timeRanges) desc += ` ⏰ ${s.timeRanges.split(",").join(", ")}`;
 			if (s.weekdays) desc += ` 📅 ${formatWeekdays(s.weekdays)}`;
 			return desc;
@@ -537,9 +556,9 @@ async function notifySubscribers(
 			const status = issue.cancelled
 				? `❌ ${labels.cancelled}`
 				: `⏱ +${issue.delayMin} min ${labels.delay}`;
-			const stopInfo = issue.stop ? ` @ ${issue.stop}` : "";
+			const stopInfo = issue.stop ? ` @ ${escapeHtml(issue.stop)}` : "";
 			entry.msgs.push(
-				`<b>${issue.line}</b> ${issue.time.slice(0, 5)} → ${issue.direction}${stopInfo}: ${status}`,
+				`<b>${escapeHtml(issue.line)}</b> ${issue.time.slice(0, 5)} → ${escapeHtml(issue.direction)}${stopInfo}: ${status}`,
 			);
 			notifications.set(sub.chatId, entry);
 		}
