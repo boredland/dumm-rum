@@ -22,18 +22,26 @@ describe("expandRange", () => {
 		expect(normalize(expandRange(2, 2))).toEqual([2]);
 	});
 
-	test("collapses Sunday to Saturday full week range", () => {
-		// BUG: a full seven-day range collapses to one day, because the loop's
-		// termination test is true on the first iteration. A later plan fixes this
-		// to return all seven days; update these assertions there.
-		expect(normalize(expandRange(0, 6))).toEqual([6]);
+	test("expands Sunday to Saturday to the whole week", () => {
+		expect(normalize(expandRange(0, 6))).toEqual([0, 1, 2, 3, 4, 5, 6]);
 	});
 
-	test("collapses Monday to Sunday full week range", () => {
-		// BUG: a full seven-day range collapses to one day, because the loop's
-		// termination test is true on the first iteration. A later plan fixes this
-		// to return all seven days; update these assertions there.
-		expect(normalize(expandRange(1, 0))).toEqual([0]);
+	test("expands Monday to Sunday to the whole week", () => {
+		expect(normalize(expandRange(1, 0))).toEqual([0, 1, 2, 3, 4, 5, 6]);
+	});
+
+	test("never repeats a day", () => {
+		for (const [from, to] of [
+			[1, 5],
+			[0, 6],
+			[1, 0],
+			[6, 0],
+			[5, 1],
+			[2, 2],
+		]) {
+			const days = expandRange(from, to);
+			expect(days.length).toBe(new Set(days).size);
+		}
 	});
 });
 
@@ -52,5 +60,9 @@ describe("parseWeekdays", () => {
 
 	test("returns null for range with invalid endpoint", () => {
 		expect(parseWeekdays("Mo-Xx")).toBeNull();
+	});
+
+	test("expands a full-week range to every day", () => {
+		expect(parseWeekdays("Mo-So")).toBe("0,1,2,3,4,5,6");
 	});
 });

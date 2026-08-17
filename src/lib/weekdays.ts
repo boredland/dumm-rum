@@ -25,11 +25,14 @@ export const WEEKDAY_NAMES: Record<string, number> = {
 
 const DAY_NAMES = ["So", "Mo", "Di", "Mi", "Do", "Fr", "Sa"];
 
+/** Days from `from` to `to` inclusive, wrapping through Sunday.
+ *
+ * Counted rather than stopped on a sentinel: an `i !== (to + 1) % 7` guard is
+ * already true on the first iteration when the range covers all seven days, so
+ * `Mo-So` used to yield Sunday alone and silence six days of alerts. */
 export function expandRange(from: number, to: number): number[] {
-	const result: number[] = [];
-	for (let i = from; i !== (to + 1) % 7; i = (i + 1) % 7) result.push(i);
-	result.push(to);
-	return result;
+	const span = ((to - from + 7) % 7) + 1;
+	return Array.from({ length: span }, (_, i) => (from + i) % 7);
 }
 
 export function parseWeekdays(input: string): string | null {
