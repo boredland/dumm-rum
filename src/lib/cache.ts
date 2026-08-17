@@ -11,7 +11,17 @@
  * costs one round trip rather than 50.
  */
 
-import { and, eq, gt, inArray, isNull, or, sql } from "drizzle-orm";
+import {
+	and,
+	eq,
+	gt,
+	inArray,
+	isNotNull,
+	isNull,
+	lt,
+	or,
+	sql,
+} from "drizzle-orm";
 import { db } from "../db/client.ts";
 import { unloggedCache } from "../db/schema.ts";
 
@@ -96,4 +106,23 @@ export async function cachePut<T>(
 /** Drop an entry. No-op if the key isn't present. */
 export async function cacheDelete(key: string): Promise<void> {
 	await db.delete(unloggedCache).where(eq(unloggedCache.key, key));
+}
+
+/** Sweeps rows whose TTL has expired.
+ *
+ * Reads already filter on `expires_at`, so expired rows are invisible
+ * but still occupy disk forever. Rows with a NULL `expiresAt` live until
+ * explicitly invalidated and must never be swept. Returns the count of
+ * removed rows. */
+export async function cacheSweepExpired(): Promise<number> {
+	const deleted = await db
+		.delete(unloggedCache)
+		.where(
+			and(
+				isNotNull(unloggedCache.expiresAt),
+				lt(unloggedCache.expiresAt, sql`now()`),
+			),
+		)
+		.returning({ key: unloggedCache.key });
+	return deleted.length;
 }

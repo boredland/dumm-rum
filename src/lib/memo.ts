@@ -18,10 +18,28 @@ interface MemoEntry {
 	expires: number;
 }
 
+/** Most keys held in the memo before the least-recently-used ones are
+ * dropped. Keys come from route params (e.g. line-stops query param), so
+ * the space is unbounded and reachable by anyone typing URLs — without a
+ * cap the map only ever grows. Mirrors `swr.ts` (4096 cap with LRU eviction)
+ * so both in-process caches stay bounded. */
+const MAX_ENTRIES = 4096;
+
 const memo = new Map<string, MemoEntry>();
 /** In-flight rebuilds, so a stale key refreshes once rather than once per
  * caller that arrives while it is running. */
 const inflight = new Map<string, Promise<string>>();
+
+/** Drops the least recently refreshed entries once the map is over cap.
+ *
+ * Map iterates in insertion order and delete-before-set re-inserts, so
+ * the front of the map is the least recently refreshed. */
+function evict(): void {
+	for (const k of memo.keys()) {
+		if (memo.size <= MAX_ENTRIES) break;
+		memo.delete(k);
+	}
+}
 
 /** Rebuilds `key` and stores the result, coalescing concurrent callers
  * onto one build. Errors are not cached — they reject every waiter and
@@ -36,7 +54,11 @@ function rebuild(
 	const p = (async () => {
 		const value = await build();
 		const body = JSON.stringify(value);
+		// Delete before set so a refreshed key moves to the back of the
+		// insertion order rather than keeping its original position.
+		memo.delete(key);
 		memo.set(key, { body, expires: Date.now() + ttlSec * 1000 });
+		if (memo.size > MAX_ENTRIES) evict();
 		import("./cache.ts")
 			.then(({ cachePut }) => cachePut(`memo:${key}`, value, ttlSec * 1000))
 			.catch(() => {
@@ -78,7 +100,11 @@ export async function memoGet(
 		const fromKv = await cacheGet<unknown>(`memo:${key}`);
 		if (fromKv !== null) {
 			const body = JSON.stringify(fromKv);
+			// Delete before set so a refreshed key moves to the back of the
+			// insertion order rather than keeping its original position.
+			memo.delete(key);
 			memo.set(key, { body, expires: now + ttlSec * 1000 });
+			if (memo.size > MAX_ENTRIES) evict();
 			return body;
 		}
 	} catch {

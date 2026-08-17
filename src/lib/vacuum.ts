@@ -1,4 +1,5 @@
 import { sql as pg } from "../db/client.ts";
+import { cacheSweepExpired } from "./cache.ts";
 
 /** Tables pg-boss churns hardest. `archive` takes every completed job and
  * then has it deleted again by the retention window, so it is almost
@@ -58,6 +59,13 @@ async function bloated(): Promise<Bloat[]> {
  * reads is in this schema, so page loads are unaffected either way.
  */
 export async function vacuumJobTables(): Promise<void> {
+	try {
+		const swept = await cacheSweepExpired();
+		console.log(`cache: swept ${swept} expired rows`);
+	} catch (e) {
+		console.error("cache: sweep failed:", e);
+	}
+
 	const targets = await bloated();
 	if (targets.length === 0) {
 		console.log("vacuum: nothing bloated enough to rewrite");
