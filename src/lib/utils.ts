@@ -41,6 +41,39 @@ export function onTimeRate(
 	return Math.round(((total - cancelled - delayed) / total) * 100);
 }
 
+/** Pseudo-departures of network-average service blended into every ranking
+ * score. At 20, a line needs roughly a fortnight of its own record before
+ * that record outweighs the assumption that it behaves like everything else. */
+const RANK_PRIOR = 20;
+
+/** The on-time share across a whole set — the mean `rankScore` pulls toward. */
+export function meanOnTimeRate(
+	items: { cancelled: number; delayed: number; total: number }[],
+): number {
+	let onTime = 0;
+	let total = 0;
+	for (const item of items) {
+		onTime += item.total - item.cancelled - item.delayed;
+		total += item.total;
+	}
+	return total > 0 ? onTime / total : 1;
+}
+
+/** On-time share pulled toward `mean`, for ordering only — never for display.
+ * Ranking on the raw rate makes the worst line whichever one ran three times
+ * and was late twice, so a single Schienenersatzverkehr owns the top of the
+ * page indefinitely. Shrinking thin evidence back toward average orders by how
+ * much a line actually disrupts rather than by how little we saw of it. */
+export function rankScore(
+	cancelled: number,
+	delayed: number,
+	total: number,
+	mean: number,
+): number {
+	const onTime = total - cancelled - delayed;
+	return (onTime + RANK_PRIOR * mean) / (total + RANK_PRIOR);
+}
+
 export function formatTime(time: string | null): string {
 	if (!time) return "—";
 	return time.slice(0, 5);

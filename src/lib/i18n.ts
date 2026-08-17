@@ -16,6 +16,8 @@ const translations = {
 			"Als verspätet gilt eine nicht ausgefallene Abfahrt, wenn die Echtzeit \u22657,5 Minuten nach dem Fahrplan liegt. Gemessen wird die Abfahrtszeit, ersatzweise die Ankunftszeit (z. B. an Endhaltestellen).",
 		"home.methodology_reliability":
 			"Die P\u00fcnktlichkeitsquote (OTP) ist der Anteil der Abfahrten, die weder ausgefallen noch versp\u00e4tet sind, ein g\u00e4ngiger Standard im \u00d6PNV.",
+		"home.methodology_ranking":
+			"Sortiert wird nicht nach der rohen Quote, sondern nach einer Quote, die bei wenigen Abfahrten zum Netzdurchschnitt hin gezogen wird. Sonst stünde eine Linie mit drei Fahrten und zwei Verspätungen dauerhaft ganz oben. Angezeigt wird immer der echte Wert.",
 		"home.methodology_dedup":
 			"Für die Linien- und Betreiberstatistiken zählen wir jede Fahrt nur einmal, auch wenn sie mehrere erfasste Haltestellen passiert: wir deduplizieren nach Fahrtnummer. Sehen wir eine Fahrt an mehreren Haltestellen, nehmen wir die früheste Abfahrtszeit und den schlechtesten Status (ausgefallen > verspätet > pünktlich).",
 		"home.methodology_colors":
@@ -207,6 +209,8 @@ const translations = {
 			"A non-cancelled departure counts as delayed when its realtime is \u22657.5 minutes behind schedule. We measure departure time, falling back to arrival time (e.g. at terminus stops).",
 		"home.methodology_reliability":
 			"On-time performance (OTP) is the share of departures that were neither cancelled nor delayed, a standard metric in public transport.",
+		"home.methodology_ranking":
+			"Ranking uses an on-time rate pulled toward the network average when a line has few departures, rather than the raw rate. Otherwise a line with three trips and two delays would sit at the top forever. The figure shown is always the real one.",
 		"home.methodology_dedup":
 			"For line and operator statistics we count each journey once, even if it passes through several tracked stations: we deduplicate by journey number. When we see a journey at more than one stop, we take the earliest departure time and the worst status (cancelled > delayed > on-time).",
 		"home.methodology_colors":

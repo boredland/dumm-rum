@@ -15,7 +15,9 @@ import { pageHead } from "../../lib/seo.ts";
 import { slugForStop } from "../../lib/stations.ts";
 import { toneForCount, toneForScore } from "../../lib/status.ts";
 import {
+	meanOnTimeRate,
 	onTimeRate,
+	rankScore,
 	shortStationName,
 	yesterdayBerlin,
 } from "../../lib/utils.ts";
@@ -224,6 +226,12 @@ function Index() {
 		});
 	};
 
+	// The prior every ranking shrinks toward is the whole network's record,
+	// not the filtered subset's: a category filter should reorder the page,
+	// not silently move the baseline the ordering is judged against.
+	const lineMean = meanOnTimeRate(lines);
+	const opMean = meanOnTimeRate(operators);
+
 	const filteredLines = [...lines]
 		.filter(
 			(line) =>
@@ -238,8 +246,8 @@ function Index() {
 					)),
 		)
 		.sort((a, b) => {
-			const sa = onTimeRate(a.cancelled, a.delayed, a.total);
-			const sb = onTimeRate(b.cancelled, b.delayed, b.total);
+			const sa = rankScore(a.cancelled, a.delayed, a.total, lineMean);
+			const sb = rankScore(b.cancelled, b.delayed, b.total, lineMean);
 			return (
 				sa - sb || a.line.localeCompare(b.line, undefined, { numeric: true })
 			);
@@ -264,8 +272,8 @@ function Index() {
 				(!q || matchesQuery(q, op.operator, op.lines.join(" "))),
 		)
 		.sort((a, b) => {
-			const sa = onTimeRate(a.cancelled, a.delayed, a.total);
-			const sb = onTimeRate(b.cancelled, b.delayed, b.total);
+			const sa = rankScore(a.cancelled, a.delayed, a.total, opMean);
+			const sb = rankScore(b.cancelled, b.delayed, b.total, opMean);
 			return sa - sb || a.operator.localeCompare(b.operator);
 		});
 
@@ -1028,6 +1036,7 @@ function Method({ lang }: { lang: Lang }) {
 		"delayed",
 		"ghost",
 		"reliability",
+		"ranking",
 		"dedup",
 		"colors",
 	] as const;
