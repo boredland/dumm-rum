@@ -77,18 +77,17 @@ export const journeyStops = pgTable(
 		rtArrTime: text("rt_arr_time"),
 		cancelled: boolean().notNull().default(false),
 		/** Per-stop delay in minutes, precomputed at insert/update. NULL
-		 * when the stop has no real-time pair. split_part + int math is
-		 * IMMUTABLE and backs a generated column; text::timestamp is not. */
+		 * when the stop has no real-time pair.
+		 *
+		 * `delay_minutes` is a custom IMMUTABLE function rather than inline
+		 * SQL, for the same reason as `normalize_category`: the midnight
+		 * correction has to be spelled once. Written inline it would appear
+		 * six times in this expression alone and drift the moment anyone
+		 * edits one copy. See drizzle/20260817000000_delay_min_midnight. */
 		delayMin: doublePrecision("delay_min").generatedAlwaysAs(
 			sql`COALESCE(
-				CASE WHEN rt_dep_time IS NOT NULL AND dep_time IS NOT NULL THEN
-					(split_part(rt_dep_time, ':', 1)::int * 60 + split_part(rt_dep_time, ':', 2)::int + split_part(rt_dep_time, ':', 3)::int / 60.0)
-					- (split_part(dep_time, ':', 1)::int * 60 + split_part(dep_time, ':', 2)::int + split_part(dep_time, ':', 3)::int / 60.0)
-				END,
-				CASE WHEN rt_arr_time IS NOT NULL AND arr_time IS NOT NULL THEN
-					(split_part(rt_arr_time, ':', 1)::int * 60 + split_part(rt_arr_time, ':', 2)::int + split_part(rt_arr_time, ':', 3)::int / 60.0)
-					- (split_part(arr_time, ':', 1)::int * 60 + split_part(arr_time, ':', 2)::int + split_part(arr_time, ':', 3)::int / 60.0)
-				END
+				delay_minutes(dep_time, rt_dep_time),
+				delay_minutes(arr_time, rt_arr_time)
 			)`,
 		),
 	},

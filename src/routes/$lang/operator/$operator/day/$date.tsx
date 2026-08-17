@@ -169,7 +169,7 @@ function OperatorDay() {
 							</thead>
 							<tbody>
 								{filters.filtered.map((j) => {
-									const delay = delayMin(j.date, j.time, j.rtTime);
+									const delay = delayMin(j.time, j.rtTime);
 									return (
 										<tr key={`${j.time}-${j.line}-${j.direction}-${j.stop}`}>
 											<td className="figures col-time">

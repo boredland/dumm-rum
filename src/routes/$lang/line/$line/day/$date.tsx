@@ -184,7 +184,7 @@ function LineDay() {
 							</thead>
 							<tbody>
 								{filters.filtered.map((j) => {
-									const delay = delayMin(j.date, j.time, j.rtTime);
+									const delay = delayMin(j.time, j.rtTime);
 									const isHighlighted = jid != null && j.journeyRef === jid;
 									return (
 										<tr

@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import type { Lang } from "../lib/i18n.ts";
 import { t } from "../lib/i18n.ts";
 import { buildSubscribeUrl } from "../lib/telegram-deeplink.ts";
-import { DELAY_THRESHOLD_MIN } from "../lib/utils.ts";
+import { DELAY_THRESHOLD_MIN, delayMin } from "../lib/utils.ts";
 import { Pill } from "./Pill.tsx";
 
 type StatusFilter = "all" | "issues" | "on_time";
@@ -22,21 +22,9 @@ interface Departure {
 	ghost: number;
 }
 
-function delayMin(
-	date: string,
-	sched: string,
-	rt: string | null,
-): number | null {
-	if (!rt) return null;
-	const planned = new Date(`${date}T${sched}`).getTime();
-	const actual = new Date(`${date}T${rt}`).getTime();
-	if (!Number.isFinite(planned) || !Number.isFinite(actual)) return null;
-	return Math.round((actual - planned) / 60_000);
-}
-
 function isIssue(d: Departure): boolean {
 	if (d.cancelled || d.ghost) return true;
-	const delay = delayMin(d.date, d.time, d.rtTime);
+	const delay = delayMin(d.time, d.rtTime);
 	return delay !== null && delay >= DELAY_THRESHOLD_MIN;
 }
 

@@ -46,16 +46,36 @@ export function formatTime(time: string | null): string {
 	return time.slice(0, 5);
 }
 
-export function delayMin(
-	date: string,
-	sched: string,
-	rt: string | null,
-): number | null {
+/** Minutes a departure ran late, or null without a real-time pair.
+ *
+ * Takes clock times only, mirroring the `delay_minutes` SQL function behind
+ * `journey_stops.delay_min`,
+ * including the midnight correction: the two values carry a clock but no date,
+ * so 23:55 -> 00:05 would otherwise read as -1430 rather than +10. Anything
+ * past ±12 h is a wrap, not a figure. HAFAS also emits an over-24 h clock
+ * (24:05) for the same instant, which `Date` rejects, so the hours are parsed
+ * rather than delegated to it. */
+export function delayMin(sched: string, rt: string | null): number | null {
 	if (!rt) return null;
-	const planned = new Date(`${date}T${sched}`).getTime();
-	const actual = new Date(`${date}T${rt}`).getTime();
-	if (!Number.isFinite(planned) || !Number.isFinite(actual)) return null;
-	return Math.round((actual - planned) / 60_000);
+	const planned = minutesOfDay(sched);
+	const actual = minutesOfDay(rt);
+	if (planned === null || actual === null) return null;
+	const diff = actual - planned;
+	if (diff < -720) return Math.round(diff + 1440);
+	if (diff > 720) return Math.round(diff - 1440);
+	return Math.round(diff);
+}
+
+/** `HH:MM[:SS]` as minutes past midnight. Hours may exceed 24 — HAFAS uses
+ * 24:05 for the small hours of the following service day. */
+function minutesOfDay(time: string): number | null {
+	const [h, m, s] = time.split(":");
+	const hours = Number(h);
+	const minutes = Number(m);
+	const seconds = s === undefined ? 0 : Number(s);
+	if (!Number.isFinite(hours) || !Number.isFinite(minutes)) return null;
+	if (!Number.isFinite(seconds)) return null;
+	return hours * 60 + minutes + seconds / 60;
 }
 
 /** Long-form date for the per-day pages. Shared because the page heading

@@ -192,7 +192,7 @@ function StationDay() {
 						   card keeps each departure self-contained. */}
 						<ul className="space-y-2 sm:hidden">
 							{filters.filtered.map((d) => {
-								const delay = delayMin(d.date, d.time, d.rtTime);
+								const delay = delayMin(d.time, d.rtTime);
 								const isRail = /^(ICE|IC|EC|RE|RB|S)\s?\d/i.test(d.line);
 								const bahnUrl =
 									isRail && delay !== null && delay >= 5
@@ -258,7 +258,7 @@ function StationDay() {
 								</thead>
 								<tbody>
 									{filters.filtered.map((d) => {
-										const delay = delayMin(d.date, d.time, d.rtTime);
+										const delay = delayMin(d.time, d.rtTime);
 										const isRail = /^(ICE|IC|EC|RE|RB|S)\s?\d/i.test(d.line);
 										const bahnUrl =
 											isRail && delay !== null && delay >= 5

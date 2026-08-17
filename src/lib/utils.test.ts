@@ -41,25 +41,38 @@ describe("formatTime", () => {
 
 describe("delayMin", () => {
 	test("returns null when realtime is null", () => {
-		expect(delayMin("2026-08-16", "10:00:00", null)).toBeNull();
+		expect(delayMin("10:00:00", null)).toBeNull();
 	});
 
 	test("calculates positive delay in minutes", () => {
-		expect(delayMin("2026-08-16", "10:00:00", "10:07:00")).toBe(7);
+		expect(delayMin("10:00:00", "10:07:00")).toBe(7);
 	});
 
 	test("calculates negative delay when running early", () => {
-		expect(delayMin("2026-08-16", "10:07:00", "10:00:00")).toBe(-7);
+		expect(delayMin("10:07:00", "10:00:00")).toBe(-7);
 	});
 
-	test("handles midnight wrap around", () => {
-		// BUG: a departure that slips past midnight reads as ~24h early. Plan 004 changes this to +10; update this assertion there.
-		expect(delayMin("2026-08-16", "23:55:00", "00:05:00")).toBe(-1430);
+	test("reads a departure that slips past midnight as late, not early", () => {
+		expect(delayMin("23:55:00", "00:05:00")).toBe(10);
 	});
 
-	test("returns null for HAFAS 24h-clock format", () => {
-		// BUG: HAFAS 24h-clock form is not parseable by new Date; plan 004 changes this.
-		expect(delayMin("2026-08-16", "23:55:00", "24:05:00")).toBeNull();
+	test("reads an early arrival across midnight as early", () => {
+		expect(delayMin("00:05:00", "23:55:00")).toBe(-10);
+	});
+
+	test("accepts the HAFAS over-24h clock for the same instant", () => {
+		expect(delayMin("23:55:00", "24:05:00")).toBe(10);
+	});
+
+	test("keeps a large real delay rather than folding it", () => {
+		// 638 min is the largest genuine delay in the data; the ±12 h wrap
+		// threshold has to stay clear of it.
+		expect(delayMin("10:00:00", "20:38:00")).toBe(638);
+	});
+
+	test("recovers the shape of the rows this fixed", () => {
+		// Real row: scheduled 23:59, arrived 01:00 the next morning.
+		expect(delayMin("23:59:00", "01:00:00")).toBe(61);
 	});
 });
 
