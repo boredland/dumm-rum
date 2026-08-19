@@ -4,7 +4,7 @@ import {
 	defaultStreamHandler,
 	type RequestHandler,
 } from "@tanstack/react-start/server";
-import { warmHomeSummaries } from "./lib/home.ts";
+import { startHomeWarmup } from "./lib/home.ts";
 import { warmPickerLists } from "./lib/memo.ts";
 import {
 	getAllDirections,
@@ -30,9 +30,11 @@ startIngest().catch((e) => {
 
 // getStopSummaries costs ~1 s at prod scale; seed the memo at boot so the
 // first post-deploy landing hit is served from cache. Sequenced behind
-// migrations for the same reason requests are.
+// migrations for the same reason requests are. Covers every window the day
+// toggle offers and re-runs after each Berlin midnight, because the keys
+// are pinned to yesterday's date and all go cold when it changes.
 migrationsApplied()
-	.then(warmHomeSummaries)
+	.then(startHomeWarmup)
 	.catch((e) => console.warn("home warmup failed:", e));
 
 // The subscribe modal's three global pick-lists. getAllStopNames scans
