@@ -47,13 +47,14 @@ export interface StartedIngest {
 
 /** How long a migration may wait on a lock before giving up.
  *
- * A migration that rewrites a hot table needs ACCESS EXCLUSIVE, which
- * queues behind every open transaction on it — and, worse, blocks every
- * transaction that arrives after it. The poller keeps journey_stops busy
- * around the clock, so an unbounded wait is not "slow", it is a deploy that
- * never lands while requests pile up behind it. Failing fast turns that
- * into a retry on the next boot instead of an outage. */
-const MIGRATION_LOCK_TIMEOUT = "15s";
+ * Short on purpose, because waiting is not free for anyone else. A pending
+ * ACCESS EXCLUSIVE request does not queue politely at the back: once it is
+ * waiting, every transaction that arrives after it queues behind it too. So
+ * a migration that sits for 15 s hoping for the lock also freezes reads of
+ * that table for 15 s — the migration stops being slow and starts being the
+ * outage. Two seconds bounds that blast radius; the retry loop supplies the
+ * patience instead, one short attempt at a time. */
+const MIGRATION_LOCK_TIMEOUT = "2s";
 
 /** Postgres 55P03 lock_not_available: the migration asked for a lock and hit
  * MIGRATION_LOCK_TIMEOUT. Distinguished from a genuinely broken migration
@@ -74,8 +75,8 @@ export function isLockTimeout(e: unknown): boolean {
  * minutes, not seconds. Ten minutes of patience costs nothing (the site is
  * served throughout, the retry loop is idle waiting) and is the difference
  * between a migration that lands on its own and one that needs a human. */
-const MIGRATION_ATTEMPTS = 40;
-const MIGRATION_RETRY_MS = 15_000;
+const MIGRATION_ATTEMPTS = 60;
+const MIGRATION_RETRY_MS = 10_000;
 
 /** Memoized so the server entry can gate request handling on migrations
  * without also waiting for the slower ingest steps queued behind them.

@@ -335,27 +335,40 @@ export interface StopSummary {
  * rows and can aggregate them on write.
  *
  * Takes no filter: the window is fixed at 7 days, so every caller gets the
- * same answer and it is memoized once rather than per day-filter. */
+ * same answer and it is memoized once rather than per day-filter.
+ *
+ * Runs under a short lock_timeout. A migration waiting for ACCESS EXCLUSIVE
+ * on stop_day_stats parks every reader that arrives after it, so without a
+ * bound this query inherits the migration's whole wait and the home page
+ * hangs on a schema change it does not otherwise care about. Failing in a
+ * second and letting the SWR layer serve the previous value is the better
+ * trade — and on a cold memo the caller gets an error it can retry, not a
+ * request that never returns. */
 export async function getStopSummaries(): Promise<StopSummary[]> {
-	const rows = await db
-		.select({
-			stopId: stopDayStats.stopId,
-			stopName: sql<string>`MIN(${stopDayStats.stopName})`.as("stop_name"),
-			journeyCount: sql<number>`SUM(${stopDayStats.total})`.as("journey_count"),
-			cancelled: sql<number>`SUM(${stopDayStats.cancelled})`.as("cancelled"),
-			ghost: sql<number>`SUM(${stopDayStats.ghost})`.as("ghost"),
-			delayed: sql<number>`SUM(${stopDayStats.delayed})`.as("delayed"),
-			lines: sql<string | null>`STRING_AGG(${stopDayStats.lines}, ',')`.as(
-				"lines",
-			),
-			categories: sql<
-				string | null
-			>`STRING_AGG(${stopDayStats.categories}, ',')`.as("categories"),
-		})
-		.from(stopDayStats)
-		.where(sql`${stopDayStats.dayOfOperation} >= ${sinceDays(7)}`)
-		.groupBy(stopDayStats.stopId)
-		.orderBy(desc(sql`SUM(${stopDayStats.total})`));
+	const rows = await db.transaction(async (tx) => {
+		await tx.execute(sql`SET LOCAL lock_timeout = '1s'`);
+		return await tx
+			.select({
+				stopId: stopDayStats.stopId,
+				stopName: sql<string>`MIN(${stopDayStats.stopName})`.as("stop_name"),
+				journeyCount: sql<number>`SUM(${stopDayStats.total})`.as(
+					"journey_count",
+				),
+				cancelled: sql<number>`SUM(${stopDayStats.cancelled})`.as("cancelled"),
+				ghost: sql<number>`SUM(${stopDayStats.ghost})`.as("ghost"),
+				delayed: sql<number>`SUM(${stopDayStats.delayed})`.as("delayed"),
+				lines: sql<string | null>`STRING_AGG(${stopDayStats.lines}, ',')`.as(
+					"lines",
+				),
+				categories: sql<
+					string | null
+				>`STRING_AGG(${stopDayStats.categories}, ',')`.as("categories"),
+			})
+			.from(stopDayStats)
+			.where(sql`${stopDayStats.dayOfOperation} >= ${sinceDays(7)}`)
+			.groupBy(stopDayStats.stopId)
+			.orderBy(desc(sql`SUM(${stopDayStats.total})`));
+	});
 
 	return rows.map((r) => ({
 		stopIds: [r.stopId],
