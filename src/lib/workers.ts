@@ -81,19 +81,20 @@ export function isLockTimeout(e: unknown): boolean {
 
 /** Attempts before giving up for this boot, and the gap between them.
  *
- * Deliberately few and far apart, because retrying is not free. Every
- * attempt re-queues an ACCESS EXCLUSIVE request, and a queued exclusive
- * request parks every reader that arrives behind it — so a tight retry loop
- * against a lock it cannot win keeps the table effectively unreadable, which
- * is worse than not migrating at all. Three widely spaced tries catch the
- * common case (a lock held briefly by a finishing task) and then stop,
- * leaving the site fully readable on the old schema until a deploy that can
- * actually take the lock.
+ * One attempt, no retry. Retrying is actively harmful here: every attempt
+ * re-queues an ACCESS EXCLUSIVE request, and a queued exclusive request
+ * parks every reader that arrives behind it. A loop against a lock it cannot
+ * win therefore keeps the table unreadable in bursts — which is exactly what
+ * production showed, /de flapping between 200 and a 25 s timeout on a cycle
+ * matching the retry interval. Not migrating is strictly better than that.
  *
- * A migration that needs a hot table rewritten wants ingest stopped and an
- * explicit window, not a boot-time race against its own readers. */
-const MIGRATION_ATTEMPTS = 3;
-const MIGRATION_RETRY_MS = 30_000;
+ * One try still lands every migration that can land: a catalog-only ADD
+ * COLUMN takes its lock in microseconds whenever there is a gap. What it
+ * will not do is grind at a table rewrite that needs the lock held for
+ * seconds — delay_min_midnight needs ingest stopped and an explicit window,
+ * and it will keep being reported as pending until it gets one. */
+const MIGRATION_ATTEMPTS = 1;
+const MIGRATION_RETRY_MS = 0;
 
 /** Memoized so the server entry can gate request handling on migrations
  * without also waiting for the slower ingest steps queued behind them.
