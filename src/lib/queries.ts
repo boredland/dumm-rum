@@ -28,6 +28,19 @@ import {
 
 const ghostCaseSql = sql<number>`CASE WHEN NOT ${journeyRuns.wasTracked} AND NOT ${journeyRuns.cancelled} THEN 1 ELSE 0 END`;
 
+/** Realtime departure time at a run's origin. Correlated rather than
+ * joined: the entity day lists read one stop per run, which the
+ * (run_id, route_idx) primary key answers as an index probe.
+ *
+ * The run id is spelled table-qualified because drizzle renders a bare
+ * column reference, which a correlated subquery resolves against the
+ * inner table. */
+const originRtDepTimeSql = sql<string | null>`(
+				SELECT js.rt_dep_time FROM journey_stops js
+				WHERE js.run_id = "journey_runs"."run_id"
+				AND js.route_idx = 0
+			)`;
+
 /** HAFAS category -> display bucket. Reads the stored `category_norm`
  * column rather than calling `normalize_category` per row: the function
  * runs several regex arms, so grouping on the call cost ~5x the column
@@ -396,9 +409,11 @@ export async function getStopSummaries(): Promise<StopSummary[]> {
 	}));
 }
 
-// ─── Line stats + day journeys ─────────────────────────────────────────
+// ─── Per-day stats, shared by the line, operator and stop pages ────────
 
-export interface LineDayStats {
+/** One day of an entity's record. All three entity pages chart the same
+ * five figures from the same row shape. */
+export interface DayStats {
 	date: string;
 	total: number;
 	cancelled: number;
@@ -406,8 +421,45 @@ export interface LineDayStats {
 	delayed: number;
 }
 
+/** Postgres returns SUM()/COUNT() as strings over the wire, so every
+ * aggregate needs coercing before the charts do arithmetic on it. */
+function toDayStats(d: {
+	date: string;
+	total: unknown;
+	cancelled: unknown;
+	ghost: unknown;
+	delayed: unknown;
+}): DayStats {
+	return {
+		date: d.date,
+		total: Number(d.total),
+		cancelled: Number(d.cancelled),
+		ghost: Number(d.ghost),
+		delayed: Number(d.delayed),
+	};
+}
+
+// ─── Line stats + day journeys ─────────────────────────────────────────
+
+/** The `journey_runs` predicate for one line slug.
+ *
+ * Spelled once because the line page, its day lists and the picker lists
+ * all have to mean the same runs by "this line" — a filter that dropped
+ * the source or the category would answer for a wider set than the page
+ * it was reached from. */
+function lineFilter(slug: string): SQL | undefined {
+	const { line, category, source } = parseLineSlug(slug);
+	let where: SQL | undefined = and(
+		eq(journeyRuns.line, line),
+		COLLECTED_TRAFFIC,
+	);
+	if (category) where = and(where, eq(normalizedCategorySql, category));
+	if (source) where = and(where, eq(sourceSql, source));
+	return where;
+}
+
 export interface LineStats {
-	days: LineDayStats[];
+	days: DayStats[];
 	operators: string[];
 	categories: string[];
 	destinations: string[];
@@ -415,14 +467,7 @@ export interface LineStats {
 
 /** Per-day stats for one line, ad-hoc from journey_runs. */
 export async function getLineStats(slug: string): Promise<LineStats> {
-	const { line, category, source } = parseLineSlug(slug);
-
-	let where: SQL | undefined = and(
-		eq(journeyRuns.line, line),
-		COLLECTED_TRAFFIC,
-	);
-	if (category) where = and(where, eq(normalizedCategorySql, category));
-	if (source) where = and(where, eq(sourceSql, source));
+	const where = lineFilter(slug);
 
 	const rows = await db
 		.select({
@@ -462,13 +507,7 @@ export async function getLineStats(slug: string): Promise<LineStats> {
 	]);
 
 	return {
-		days: rows.map((d) => ({
-			date: d.date,
-			total: Number(d.total),
-			cancelled: Number(d.cancelled),
-			ghost: Number(d.ghost),
-			delayed: Number(d.delayed),
-		})),
+		days: rows.map(toDayStats),
 		operators: opRows.map((r) => r.operator).filter((o): o is string => !!o),
 		categories: catRows.map((r) => r.category).filter((c): c is string => !!c),
 		destinations: destRows.map((r) => r.dest).filter(Boolean),
@@ -492,25 +531,14 @@ export async function getLineDayJourneys(
 	slug: string,
 	date: string,
 ): Promise<LineDayJourney[]> {
-	const { line, category, source } = parseLineSlug(slug);
-	let where = and(
-		eq(journeyRuns.line, line),
-		eq(journeyRuns.dayOfOperation, date),
-		COLLECTED_TRAFFIC,
-	);
-	if (category) where = and(where, eq(normalizedCategorySql, category));
-	if (source) where = and(where, eq(sourceSql, source));
+	const where = and(lineFilter(slug), eq(journeyRuns.dayOfOperation, date));
 
 	const rows = await db
 		.select({
 			journeyRef: journeyRuns.journeyRef,
 			date: journeyRuns.dayOfOperation,
 			time: journeyRuns.originDepTime,
-			rtTime: sql<string | null>`(
-				SELECT js.rt_dep_time FROM journey_stops js
-				WHERE js.run_id = "journey_runs"."run_id"
-				AND js.route_idx = 0
-			)`.as("rt_time"),
+			rtTime: originRtDepTimeSql.as("rt_time"),
 			direction: journeyRuns.destName,
 			cancelled: journeyRuns.cancelled,
 			ghost: sql<number>`${ghostCaseSql}`.as("ghost"),
@@ -530,16 +558,8 @@ export async function getLineDayJourneys(
 
 // ─── Operator stats + day journeys ─────────────────────────────────────
 
-export interface OperatorDayStats {
-	date: string;
-	total: number;
-	cancelled: number;
-	ghost: number;
-	delayed: number;
-}
-
 export interface OperatorStats {
-	days: OperatorDayStats[];
+	days: DayStats[];
 	lines: string[];
 	categories: string[];
 }
@@ -586,13 +606,7 @@ export async function getOperatorStats(
 	]);
 
 	return {
-		days: rows.map((d) => ({
-			date: d.date,
-			total: Number(d.total),
-			cancelled: Number(d.cancelled),
-			ghost: Number(d.ghost),
-			delayed: Number(d.delayed),
-		})),
+		days: rows.map(toDayStats),
 		lines: lineRows.map((r) => lineSlug(r.source, r.category, r.line)),
 		categories: catRows.map((r) => r.category).filter((c): c is string => !!c),
 	};
@@ -618,11 +632,7 @@ export async function getOperatorDayJourneys(
 		.select({
 			date: journeyRuns.dayOfOperation,
 			time: journeyRuns.originDepTime,
-			rtTime: sql<string | null>`(
-				SELECT js.rt_dep_time FROM journey_stops js
-				WHERE js.run_id = "journey_runs"."run_id"
-				AND js.route_idx = 0
-			)`.as("rt_time"),
+			rtTime: originRtDepTimeSql.as("rt_time"),
 			line: journeyRuns.line,
 			category: normalizedCategorySql.as("category"),
 			direction: journeyRuns.destName,
@@ -679,14 +689,6 @@ export async function findStopBySlug(slug: string): Promise<KnownStop | null> {
 		stopIds: rows.map((r) => r.stopId),
 		stopName: rows[0].stopName,
 	};
-}
-
-export interface DayStats {
-	date: string;
-	total: number;
-	cancelled: number;
-	ghost: number;
-	delayed: number;
 }
 
 export interface StopStats {
@@ -749,13 +751,7 @@ export async function getStopStats(stopIds: string[]): Promise<StopStats> {
 	}
 
 	return {
-		days: rows.map((d) => ({
-			date: d.date,
-			total: Number(d.total),
-			cancelled: Number(d.cancelled),
-			ghost: Number(d.ghost),
-			delayed: Number(d.delayed),
-		})),
+		days: rows.map(toDayStats),
 		lastChange,
 		categories: categories.length ? dedupeCsv(categories.join(",")) : [],
 	};
@@ -914,14 +910,9 @@ export async function getAllDirections(): Promise<string[]> {
 	return rows.map((r) => r.dest).filter(Boolean);
 }
 
-/** All distinct destinations a given line has run to in the last 30 days. */
+/** All distinct destinations a line has run to in the last 30 days. */
 export async function getDirectionsForLine(slug: string): Promise<string[]> {
-	const { line, category } = parseLineSlug(slug);
-	const where = and(
-		eq(journeyRuns.line, line),
-		COLLECTED_TRAFFIC,
-		category ? eq(normalizedCategorySql, category) : undefined,
-	);
+	const where = lineFilter(slug);
 
 	const rows = await db
 		.selectDistinct({ dest: journeyRuns.destName })
@@ -939,12 +930,7 @@ export async function getDirectionsForLine(slug: string): Promise<string[]> {
 
 /** All distinct stop names served by a line in the last 30 days. */
 export async function getStopsForLine(slug: string): Promise<string[]> {
-	const { line, category } = parseLineSlug(slug);
-	const where = and(
-		eq(journeyRuns.line, line),
-		COLLECTED_TRAFFIC,
-		category ? eq(normalizedCategorySql, category) : undefined,
-	);
+	const where = lineFilter(slug);
 
 	const rows = await db
 		.selectDistinct({
