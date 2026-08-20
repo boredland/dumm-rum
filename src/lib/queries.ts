@@ -336,7 +336,35 @@ export interface StopSummary {
  *
  * Takes no filter: the window is fixed at 7 days, so every caller gets the
  * same answer and it is memoized once rather than per day-filter. */
+/** Whether stop_day_stats.lines exists yet, checked once and cached.
+ *
+ * A column that is not there yet fails the statement at parse time, so this
+ * cannot be guarded inside the SQL — the query has to be built differently.
+ * The migration that adds the column waits for its lock like anything else,
+ * so a build can legitimately be serving before it lands, and the home page
+ * has to work in both states rather than 500 until the DDL wins its race.
+ *
+ * Cached because it only ever goes false -> true, and re-reading the catalog
+ * on every home render to learn a fact that changes once is waste. A process
+ * that starts before the migration keeps rendering stops without their line
+ * chips until it restarts; that is a missing detail, not a broken page. */
+let hasLinesColumn: boolean | undefined;
+
+async function linesColumnExists(): Promise<boolean> {
+	if (hasLinesColumn === undefined) {
+		const [row] = await db.execute<{ present: boolean }>(sql`
+			SELECT EXISTS (
+				SELECT 1 FROM information_schema.columns
+				WHERE table_name = 'stop_day_stats' AND column_name = 'lines'
+			) AS present
+		`);
+		hasLinesColumn = row?.present === true;
+	}
+	return hasLinesColumn;
+}
+
 export async function getStopSummaries(): Promise<StopSummary[]> {
+	const withLines = await linesColumnExists();
 	const rows = await db
 		.select({
 			stopId: stopDayStats.stopId,
@@ -345,9 +373,10 @@ export async function getStopSummaries(): Promise<StopSummary[]> {
 			cancelled: sql<number>`SUM(${stopDayStats.cancelled})`.as("cancelled"),
 			ghost: sql<number>`SUM(${stopDayStats.ghost})`.as("ghost"),
 			delayed: sql<number>`SUM(${stopDayStats.delayed})`.as("delayed"),
-			lines: sql<string | null>`STRING_AGG(${stopDayStats.lines}, ',')`.as(
-				"lines",
-			),
+			lines: (withLines
+				? sql<string | null>`STRING_AGG(${stopDayStats.lines}, ',')`
+				: sql<string | null>`NULL::text`
+			).as("lines"),
 			categories: sql<
 				string | null
 			>`STRING_AGG(${stopDayStats.categories}, ',')`.as("categories"),
