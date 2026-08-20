@@ -93,8 +93,10 @@ export const journeyStops = pgTable(
 	},
 	(t) => [
 		primaryKey({ columns: [t.journeyRef, t.dayOfOperation, t.routeIdx] }),
-		index("idx_journey_stops_day").on(t.dayOfOperation),
 		index("idx_journey_stops_stop_day").on(t.stopId, t.dayOfOperation),
+		/** Also serves lookups on `day_of_operation` alone: a btree answers any
+		 * query on a prefix of its columns, so the standalone index this
+		 * replaced was 798 MB of duplicate storage on a 27 GB table. */
 		index("idx_journey_stops_day_name").on(t.dayOfOperation, t.stopName),
 		index("idx_journey_stops_delay_min")
 			.on(t.journeyRef, t.dayOfOperation)

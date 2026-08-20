@@ -1,0 +1,22 @@
+-- Drop idx_journey_stops_day: a strict prefix of idx_journey_stops_day_name.
+--
+-- A btree can answer a query on any prefix of its column list, so
+-- (day_of_operation, stop_name) already serves every lookup the standalone
+-- (day_of_operation) index did. Measured on production: 798 MB of duplicate
+-- storage on a table whose indexes total 19 GB against 7.4 GB of heap.
+--
+-- A plain DROP INDEX takes ACCESS EXCLUSIVE on the table, and a pending
+-- exclusive request parks every reader that arrives behind it — the failure
+-- mode that took the site down on 2026-08-20. It is safe here anyway, for
+-- two different reasons depending on the database:
+--
+--   * Production already had it dropped by hand with DROP INDEX CONCURRENTLY,
+--     which takes only SHARE UPDATE EXCLUSIVE and never blocks readers. This
+--     statement is a no-op there, hence IF EXISTS.
+--   * A fresh database reaches this migration seconds after 20260415190504
+--     created the index, with no traffic and almost no rows, so the lock is
+--     uncontended and held for microseconds.
+--
+-- The CONCURRENTLY form cannot be used here: it is forbidden inside a
+-- transaction, and drizzle wraps every migration in one.
+DROP INDEX IF EXISTS "idx_journey_stops_day";
