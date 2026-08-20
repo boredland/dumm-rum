@@ -81,14 +81,19 @@ export function isLockTimeout(e: unknown): boolean {
 
 /** Attempts before giving up for this boot, and the gap between them.
  *
- * Sized to outlast a rolling deploy, not just one poll cycle. During a
- * changeover the outgoing container is still polling, so the incoming one
- * competes with a writer that only stops when the old task is drained —
- * minutes, not seconds. Ten minutes of patience costs nothing (the site is
- * served throughout, the retry loop is idle waiting) and is the difference
- * between a migration that lands on its own and one that needs a human. */
-const MIGRATION_ATTEMPTS = 60;
-const MIGRATION_RETRY_MS = 10_000;
+ * Deliberately few and far apart, because retrying is not free. Every
+ * attempt re-queues an ACCESS EXCLUSIVE request, and a queued exclusive
+ * request parks every reader that arrives behind it — so a tight retry loop
+ * against a lock it cannot win keeps the table effectively unreadable, which
+ * is worse than not migrating at all. Three widely spaced tries catch the
+ * common case (a lock held briefly by a finishing task) and then stop,
+ * leaving the site fully readable on the old schema until a deploy that can
+ * actually take the lock.
+ *
+ * A migration that needs a hot table rewritten wants ingest stopped and an
+ * explicit window, not a boot-time race against its own readers. */
+const MIGRATION_ATTEMPTS = 3;
+const MIGRATION_RETRY_MS = 30_000;
 
 /** Memoized so the server entry can gate request handling on migrations
  * without also waiting for the slower ingest steps queued behind them.
@@ -101,7 +106,19 @@ const MIGRATION_RETRY_MS = 10_000;
  * soon as the poller is between batches, which is where the window is. */
 let migration: Promise<unknown> | undefined;
 export function migrationsApplied(): Promise<unknown> {
-	migration ??= (async () => {
+	if (!migration) {
+		migration = runMigrations();
+		// Claim the rejection immediately. Callers that care still see it via
+		// their own await; without this, a boot where every caller happens to
+		// use .catch() late leaves an unhandled rejection that kills the
+		// process the gate was meant to keep alive.
+		migration.catch(() => {});
+	}
+	return migration;
+}
+
+function runMigrations(): Promise<void> {
+	return (async () => {
 		for (let attempt = 1; ; attempt++) {
 			try {
 				// The timeouts have to reach the connection the migration
@@ -136,7 +153,6 @@ export function migrationsApplied(): Promise<unknown> {
 			}
 		}
 	})();
-	return migration;
 }
 
 /**

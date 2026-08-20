@@ -101,8 +101,13 @@ export default {
 	async fetch(...args) {
 		// Resolves in ~1 ms once migrations have landed, which is the normal
 		// case. The race only matters on a deploy whose migration is stuck.
+		// .catch before the race, not after: Promise.race adopts a rejection
+		// as its own, so a migration that gave up would otherwise reject
+		// every request that waited on it — turning "one migration behind"
+		// into "the whole site 500s", which is exactly the failure this gate
+		// exists to prevent.
 		await Promise.race([
-			migrationsApplied(),
+			migrationsApplied().catch(() => {}),
 			new Promise((r) => setTimeout(r, MIGRATION_GATE_MS)),
 		]);
 		return await fetch(...args);
