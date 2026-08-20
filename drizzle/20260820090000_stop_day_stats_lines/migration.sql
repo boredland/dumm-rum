@@ -1,0 +1,33 @@
+-- Per-stop-day line list, so getStopSummaries stops joining raw stop visits.
+--
+-- The counts half of that query already reads this rollup and costs ~4 ms.
+-- The lines half went to journey_stops JOIN journey_runs and sorted ~493k
+-- stop visits down to ~2.6k distinct (stop, source:category:line) tuples,
+-- spilling to disk at the default 4 MB work_mem. Measured 276 ms locally
+-- against 3.9 ms reading from here — and on production, where the table is
+-- far larger, that same join exceeded a 25 s statement_timeout and took the
+-- home page down with it. This column is what makes /de affordable.
+--
+-- Stored as the same `source:category:line` slug `lineSlugSql` builds, so
+-- the read path keeps handing whole slugs to dedupeCsv and nothing
+-- downstream has to learn a second format.
+--
+-- ADD COLUMN with no default and no volatile expression is catalog-only: no
+-- table rewrite, so the ACCESS EXCLUSIVE lock is held for microseconds. It
+-- still has to be GRANTED, which is why migrations run under a short
+-- lock_timeout and retry (see migrationsApplied) rather than queueing and
+-- parking every reader behind them.
+ALTER TABLE "stop_day_stats" ADD COLUMN IF NOT EXISTS "lines" text;--> statement-breakpoint
+-- No backfill here, deliberately.
+--
+-- The obvious `UPDATE ... FROM (aggregate over journey_stops)` is the same
+-- expensive join this column exists to avoid, and running it inside the
+-- migration's transaction would hold locks on stop_day_stats for its whole
+-- duration — reintroducing, once, exactly the stall this is meant to end.
+--
+-- Instead the column starts NULL and the poller fills it: refreshStopDayStats
+-- recomputes a stop-day from source on every poll, so within one polling
+-- cycle every actively served stop-day has its lines. Older rows fill in as
+-- they are touched. getStopSummaries treats a NULL as "no lines yet" and
+-- renders the stop without its line chips, which degrades a detail rather
+-- than the page.

@@ -319,96 +319,56 @@ export interface StopSummary {
 	categories: string[];
 }
 
-/** Ad-hoc aggregation of journey_stops for the last 7 days, grouped by stop.
+/** Per-stop totals and line lists for the last 7 days, read entirely from
+ * the stop_day_stats rollup.
  *
- * Split into two parallel queries so the planner never has to sort 1.2M
- * stop-visit rows for DISTINCT aggregation: the counts pass uses plain
- * aggregates and the lines pass hash-dedupes down to ~10k (stop, line,
- * category, source) tuples before the STRING_AGG. Merged back by stop_id
- * in JS. Same result shape as the single-query version, 20–30× faster. */
+ * Both halves used to be separate: counts from the rollup, line lists from
+ * journey_stops JOIN journey_runs. That join was the single most expensive
+ * query behind the home page — it sorted ~493k stop visits down to ~2.6k
+ * distinct (stop, source:category:line) tuples and spilled to disk at the
+ * default 4 MB work_mem, 276 ms against 3.9 ms for the same answer here.
+ *
+ * Rewriting the join did not help: pre-deduping the runs side measured
+ * worse (500 ms), GROUP BY for DISTINCT was a wash, and a larger work_mem
+ * made the planner pick a slower plan. The scan was the cost, not the sort,
+ * so the fix is to not run it — the poller already visits exactly these
+ * rows and can aggregate them on write.
+ *
+ * Takes no filter: the window is fixed at 7 days, so every caller gets the
+ * same answer and it is memoized once rather than per day-filter. */
 export async function getStopSummaries(): Promise<StopSummary[]> {
-	const dayWindow = sql`${journeyStops.dayOfOperation} >= ${sinceDays(7)}`;
-	// The same bound on the run side of the join. It adds no rows — the join
-	// matches on day_of_operation anyway — but it lets the planner build the
-	// hash from 7 days of runs instead of every row ever ingested, which is
-	// what made the join spill to disk (84 ms against 55 ms).
-	const runDayWindow = sql`${journeyRuns.dayOfOperation} >= ${sinceDays(7)}`;
+	const rows = await db
+		.select({
+			stopId: stopDayStats.stopId,
+			stopName: sql<string>`MIN(${stopDayStats.stopName})`.as("stop_name"),
+			journeyCount: sql<number>`SUM(${stopDayStats.total})`.as("journey_count"),
+			cancelled: sql<number>`SUM(${stopDayStats.cancelled})`.as("cancelled"),
+			ghost: sql<number>`SUM(${stopDayStats.ghost})`.as("ghost"),
+			delayed: sql<number>`SUM(${stopDayStats.delayed})`.as("delayed"),
+			lines: sql<string | null>`STRING_AGG(${stopDayStats.lines}, ',')`.as(
+				"lines",
+			),
+			categories: sql<
+				string | null
+			>`STRING_AGG(${stopDayStats.categories}, ',')`.as("categories"),
+		})
+		.from(stopDayStats)
+		.where(sql`${stopDayStats.dayOfOperation} >= ${sinceDays(7)}`)
+		.groupBy(stopDayStats.stopId)
+		.orderBy(desc(sql`SUM(${stopDayStats.total})`));
 
-	const [countsRows, linesRows] = await Promise.all([
-		// Counts come from the rollup: one row per stop-day instead of one
-		// per stop visit, which is the same 7-day window over ~150x fewer
-		// rows and no join to journey_runs.
-		db
-			.select({
-				stopId: stopDayStats.stopId,
-				stopName: sql<string>`MIN(${stopDayStats.stopName})`.as("stop_name"),
-				journeyCount: sql<number>`SUM(${stopDayStats.total})`.as(
-					"journey_count",
-				),
-				cancelled: sql<number>`SUM(${stopDayStats.cancelled})`.as("cancelled"),
-				ghost: sql<number>`SUM(${stopDayStats.ghost})`.as("ghost"),
-				delayed: sql<number>`SUM(${stopDayStats.delayed})`.as("delayed"),
-			})
-			.from(stopDayStats)
-			.where(sql`${stopDayStats.dayOfOperation} >= ${sinceDays(7)}`)
-			.groupBy(stopDayStats.stopId)
-			.orderBy(desc(sql`SUM(${stopDayStats.total})`)),
-		// Line lists still need journey_runs: the rollup keeps categories but
-		// not the per-line breakdown, which only this query reads.
-		db.execute(sql<{
-			stop_id: string;
-			lines: string | null;
-			categories: string | null;
-		}>`
-			WITH distinct_stop_lines AS (
-				SELECT DISTINCT
-					${journeyStops.stopId} AS stop_id,
-					${journeyRuns.line} AS line,
-					${normalizedCategorySql} AS category,
-					${sourceSql} AS source
-				FROM ${journeyStops}
-				LEFT JOIN ${journeyRuns}
-					ON ${journeyRuns.journeyRef} = ${journeyStops.journeyRef}
-					AND ${journeyRuns.dayOfOperation} = ${journeyStops.dayOfOperation}
-				WHERE ${dayWindow} AND ${runDayWindow} AND ${COLLECTED_TRAFFIC}
-			)
-			SELECT
-				stop_id,
-				STRING_AGG(source || ':' || category || ':' || line, ',' ORDER BY category, line) AS lines,
-				STRING_AGG(DISTINCT category, ',' ORDER BY category) AS categories
-			FROM distinct_stop_lines
-			GROUP BY stop_id
-		`),
-	]);
-
-	const linesByStop = new Map<
-		string,
-		{ lines: string | null; categories: string | null }
-	>();
-	for (const row of linesRows as unknown as {
-		stop_id: string;
-		lines: string | null;
-		categories: string | null;
-	}[]) {
-		linesByStop.set(row.stop_id, {
-			lines: row.lines,
-			categories: row.categories,
-		});
-	}
-
-	return countsRows.map((r) => {
-		const l = linesByStop.get(r.stopId);
-		return {
-			stopIds: [r.stopId],
-			stopName: r.stopName,
-			journeyCount: Number(r.journeyCount ?? 0),
-			cancelled: Number(r.cancelled ?? 0),
-			ghost: Number(r.ghost ?? 0),
-			delayed: Number(r.delayed ?? 0),
-			lines: l?.lines ? dedupeCsv(l.lines) : [],
-			categories: l?.categories ? dedupeCsv(l.categories) : [],
-		};
-	});
+	return rows.map((r) => ({
+		stopIds: [r.stopId],
+		stopName: r.stopName,
+		journeyCount: Number(r.journeyCount ?? 0),
+		cancelled: Number(r.cancelled ?? 0),
+		ghost: Number(r.ghost ?? 0),
+		delayed: Number(r.delayed ?? 0),
+		// Per-day lists concatenated across the window, so a line seen on
+		// six days arrives six times.
+		lines: r.lines ? dedupeCsv(r.lines) : [],
+		categories: r.categories ? dedupeCsv(r.categories) : [],
+	}));
 }
 
 // ─── Line stats + day journeys ─────────────────────────────────────────
