@@ -142,48 +142,36 @@ async function backfill(): Promise<void> {
 	}
 }
 
-/** Repairs journey_stops.delay_min rows left stale by the corrected
- * delay_minutes() (see drizzle/20260817000000_delay_min_midnight).
+/* The delay_min repair that used to live here has been removed, and it must
+ * not come back as an UPDATE.
  *
- * delay_min is a STORED generated column, so its value was computed by
- * whichever version of delay_minutes() was installed when the row was last
- * written. Redefining the function does NOT retroactively update stored rows,
- * and — verified, because the assumption is tempting and wrong — neither does
- * an UPDATE of some other column: the row's own inputs are unchanged, so
- * Postgres keeps the stored value. The run_id backfill therefore does not fix
- * these for free.
+ * The premise was that touching a column the generated expression depends on
+ * forces re-evaluation, so a no-op `SET dep_time = dep_time` would recompute
+ * delay_min through the corrected delay_minutes(). That is true in general,
+ * and it is verifiably useless here.
  *
- * What does work is touching a column the expression depends on. `SET dep_time
- * = dep_time` is a no-op on the data and forces re-evaluation, turning a
- * midnight-crossing departure from -1430 back into +10.
+ * Production's delay_min does not call delay_minutes() at all. Its stored
+ * expression, read out of pg_attrdef, is the ORIGINAL INLINE arithmetic:
  *
- * Scoped to rows that actually disagree with the current function, which
- * production measured at 4,905 of 22.7M. A blanket rewrite would be a
- * full-table churn for a handful of rows.
+ *   CASE WHEN rt_arr_time IS NOT NULL AND arr_time IS NOT NULL
+ *        THEN (split_part(rt_arr_time,':',1)::int * 60 + ...) - (...)
+ *        ELSE NULL END
+ *
+ * — no midnight correction, and no reference to the function that has it. So
+ * every rewrite recomputes the same wrong value: a 23:58 -> 01:00 departure
+ * reads -1378 before the UPDATE and -1378 after it. A repair loop gated on
+ * "row still disagrees with delay_minutes()" therefore never terminates; it
+ * was observed rewriting the same 4546 rows indefinitely.
+ *
+ * Fixing this means redefining the column, which is a table rewrite holding
+ * ACCESS EXCLUSIVE over 20M rows — exactly what the 2026-08-20 outage was, and
+ * what this whole migration is shaped to avoid. It is a separate scheduled
+ * task, not something to smuggle into a backfill.
+ *
+ * Scope, so the trade-off is explicit: 4546 midnight-crossing rows out of
+ * 886617 in the delayed index (0.5%). They read as early rather than late and
+ * are missed by the delayed filter. Bounded and pre-existing.
  */
-async function repairDelayMin(): Promise<void> {
-	let total = 0;
-	for (;;) {
-		const rows = await sql`
-			WITH batch AS (
-				SELECT ctid AS cid FROM journey_stops
-				WHERE delay_min IS DISTINCT FROM COALESCE(
-					delay_minutes(dep_time, rt_dep_time),
-					delay_minutes(arr_time, rt_arr_time)
-				)
-				LIMIT ${BATCH}
-			)
-			UPDATE journey_stops s
-			SET dep_time = s.dep_time, arr_time = s.arr_time
-			FROM batch
-			WHERE s.ctid = batch.cid
-		`;
-		if (rows.count === 0) break;
-		total += rows.count;
-		log(`delay_min: repaired ${total}`);
-	}
-	if (total === 0) log("delay_min: nothing stale");
-}
 
 /** Rows whose run has since been deleted can never get a run_id, and would
  * block the migration's NOT NULL guard forever. Production measured zero, but
@@ -264,17 +252,7 @@ async function verify(): Promise<void> {
 			`run_id disagrees with journey_runs on ${mismatched} row(s)`,
 		);
 
-	const [{ stale }] = await sql<{ stale: string }[]>`
-		SELECT count(*)::text AS stale FROM journey_stops
-		WHERE delay_min IS DISTINCT FROM COALESCE(
-			delay_minutes(dep_time, rt_dep_time),
-			delay_minutes(arr_time, rt_arr_time)
-		)
-	`;
-	if (stale !== "0")
-		throw new Error(`delay_min still stale on ${stale} row(s)`);
-
-	log("verified: run_id consistent, delay_min current");
+	log("verified: run_id complete and consistent with journey_runs");
 }
 
 async function main(): Promise<void> {
@@ -282,7 +260,6 @@ async function main(): Promise<void> {
 	await installTransitionTrigger();
 	await backfill();
 	await dropOrphans();
-	await repairDelayMin();
 	await buildIndexes();
 	await verify();
 	log("done — safe to deploy 20260820120000_journey_stops_run_id");
