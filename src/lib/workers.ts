@@ -1,6 +1,9 @@
+import { drizzle } from "drizzle-orm/postgres-js";
 import { migrate } from "drizzle-orm/postgres-js/migrator";
 import PgBoss from "pg-boss";
+import postgres from "postgres";
 import { db, sql as pg } from "../db/client.ts";
+import * as schema from "../db/schema.ts";
 import { runDiscovery } from "./discover.ts";
 import {
 	backfillKnownStops,
@@ -54,7 +57,16 @@ export interface StartedIngest {
  * that table for 15 s — the migration stops being slow and starts being the
  * outage. Two seconds bounds that blast radius; the retry loop supplies the
  * patience instead, one short attempt at a time. */
-const MIGRATION_LOCK_TIMEOUT = "2s";
+const MIGRATION_LOCK_TIMEOUT_MS = 3_000;
+
+/** Statement budget for the migration itself, once it holds the lock.
+ *
+ * lock_timeout bounds only how long we WAIT for a lock, not how long we may
+ * hold it. delay_min_midnight rewrites journey_stops — 17 s locally on 636k
+ * rows, more on production history — so a statement_timeout tight enough to
+ * protect readers would abort the rewrite halfway every time. The lock is
+ * taken quickly or not at all; once taken, the work is allowed to finish. */
+const MIGRATION_STATEMENT_TIMEOUT_MS = 15 * 60_000;
 
 /** Postgres 55P03 lock_not_available: the migration asked for a lock and hit
  * MIGRATION_LOCK_TIMEOUT. Distinguished from a genuinely broken migration
@@ -90,11 +102,30 @@ const MIGRATION_RETRY_MS = 10_000;
 let migration: Promise<unknown> | undefined;
 export function migrationsApplied(): Promise<unknown> {
 	migration ??= (async () => {
-		// Scoped to this connection, so it cannot leak into request queries.
-		await pg`SET lock_timeout = ${pg.unsafe(`'${MIGRATION_LOCK_TIMEOUT}'`)}`;
 		for (let attempt = 1; ; attempt++) {
 			try {
-				await migrate(db, { migrationsFolder: "./drizzle" });
+				// The timeouts have to reach the connection the migration
+				// actually runs on. `db` sits on a pool, so a bare `SET` lands
+				// on whichever connection happens to be free and the migration
+				// then runs somewhere else with no bound at all — which is how
+				// a lock_timeout that looked set still waited forever. A
+				// dedicated single connection carries its own settings.
+				const url = process.env.DATABASE_URL;
+				if (!url) throw new Error("DATABASE_URL is not set");
+				const conn = postgres(url, {
+					max: 1,
+					connection: {
+						lock_timeout: MIGRATION_LOCK_TIMEOUT_MS,
+						statement_timeout: MIGRATION_STATEMENT_TIMEOUT_MS,
+					},
+				});
+				try {
+					await migrate(drizzle({ client: conn, schema }), {
+						migrationsFolder: "./drizzle",
+					});
+				} finally {
+					await conn.end({ timeout: 5 });
+				}
 				return;
 			} catch (e) {
 				if (!isLockTimeout(e) || attempt >= MIGRATION_ATTEMPTS) throw e;
