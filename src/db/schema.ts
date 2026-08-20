@@ -147,11 +147,6 @@ export const stopDayStats = pgTable(
 		/** Comma-separated normalized categories seen at this stop-day.
 		 * Aggregated across days in JS, same shape dedupeCsv already takes. */
 		categories: text(),
-		/** Comma-separated `source:category:line` slugs seen at this stop-day,
-		 * same shape and reason as `categories`. Without it getStopSummaries
-		 * had to sort ~493k raw stop visits down to ~2.6k distinct tuples on
-		 * every miss: 276 ms against 3.9 ms read from here. */
-		lines: text(),
 	},
 	(t) => [
 		primaryKey({ columns: [t.stopId, t.dayOfOperation] }),

@@ -1,7 +1,7 @@
 import { and, eq, sql } from "drizzle-orm";
 import type PgBoss from "pg-boss";
 import type { Db } from "../db/client.ts";
-import { excluded, lineSlugSql } from "../db/helpers.ts";
+import { excluded } from "../db/helpers.ts";
 import {
 	journeyRuns,
 	journeyStops,
@@ -593,8 +593,7 @@ async function refreshStopDayStats(
 				SUM(CASE WHEN NOT ${journeyRuns.wasTracked} AND NOT ${journeyRuns.cancelled} THEN 1 ELSE 0 END)::int AS ghost,
 				SUM(CASE WHEN NOT ${journeyStops.cancelled} AND ${journeyStops.delayMin} >= 7.5 THEN 1 ELSE 0 END)::int AS delayed,
 				MAX(${journeyRuns.snapshotAt}) AS last_change,
-				STRING_AGG(DISTINCT ${journeyRuns.categoryNorm}, ',' ORDER BY ${journeyRuns.categoryNorm}) AS categories,
-				STRING_AGG(DISTINCT ${lineSlugSql}, ',') AS lines
+				STRING_AGG(DISTINCT ${journeyRuns.categoryNorm}, ',' ORDER BY ${journeyRuns.categoryNorm}) AS categories
 			FROM ${journeyStops}
 			JOIN ${journeyRuns}
 				ON ${journeyRuns.journeyRef} = ${journeyStops.journeyRef}
@@ -608,10 +607,10 @@ async function refreshStopDayStats(
 		), upserted AS (
 			INSERT INTO ${stopDayStats} (
 				stop_id, day_of_operation, stop_name, total, cancelled, ghost,
-				delayed, last_change, categories, lines
+				delayed, last_change, categories
 			)
 			SELECT stop_id, ${dayOfOperation}, stop_name, total, cancelled, ghost,
-				delayed, last_change, categories, lines
+				delayed, last_change, categories
 			FROM agg
 			ON CONFLICT (stop_id, day_of_operation) DO UPDATE SET
 				stop_name = EXCLUDED.stop_name,
@@ -620,8 +619,7 @@ async function refreshStopDayStats(
 				ghost = EXCLUDED.ghost,
 				delayed = EXCLUDED.delayed,
 				last_change = EXCLUDED.last_change,
-				categories = EXCLUDED.categories,
-				lines = EXCLUDED.lines
+				categories = EXCLUDED.categories
 			RETURNING stop_id
 		)
 		DELETE FROM ${stopDayStats}
