@@ -1,4 +1,4 @@
-import { and, eq, gte, inArray, isNotNull, or, sql } from "drizzle-orm";
+import { and, eq, inArray, or, sql } from "drizzle-orm";
 import { db } from "../db/client.ts";
 import {
 	journeyRuns,
@@ -6,7 +6,7 @@ import {
 	telegramSubscriptions,
 } from "../db/schema.ts";
 import {
-	COLLECTED_TRAFFIC,
+	getDirectionsForLine,
 	normalizedCategorySql,
 	sinceDays,
 } from "./queries.ts";
@@ -58,25 +58,10 @@ async function sendMessage(
 	if (!res.ok) console.error(`Telegram API error: ${res.status}`);
 }
 
-async function fetchDirections(lineSlug: string) {
-	const { line, category } = parseLineSlug(lineSlug);
-	const where = and(
-		eq(journeyRuns.line, line),
-		COLLECTED_TRAFFIC,
-		category ? eq(normalizedCategorySql, category) : undefined,
-	);
-
-	return db
-		.selectDistinct({ direction: journeyRuns.destName })
-		.from(journeyRuns)
-		.where(
-			and(
-				where,
-				isNotNull(journeyRuns.destName),
-				gte(journeyRuns.dayOfOperation, sinceDays(7)),
-			),
-		);
-}
+/** Destinations the bot will match a typed direction against. Windowed
+ * tighter than the picker's: a destination the line stopped serving weeks
+ * ago would accept a subscription that can never fire. */
+const KNOWN_DIRECTION_DAYS = 7;
 
 export async function handleTelegramWebhook(
 	token: string,
@@ -133,8 +118,7 @@ export async function handleTelegramWebhook(
 
 	if (text.startsWith("/start subscribe_")) {
 		const line = decodeURIComponent(text.slice("/start subscribe_".length));
-		const knownDirs = await fetchDirections(line);
-		const dirs = knownDirs.map((d) => d.direction);
+		const dirs = await getDirectionsForLine(line, KNOWN_DIRECTION_DAYS);
 		const exampleDir =
 			dirs.length >= 2
 				? `${escapeHtml(dirs[0])}+${escapeHtml(dirs[1])}`
@@ -175,12 +159,12 @@ export async function handleTelegramWebhook(
 		const args = text.slice("/subscribe ".length).trim().split(" ");
 		if (args.length < 2) {
 			const line = args[0];
-			const knownDirs = await fetchDirections(line);
+			const knownDirs = await getDirectionsForLine(line, KNOWN_DIRECTION_DAYS);
 			if (knownDirs.length > 0) {
 				const list = knownDirs
 					.map(
 						(d) =>
-							`• <code>/subscribe ${escapeHtml(line)} ${escapeHtml(d.direction)}</code>`,
+							`• <code>/subscribe ${escapeHtml(line)} ${escapeHtml(d)}</code>`,
 					)
 					.join("\n");
 				await reply(
@@ -240,16 +224,14 @@ export async function handleTelegramWebhook(
 			.split("+")
 			.map((d) => d.trim())
 			.filter(Boolean);
-		const knownDirs = await fetchDirections(line);
+		const knownDirs = await getDirectionsForLine(line, KNOWN_DIRECTION_DAYS);
 		const unmatched: string[] = [];
 		const matched: string[] = [];
 		for (const dir of directions) {
 			const low = dir.toLowerCase();
-			const found = knownDirs.find((d) =>
-				d.direction.toLowerCase().includes(low),
-			);
+			const found = knownDirs.find((d) => d.toLowerCase().includes(low));
 			if (found) {
-				matched.push(found.direction);
+				matched.push(found);
 			} else {
 				unmatched.push(dir);
 			}
@@ -260,9 +242,7 @@ export async function handleTelegramWebhook(
 					`Unknown line <b>${escapeHtml(line)}</b>. Check the line name and try again.`,
 				);
 			} else {
-				const list = knownDirs
-					.map((d) => `• ${escapeHtml(d.direction)}`)
-					.join("\n");
+				const list = knownDirs.map((d) => `• ${escapeHtml(d)}`).join("\n");
 				await reply(
 					`No direction matching "${unmatched.map(escapeHtml).join(", ")}" for <b>${escapeHtml(line)}</b>.\n\nKnown destinations:\n${list}`,
 				);

@@ -68,9 +68,8 @@ export const normalizedCategorySql = sql<string>`${journeyRuns.categoryNorm}`;
  *
  * Applied in every read query rather than in the UI, so headline totals,
  * worst-offender cards and section counts cannot disagree with the lists
- * they summarize. Exported for the alert path, which reads journey_runs
- * directly. */
-export const COLLECTED_TRAFFIC = sql`${normalizedCategorySql} <> 'Fernverkehr'
+ * they summarize. */
+const COLLECTED_TRAFFIC = sql`${normalizedCategorySql} <> 'Fernverkehr'
 	AND (${journeyRuns.operator} IS NULL OR ${journeyRuns.operator} <> 'Mainzer Mobilität')
 	AND (${journeyRuns.pollState} IS NULL OR ${journeyRuns.pollState} <> 'excluded')`;
 
@@ -910,8 +909,15 @@ export async function getAllDirections(): Promise<string[]> {
 	return rows.map((r) => r.dest).filter(Boolean);
 }
 
-/** All distinct destinations a line has run to in the last 30 days. */
-export async function getDirectionsForLine(slug: string): Promise<string[]> {
+/** All distinct destinations a line has run to in the last `days` days.
+ *
+ * The window is a parameter because the Telegram bot matches what a user
+ * typed against these: a destination the line stopped serving weeks ago
+ * is a wrong answer there, while the picker wants the wider list. */
+export async function getDirectionsForLine(
+	slug: string,
+	days = 30,
+): Promise<string[]> {
 	const where = lineFilter(slug);
 
 	const rows = await db
@@ -921,7 +927,7 @@ export async function getDirectionsForLine(slug: string): Promise<string[]> {
 			and(
 				where,
 				isNotNull(journeyRuns.destName),
-				gte(journeyRuns.dayOfOperation, sinceDays(30)),
+				gte(journeyRuns.dayOfOperation, sinceDays(days)),
 			),
 		)
 		.orderBy(journeyRuns.destName);
