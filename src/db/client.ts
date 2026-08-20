@@ -22,7 +22,7 @@ if (!url) throw new Error("DATABASE_URL is not set");
  * Migrations deliberately do NOT use this pool: they need to hold a lock
  * far longer than any reader should. See migrationsApplied in workers.ts. */
 export const sql = postgres(url, {
-	connection: { lock_timeout: 2_000, statement_timeout: 30_000 },
+	connection: { lock_timeout: 10_000, statement_timeout: 30_000 },
 });
 export const db = drizzle({ client: sql, schema });
 export type Db = typeof db;
