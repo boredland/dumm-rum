@@ -66,12 +66,16 @@ export function isLockTimeout(e: unknown): boolean {
 	return false;
 }
 
-/** Attempts before giving up for this boot. The poller re-enqueues every
- * 60 s and a stop-day refresh is short, so the gaps between tries are what
- * matter, not the count: they have to outlast one poll cycle for a window
- * to open. */
-const MIGRATION_ATTEMPTS = 6;
-const MIGRATION_RETRY_MS = 20_000;
+/** Attempts before giving up for this boot, and the gap between them.
+ *
+ * Sized to outlast a rolling deploy, not just one poll cycle. During a
+ * changeover the outgoing container is still polling, so the incoming one
+ * competes with a writer that only stops when the old task is drained —
+ * minutes, not seconds. Ten minutes of patience costs nothing (the site is
+ * served throughout, the retry loop is idle waiting) and is the difference
+ * between a migration that lands on its own and one that needs a human. */
+const MIGRATION_ATTEMPTS = 40;
+const MIGRATION_RETRY_MS = 15_000;
 
 /** Memoized so the server entry can gate request handling on migrations
  * without also waiting for the slower ingest steps queued behind them.
@@ -116,6 +120,8 @@ export async function startIngest(): Promise<StartedIngest> {
 	const url = process.env.DATABASE_URL;
 	if (!url) throw new Error("DATABASE_URL is not set");
 
+	// Before pg-boss and the poll worker exist, so this process is not
+	// competing with its own writers for the locks the migrations need.
 	await migrationsApplied();
 
 	// Stops discovered before the poller wrote known_stops have no slug row,
