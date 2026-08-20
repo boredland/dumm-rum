@@ -151,13 +151,22 @@ function runMigrations(): Promise<void> {
 					// chances first, and only for idle-in-transaction sessions,
 					// which are waiting on the client rather than doing work.
 					if (attempt === MIGRATION_ATTEMPTS) {
+						// Anything holding a lock we need and not actively
+						// running a statement. 'idle in transaction' is the
+						// classic case, but a poll batch mid-flight blocks us
+						// just as hard, so this also clears sessions whose
+						// current statement has been waiting on a lock itself —
+						// they are part of the same pile-up, not doing work.
 						const cleared = await conn`
 							SELECT pg_terminate_backend(pid)
 							FROM pg_stat_activity
 							WHERE datname = current_database()
 								AND pid <> pg_backend_pid()
-								AND state = 'idle in transaction'
-								AND state_change < now() - INTERVAL '5 seconds'
+								AND (
+									(state = 'idle in transaction'
+										AND state_change < now() - INTERVAL '5 seconds')
+									OR wait_event_type = 'Lock'
+								)
 						`;
 						if (cleared.length > 0)
 							console.warn(
