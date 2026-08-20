@@ -5,28 +5,25 @@ import * as schema from "./schema.ts";
 const url = process.env.DATABASE_URL;
 if (!url) throw new Error("DATABASE_URL is not set");
 
-/** Bounds on every query this pool runs.
+/** Backstop against a query that has stopped making progress.
  *
- * `lock_timeout` is the important one. A migration waiting for ACCESS
- * EXCLUSIVE parks every transaction that arrives after it, so without a
- * bound an ordinary SELECT inherits the migration's entire wait — which is
- * how a schema change on journey_stops took the home page down while
- * routes that did not read that table stayed up. Two seconds is far above
- * any lock this app takes in normal operation and far below the proxy's
- * patience, so it only ever fires when something is genuinely stuck.
+ * There is deliberately no lock_timeout here. One was added while chasing an
+ * outage caused by a migration that rewrote journey_stops: a pending ACCESS
+ * EXCLUSIVE request parks every reader behind it, so reads were inheriting
+ * that unbounded wait. But the bound cured nothing and caused its own
+ * failures — at 2 s, then 10 s, then 20 s it aborted ordinary reads that were
+ * merely queued behind ingest writes, turning a slow page into a broken one.
  *
- * `statement_timeout` is only a backstop against a runaway query, so it is
- * deliberately far above any real one. It must never be the thing that
- * fails a slow-but-working request: at 25 s it was aborting the operator
- * and line summaries on a cold cache right after a deploy, which turned a
- * slow first render into a 500 on every route that needed them. The SWR
- * layer is what keeps those off the request path in steady state; this only
- * catches a query that has genuinely stopped making progress.
+ * The real fix was removing the rewrite. With no migration taking a long
+ * exclusive lock, no reader has an unbounded wait to inherit, and a lock this
+ * app does take is one it should simply wait for.
  *
- * Migrations deliberately do NOT use this pool: they need to hold a lock
- * far longer than any reader should. See migrationsApplied in workers.ts. */
+ * statement_timeout stays, high. It is not a performance budget — the SWR
+ * layer keeps the heavy aggregates off the request path — just a ceiling on
+ * a query that will never finish.
+ */
 export const sql = postgres(url, {
-	connection: { lock_timeout: 20_000, statement_timeout: 120_000 },
+	connection: { statement_timeout: 120_000 },
 });
 export const db = drizzle({ client: sql, schema });
 export type Db = typeof db;
