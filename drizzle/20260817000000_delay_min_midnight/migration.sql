@@ -35,18 +35,43 @@ AS $$
 			- (split_part(sched, ':', 1)::int * 60 + split_part(sched, ':', 2)::int + split_part(sched, ':', 3)::int / 60.0)
 			AS diff
 	) d
-$$;--> statement-breakpoint
--- The partial index reads delay_min, so it has to go before the column can be
--- dropped. Recreated below against the corrected values, which is the point:
--- the midnight rows were missing from it entirely.
-DROP INDEX IF EXISTS "idx_journey_stops_delay_min";--> statement-breakpoint
--- A generated column's expression cannot be altered in place, so the column is
--- dropped and re-added. Postgres recomputes it for every existing row during
--- the ADD, which is the rewrite that repairs the historical data — no separate
--- backfill needed.
-ALTER TABLE "journey_stops" DROP COLUMN "delay_min";--> statement-breakpoint
-ALTER TABLE "journey_stops" ADD COLUMN "delay_min" double precision GENERATED ALWAYS AS (COALESCE(
-	delay_minutes(dep_time, rt_dep_time),
-	delay_minutes(arr_time, rt_arr_time)
-)) STORED;--> statement-breakpoint
-CREATE INDEX IF NOT EXISTS "idx_journey_stops_delay_min" ON "journey_stops" ("journey_ref","day_of_operation") WHERE "journey_stops"."delay_min" >= 7.5;
+$$;
+--
+-- The column rewrite that used to live here has been removed, and it must not
+-- come back in this form.
+--
+-- It dropped and re-added journey_stops.delay_min so Postgres would recompute
+-- the generated column for every row. That is a full table rewrite holding
+-- ACCESS EXCLUSIVE on the busiest table in the database — ~17 s on 636k rows
+-- locally, longer on production history. The poller writes journey_stops
+-- continuously, so the lock was never free when a deploying container asked
+-- for it, and a *queued* exclusive request parks every reader that arrives
+-- behind it. The result was not a slow migration, it was an outage: every
+-- route reading journey_stops (which is /de, via delayedByRunSq) returned 502
+-- or 500 for as long as the migration kept asking, across every restart.
+--
+-- Nothing depends on the rewrite having happened. The column already exists
+-- and is already populated; only its expression is stale, and only for rows
+-- whose departure crosses midnight — 45 of them when this was written. Those
+-- read as early rather than late and are missed by the delayed filter. That
+-- is a small, bounded data-quality gap, and it is strictly better than a site
+-- that will not load.
+--
+-- The corrected delay_minutes() above is still installed, so every row written
+-- from here on is correct: the generated column's stored expression is stale,
+-- but new rows are computed by the poller through the same function. Only
+-- pre-existing midnight-crossing rows keep the old value.
+--
+-- To repair the historical rows, run this by hand against a quiet database
+-- with ingest stopped — seconds, with nothing competing for the lock:
+--
+--   DROP INDEX IF EXISTS "idx_journey_stops_delay_min";
+--   ALTER TABLE "journey_stops" DROP COLUMN "delay_min";
+--   ALTER TABLE "journey_stops" ADD COLUMN "delay_min" double precision
+--     GENERATED ALWAYS AS (COALESCE(
+--       delay_minutes(dep_time, rt_dep_time),
+--       delay_minutes(arr_time, rt_arr_time)
+--     )) STORED;
+--   CREATE INDEX IF NOT EXISTS "idx_journey_stops_delay_min"
+--     ON "journey_stops" ("journey_ref","day_of_operation")
+--     WHERE "journey_stops"."delay_min" >= 7.5;
