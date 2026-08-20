@@ -50,14 +50,17 @@ export interface StartedIngest {
 
 /** How long a migration may wait on a lock before giving up.
  *
- * Short on purpose, because waiting is not free for anyone else. A pending
- * ACCESS EXCLUSIVE request does not queue politely at the back: once it is
- * waiting, every transaction that arrives after it queues behind it too. So
- * a migration that sits for 15 s hoping for the lock also freezes reads of
- * that table for 15 s — the migration stops being slow and starts being the
- * outage. Two seconds bounds that blast radius; the retry loop supplies the
- * patience instead, one short attempt at a time. */
-const MIGRATION_LOCK_TIMEOUT_MS = 3_000;
+ * Long, because this is now a single attempt that has just cleared the
+ * sessions in its way. A pending ACCESS EXCLUSIVE request parks readers
+ * behind it, so waiting is not free — but the alternative is worse: a
+ * migration that never lands leaves the schema behind forever, and every
+ * query written against the new shape fails on every request rather than
+ * once. Short timeouts plus retries were tried first and were the worse
+ * trade: they took the site down in bursts and still never landed.
+ *
+ * One minute is enough for a table rewrite to start once the blockers are
+ * gone, and it happens once per boot rather than on a loop. */
+const MIGRATION_LOCK_TIMEOUT_MS = 60_000;
 
 /** Statement budget for the migration itself, once it holds the lock.
  *
