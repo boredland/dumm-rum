@@ -1,11 +1,8 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { createServerFn } from "@tanstack/react-start";
 import { setResponseHeader } from "@tanstack/react-start/server";
-import {
-	DaysToggleBar,
-	useDaysFilter,
-} from "../../../../components/DaysToggle.tsx";
-import { EmptyState } from "../../../../components/EmptyState.tsx";
+import { DailyBreakdown } from "../../../../components/DailyBreakdown.tsx";
+import { useDaysFilter } from "../../../../components/DaysToggle.tsx";
 import { Figure, Figures } from "../../../../components/Figures.tsx";
 import { BackLink, PageHeader } from "../../../../components/PageHeader.tsx";
 import { operatorSwr } from "../../../../lib/entity-cache.ts";
@@ -18,11 +15,7 @@ import {
 	entityRoute,
 	pageHead,
 } from "../../../../lib/seo.ts";
-import {
-	toneForCancRate,
-	toneForCount,
-	toneForScore,
-} from "../../../../lib/status.ts";
+import { toneForCancRate, toneForScore } from "../../../../lib/status.ts";
 import { onTimeRate, parseLineSlug } from "../../../../lib/utils.ts";
 
 const DAYS_FILTER_OPTS = ["all", "today", "weekdays", "weekends"] as const;
@@ -159,77 +152,21 @@ function OperatorIndex() {
 				/>
 			</Figures>
 
-			<section className="space-y-3">
-				<h2 className="eyebrow text-ink border-b border-ink pb-2">
-					{t(l, "section.daily_breakdown")}
-				</h2>
-				<DaysToggleBar
-					lang={l}
-					active={daysFilter.active}
-					setActive={daysFilter.setActive}
-				/>
-				{daysFilter.filtered.length === 0 ? (
-					<EmptyState title={t(l, "table.no_data")} />
-				) : (
-					<div className="overflow-x-auto">
-						<table className="report-table">
-							<thead>
-								<tr>
-									<th>{t(l, "table.date")}</th>
-									<th className="num">{t(l, "table.th.total")}</th>
-									<th className="num">{t(l, "table.th.cancelled")}</th>
-									<th className="num">{t(l, "table.th.ghost")}</th>
-									<th className="num">{t(l, "table.th.delayed")}</th>
-									<th className="num">{t(l, "table.otp")}</th>
-									<th />
-								</tr>
-							</thead>
-							<tbody>
-								{daysFilter.filtered.map((d) => {
-									const dayScore = onTimeRate(d.cancelled, d.delayed, d.total);
-									return (
-										<tr key={d.date}>
-											<td className="whitespace-nowrap">
-												{new Date(`${d.date}T00:00:00`).toLocaleDateString(l, {
-													weekday: "short",
-													day: "2-digit",
-													month: "2-digit",
-												})}
-											</td>
-											<td className="num text-muted">{d.total}</td>
-											<td className={`num ${toneForCount(d.cancelled, "bad")}`}>
-												{d.cancelled || "—"}
-											</td>
-											<td className={`num ${toneForCount(d.ghost, "ghost")}`}>
-												{d.ghost || "—"}
-											</td>
-											<td className={`num ${toneForCount(d.delayed, "mixed")}`}>
-												{d.delayed || "—"}
-											</td>
-											<td className={`num ${toneForScore(dayScore)}`}>
-												{dayScore}%
-											</td>
-											<td className="num">
-												<Link
-													to="/$lang/operator/$operator/day/$date"
-													params={{
-														lang: l,
-														operator,
-														date: d.date,
-													}}
-													className="text-meta text-muted hover:text-ink"
-												>
-													→
-												</Link>
-											</td>
-										</tr>
-									);
-								})}
-							</tbody>
-						</table>
-					</div>
+			<DailyBreakdown
+				lang={l}
+				days={daysFilter.filtered}
+				active={daysFilter.active}
+				setActive={daysFilter.setActive}
+				dayLink={(date) => (
+					<Link
+						to="/$lang/operator/$operator/day/$date"
+						params={{ lang: l, operator, date }}
+						className="text-meta text-muted hover:text-ink"
+					>
+						→
+					</Link>
 				)}
-			</section>
+			/>
 		</main>
 	);
 }
