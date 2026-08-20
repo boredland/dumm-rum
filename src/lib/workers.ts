@@ -137,6 +137,33 @@ function runMigrations(): Promise<void> {
 					},
 				});
 				try {
+					// Last attempt: clear the way rather than lose the window.
+					//
+					// A table rewrite needs ACCESS EXCLUSIVE, and the poller
+					// holds short transactions on journey_stops around the
+					// clock, so on a busy database the lock is never free at
+					// the instant we ask. Cancelling the sessions in our way
+					// costs a poll cycle — those jobs are re-enqueued and the
+					// data is re-read next pass — where not migrating costs
+					// every deploy from here on.
+					//
+					// Only on the final attempt, so the polite path gets its
+					// chances first, and only for idle-in-transaction sessions,
+					// which are waiting on the client rather than doing work.
+					if (attempt === MIGRATION_ATTEMPTS) {
+						const cleared = await conn`
+							SELECT pg_terminate_backend(pid)
+							FROM pg_stat_activity
+							WHERE datname = current_database()
+								AND pid <> pg_backend_pid()
+								AND state = 'idle in transaction'
+								AND state_change < now() - INTERVAL '5 seconds'
+						`;
+						if (cleared.length > 0)
+							console.warn(
+								`migration: cleared ${cleared.length} idle-in-transaction session(s) to take the lock`,
+							);
+					}
 					await migrate(drizzle({ client: conn, schema }), {
 						migrationsFolder: "./drizzle",
 					});
