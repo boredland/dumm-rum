@@ -110,15 +110,52 @@ export const journeyStops = pgTable(
 		/** Per-stop delay in minutes, precomputed at insert/update. NULL
 		 * when the stop has no real-time pair.
 		 *
-		 * `delay_minutes` is a custom IMMUTABLE function rather than inline
-		 * SQL, for the same reason as `normalize_category`: the midnight
-		 * correction has to be spelled once. Written inline it would appear
-		 * six times in this expression alone and drift the moment anyone
-		 * edits one copy. See drizzle/20260817000000_delay_min_midnight. */
+		 * Spelled inline rather than as `delay_minutes(...)`, which is the one
+		 * place in this schema that deliberately duplicates the function's
+		 * logic. A generated column cannot inline a SQL function, so every row
+		 * would pay the full call machinery twice: measured over one
+		 * production day, 25099 ms via the function against 1075 ms inlined,
+		 * which across 20M rows is the difference between a two-hour rewrite
+		 * and a two-minute one.
+		 *
+		 * `delay_minutes` remains the single definition for every other caller
+		 * — the poller and the read layer both use it — and the two MUST be
+		 * changed together. Drift shows up as wrong values in this column.
+		 * See drizzle/20260820140000_delay_min_expression.
+		 *
+		 * This declaration must also match the database byte for byte, or
+		 * `drizzle-kit generate` plans a table rewrite on every run. It said
+		 * `delay_minutes(...)` from 20260817000000 until then, while every
+		 * database carried the April arithmetic — a silent disagreement that
+		 * is what let the midnight bug survive. */
 		delayMin: doublePrecision("delay_min").generatedAlwaysAs(
 			sql`COALESCE(
-				delay_minutes(dep_time, rt_dep_time),
-				delay_minutes(arr_time, rt_arr_time)
+				CASE
+					WHEN dep_time IS NULL OR rt_dep_time IS NULL THEN NULL
+					WHEN ((split_part(rt_dep_time,':',1)::int * 60 + split_part(rt_dep_time,':',2)::int + split_part(rt_dep_time,':',3)::int / 60.0)
+						- (split_part(dep_time,':',1)::int * 60 + split_part(dep_time,':',2)::int + split_part(dep_time,':',3)::int / 60.0)) < -720
+						THEN ((split_part(rt_dep_time,':',1)::int * 60 + split_part(rt_dep_time,':',2)::int + split_part(rt_dep_time,':',3)::int / 60.0)
+						- (split_part(dep_time,':',1)::int * 60 + split_part(dep_time,':',2)::int + split_part(dep_time,':',3)::int / 60.0)) + 1440
+					WHEN ((split_part(rt_dep_time,':',1)::int * 60 + split_part(rt_dep_time,':',2)::int + split_part(rt_dep_time,':',3)::int / 60.0)
+						- (split_part(dep_time,':',1)::int * 60 + split_part(dep_time,':',2)::int + split_part(dep_time,':',3)::int / 60.0)) > 720
+						THEN ((split_part(rt_dep_time,':',1)::int * 60 + split_part(rt_dep_time,':',2)::int + split_part(rt_dep_time,':',3)::int / 60.0)
+						- (split_part(dep_time,':',1)::int * 60 + split_part(dep_time,':',2)::int + split_part(dep_time,':',3)::int / 60.0)) - 1440
+					ELSE ((split_part(rt_dep_time,':',1)::int * 60 + split_part(rt_dep_time,':',2)::int + split_part(rt_dep_time,':',3)::int / 60.0)
+						- (split_part(dep_time,':',1)::int * 60 + split_part(dep_time,':',2)::int + split_part(dep_time,':',3)::int / 60.0))
+				END,
+				CASE
+					WHEN arr_time IS NULL OR rt_arr_time IS NULL THEN NULL
+					WHEN ((split_part(rt_arr_time,':',1)::int * 60 + split_part(rt_arr_time,':',2)::int + split_part(rt_arr_time,':',3)::int / 60.0)
+						- (split_part(arr_time,':',1)::int * 60 + split_part(arr_time,':',2)::int + split_part(arr_time,':',3)::int / 60.0)) < -720
+						THEN ((split_part(rt_arr_time,':',1)::int * 60 + split_part(rt_arr_time,':',2)::int + split_part(rt_arr_time,':',3)::int / 60.0)
+						- (split_part(arr_time,':',1)::int * 60 + split_part(arr_time,':',2)::int + split_part(arr_time,':',3)::int / 60.0)) + 1440
+					WHEN ((split_part(rt_arr_time,':',1)::int * 60 + split_part(rt_arr_time,':',2)::int + split_part(rt_arr_time,':',3)::int / 60.0)
+						- (split_part(arr_time,':',1)::int * 60 + split_part(arr_time,':',2)::int + split_part(arr_time,':',3)::int / 60.0)) > 720
+						THEN ((split_part(rt_arr_time,':',1)::int * 60 + split_part(rt_arr_time,':',2)::int + split_part(rt_arr_time,':',3)::int / 60.0)
+						- (split_part(arr_time,':',1)::int * 60 + split_part(arr_time,':',2)::int + split_part(arr_time,':',3)::int / 60.0)) - 1440
+					ELSE ((split_part(rt_arr_time,':',1)::int * 60 + split_part(rt_arr_time,':',2)::int + split_part(rt_arr_time,':',3)::int / 60.0)
+						- (split_part(arr_time,':',1)::int * 60 + split_part(arr_time,':',2)::int + split_part(arr_time,':',3)::int / 60.0))
+				END
 			)`,
 		),
 	},
