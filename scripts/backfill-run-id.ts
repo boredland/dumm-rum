@@ -51,6 +51,45 @@ async function addColumn(): Promise<void> {
 	log("journey_stops.run_id present");
 }
 
+/** Fills run_id on rows written by the *old* poller, for as long as one is
+ * still running.
+ *
+ * Without this the backfill can never finish. The deployed poller writes
+ * journey_stops with journey_ref and no run_id, so every poll cycle creates
+ * fresh NULLs behind the backfill, and the migration's "no NULLs" guard would
+ * fail at deploy time no matter how long the backfill ran. Stopping ingest for
+ * the duration would avoid it at the cost of a hole in the data.
+ *
+ * Installed before the backfill starts, so there is no window in which a NULL
+ * can be created and missed. One index probe on journey_runs per inserted row,
+ * against a poller that already does a round-trip per journey.
+ *
+ * The migration drops this — it reads NEW.journey_ref, so it must go before
+ * that column does, and the new poller supplies run_id itself.
+ */
+async function installTransitionTrigger(): Promise<void> {
+	await sql`
+		CREATE OR REPLACE FUNCTION journey_stops_fill_run_id() RETURNS trigger
+		LANGUAGE plpgsql AS $fn$
+		BEGIN
+			IF NEW.run_id IS NULL THEN
+				SELECT r.run_id INTO NEW.run_id FROM journey_runs r
+				WHERE r.journey_ref = NEW.journey_ref
+					AND r.day_of_operation = NEW.day_of_operation;
+			END IF;
+			RETURN NEW;
+		END;
+		$fn$
+	`;
+	await sql`DROP TRIGGER IF EXISTS journey_stops_fill_run_id ON journey_stops`;
+	await sql`
+		CREATE TRIGGER journey_stops_fill_run_id
+		BEFORE INSERT OR UPDATE ON journey_stops
+		FOR EACH ROW EXECUTE FUNCTION journey_stops_fill_run_id()
+	`;
+	log("transition trigger installed — new rows get run_id from journey_runs");
+}
+
 /** Backfill day by day rather than one unbounded sweep.
  *
  * The poller only writes the current service day — every earlier day is
@@ -240,6 +279,7 @@ async function verify(): Promise<void> {
 
 async function main(): Promise<void> {
 	await addColumn();
+	await installTransitionTrigger();
 	await backfill();
 	await dropOrphans();
 	await repairDelayMin();

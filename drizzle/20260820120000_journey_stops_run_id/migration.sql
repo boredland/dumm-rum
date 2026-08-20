@@ -128,12 +128,17 @@ ALTER TABLE "journey_stops" ADD CONSTRAINT "journey_stops_pkey"
 DROP INDEX IF EXISTS "idx_journey_stops_ref_day_name";--> statement-breakpoint
 DROP INDEX IF EXISTS "idx_journey_stops_origin_rt";--> statement-breakpoint
 DROP INDEX IF EXISTS "idx_journey_stops_delay_min";--> statement-breakpoint
--- Finally the column itself, ~172 of the ~326 bytes per row. Also catalog-only:
--- Postgres marks the attribute dropped and leaves the bytes in place, so the
--- heap shrinks as rows are rewritten by ordinary churn rather than all at once.
-ALTER TABLE "journey_stops" DROP COLUMN "journey_ref";--> statement-breakpoint
--- Match the names schema.ts declares, so a later `drizzle-kit generate` does
--- not plan to recreate what the script already built.
-ALTER INDEX "idx_journey_stops_delay_min_run" RENAME TO "idx_journey_stops_delay_min";--> statement-breakpoint
-ALTER INDEX "idx_journey_stops_origin_rt_run" RENAME TO "idx_journey_stops_origin_rt";--> statement-breakpoint
-ALTER INDEX "idx_journey_stops_run_name" RENAME TO "idx_journey_stops_ref_day_name";
+-- journey_ref and the four indexes that lead with it are NOT dropped here.
+--
+-- Dokploy deploys this service with order=start-first: the new container has
+-- to pass its health check before the old one is stopped, so for a window the
+-- two run against the same database. The old one still selects journey_ref
+-- from journey_stops, so dropping the column in the same migration that the
+-- new code deploys with would 500 every request the old container is still
+-- serving — verified in rehearsal, where exactly that killed a concurrently
+-- running old-shape writer.
+--
+-- So this migration is additive-only and safe for both shapes to run against:
+-- the new indexes exist, the old ones still do, and journey_ref is untouched.
+-- drizzle/20260820130000_journey_stops_drop_ref removes the old column and
+-- indexes on the NEXT deploy, once no old container is left.
