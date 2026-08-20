@@ -45,12 +45,61 @@ export interface StartedIngest {
 	shutdown: () => Promise<void>;
 }
 
+/** How long a migration may wait on a lock before giving up.
+ *
+ * A migration that rewrites a hot table needs ACCESS EXCLUSIVE, which
+ * queues behind every open transaction on it — and, worse, blocks every
+ * transaction that arrives after it. The poller keeps journey_stops busy
+ * around the clock, so an unbounded wait is not "slow", it is a deploy that
+ * never lands while requests pile up behind it. Failing fast turns that
+ * into a retry on the next boot instead of an outage. */
+const MIGRATION_LOCK_TIMEOUT = "15s";
+
+/** Postgres 55P03 lock_not_available: the migration asked for a lock and hit
+ * MIGRATION_LOCK_TIMEOUT. Distinguished from a genuinely broken migration
+ * because the two want opposite handling — a bad migration should take the
+ * process down, a contended one should let it keep serving and retry later. */
+export function isLockTimeout(e: unknown): boolean {
+	for (let cur = e; cur; cur = (cur as { cause?: unknown }).cause) {
+		if ((cur as { code?: string }).code === "55P03") return true;
+	}
+	return false;
+}
+
+/** Attempts before giving up for this boot. The poller re-enqueues every
+ * 60 s and a stop-day refresh is short, so the gaps between tries are what
+ * matter, not the count: they have to outlast one poll cycle for a window
+ * to open. */
+const MIGRATION_ATTEMPTS = 6;
+const MIGRATION_RETRY_MS = 20_000;
+
 /** Memoized so the server entry can gate request handling on migrations
  * without also waiting for the slower ingest steps queued behind them.
- * Both entries call it; only the first caller does the work. */
+ * Both entries call it; only the first caller does the work.
+ *
+ * Retries on lock contention rather than failing the boot. A bounded
+ * lock_timeout on its own only converts a hang into a permanently unapplied
+ * migration — the schema stays behind, and any code expecting the new shape
+ * breaks on every request instead of once. Retrying lets a deploy land as
+ * soon as the poller is between batches, which is where the window is. */
 let migration: Promise<unknown> | undefined;
 export function migrationsApplied(): Promise<unknown> {
-	migration ??= migrate(db, { migrationsFolder: "./drizzle" });
+	migration ??= (async () => {
+		// Scoped to this connection, so it cannot leak into request queries.
+		await pg`SET lock_timeout = ${pg.unsafe(`'${MIGRATION_LOCK_TIMEOUT}'`)}`;
+		for (let attempt = 1; ; attempt++) {
+			try {
+				await migrate(db, { migrationsFolder: "./drizzle" });
+				return;
+			} catch (e) {
+				if (!isLockTimeout(e) || attempt >= MIGRATION_ATTEMPTS) throw e;
+				console.warn(
+					`migration blocked on a lock (attempt ${attempt}/${MIGRATION_ATTEMPTS}), retrying`,
+				);
+				await new Promise((r) => setTimeout(r, MIGRATION_RETRY_MS));
+			}
+		}
+	})();
 	return migration;
 }
 

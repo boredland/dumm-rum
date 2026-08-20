@@ -12,7 +12,11 @@ import {
 	getAllStopNames,
 } from "./lib/queries.ts";
 import { warmEntityPages } from "./lib/warm.ts";
-import { migrationsApplied, startIngest } from "./lib/workers.ts";
+import {
+	isLockTimeout,
+	migrationsApplied,
+	startIngest,
+} from "./lib/workers.ts";
 
 // Ingest startup runs alongside request handling rather than in front of
 // it. Awaiting it here meant migrations, the known_stops backfill, pg-boss
@@ -23,7 +27,20 @@ import { migrationsApplied, startIngest } from "./lib/workers.ts";
 // Failures still surface: nothing recovers from a broken ingest boot, so
 // the process exits and the platform restarts it, rather than quietly
 // serving a site whose data has silently stopped updating.
+//
+// Except when the reason is a migration that could not take its lock. That
+// restart does not help — the next boot queues for the same lock behind the
+// same poller — and it costs the site the container that was serving reads.
+// Left up, the process keeps answering from a schema that is merely one
+// migration behind, and the migration retries on the next deploy.
 startIngest().catch((e) => {
+	if (isLockTimeout(e)) {
+		console.error(
+			"ingest startup blocked on a migration lock; serving reads without ingest:",
+			e,
+		);
+		return;
+	}
 	console.error("fatal: ingest startup failed:", e);
 	process.exit(1);
 });
@@ -66,14 +83,28 @@ const fetch = createStartHandler(defaultStreamHandler);
 
 export type ServerEntry = { fetch: RequestHandler<Register> };
 
+/** How long a request will wait for a pending migration before being served
+ * anyway.
+ *
+ * Requests used to await migrationsApplied() unbounded. The reasoning was
+ * that a query touching a column its migration has not committed yet would
+ * 500, and steady-state the await costs ~1 ms. Both are true, and it still
+ * took the site down: a migration that rewrites journey_stops waits on an
+ * ACCESS EXCLUSIVE lock the poller never releases, so "pending" lasted
+ * forever and every request in front of it hit Cloudflare's timeout as a
+ * 502. An origin that answers is worth more than one that is provably
+ * consistent and unreachable — a stale-schema 500 affects the one route
+ * that touches the new column; a hung await affects all of them. */
+const MIGRATION_GATE_MS = 5_000;
+
 export default {
 	async fetch(...args) {
-		// The only part of startup a request genuinely depends on: a query
-		// referencing a column its migration has not committed yet would
-		// 500. Steady-state this resolves in ~1 ms and costs nothing; on a
-		// deploy carrying a schema change it holds the request instead of
-		// failing it. Everything else ingest does is irrelevant to readers.
-		await migrationsApplied();
+		// Resolves in ~1 ms once migrations have landed, which is the normal
+		// case. The race only matters on a deploy whose migration is stuck.
+		await Promise.race([
+			migrationsApplied(),
+			new Promise((r) => setTimeout(r, MIGRATION_GATE_MS)),
+		]);
 		return await fetch(...args);
 	},
 } satisfies ServerEntry;
