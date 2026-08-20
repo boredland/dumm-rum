@@ -16,6 +16,26 @@ export const journeyRuns = pgTable(
 	"journey_runs",
 	{
 		journeyRef: text("journey_ref").notNull(),
+		/** Surrogate key journey_stops references instead of carrying
+		 * `journey_ref` on every row.
+		 *
+		 * `journey_ref` is a 158-175 byte HAFAS blob (avg 172). Stored 22.7M
+		 * times over, and leading four of six journey_stops indexes, it was
+		 * 17.1 GB of that table's 19 GB of indexes, plus ~172 of its ~326
+		 * bytes per row. A 4-byte int in its place measured 43 MB/day against
+		 * 206 MB/day for the same rows.
+		 *
+		 * int4, not bigint: at ~8.6k runs/day the sequence needs centuries to
+		 * reach 2^31, and the extra 4 bytes would cost ~360 MB across
+		 * journey_stops' indexes.
+		 *
+		 * Assigned by a sequence rather than derived from `journey_ref`. A
+		 * hash would let the poller compute it without a round-trip, but a
+		 * 32-bit hash collides at ~1% on 1M rows, and a 64-bit one gives up
+		 * the int4 saving that is the entire point. */
+		runId: integer("run_id")
+			.notNull()
+			.default(sql`nextval('journey_runs_run_id_seq')`),
 		dayOfOperation: text("day_of_operation").notNull(),
 		line: text().notNull(),
 		category: text(),
@@ -44,6 +64,10 @@ export const journeyRuns = pgTable(
 	},
 	(t) => [
 		primaryKey({ columns: [t.journeyRef, t.dayOfOperation] }),
+		// The surrogate journey_stops joins on. Unique because it is a key in
+		// everything but name: journey_stops rows are meaningless if two runs
+		// can claim the same id, and the join would silently fan out.
+		unique("journey_runs_run_id_idx").on(t.runId),
 		index("idx_journey_runs_day").on(t.dayOfOperation),
 		index("idx_journey_runs_poll_state").on(t.pollState, t.dayOfOperation),
 		index("idx_journey_runs_line").on(t.line, t.dayOfOperation),
@@ -66,7 +90,14 @@ export const journeyRuns = pgTable(
 export const journeyStops = pgTable(
 	"journey_stops",
 	{
-		journeyRef: text("journey_ref").notNull(),
+		/** The run this stop visit belongs to, as journey_runs.run_id.
+		 *
+		 * Replaces the `journey_ref` this table used to carry on all 22.7M
+		 * rows; see the column comment on journey_runs.run_id for the sizes
+		 * that motivated it. Not a declared FOREIGN KEY: this schema has none
+		 * anywhere, and the poller's tombstone paths delete stop visits while
+		 * deliberately keeping the run row, which a cascade would fight. */
+		runId: integer("run_id").notNull(),
 		dayOfOperation: text("day_of_operation").notNull(),
 		routeIdx: integer("route_idx").notNull(),
 		stopId: text("stop_id").notNull(),
@@ -92,19 +123,32 @@ export const journeyStops = pgTable(
 		),
 	},
 	(t) => [
-		primaryKey({ columns: [t.journeyRef, t.dayOfOperation, t.routeIdx] }),
+		/** (run_id, route_idx) — `day_of_operation` is deliberately NOT in the
+		 * key.
+		 *
+		 * The old key was (journey_ref, day_of_operation, route_idx), because
+		 * (journey_ref, day_of_operation) is journey_runs' primary key. But
+		 * run_id is unique on journey_runs by itself, so it already implies a
+		 * day: adding day_of_operation back would widen every index entry by
+		 * 11 bytes to re-state something run_id has already fixed.
+		 *
+		 * The column stays on the table — idx_journey_stops_stop_day and
+		 * idx_journey_stops_day_name both lead with it, and getStopDayDepartures
+		 * filters on it directly — it is just not part of the identity. */
+		primaryKey({ columns: [t.runId, t.routeIdx] }),
 		index("idx_journey_stops_stop_day").on(t.stopId, t.dayOfOperation),
 		/** Also serves lookups on `day_of_operation` alone: a btree answers any
 		 * query on a prefix of its columns, so the standalone index this
 		 * replaced was 798 MB of duplicate storage on a 27 GB table. */
 		index("idx_journey_stops_day_name").on(t.dayOfOperation, t.stopName),
 		index("idx_journey_stops_delay_min")
-			.on(t.journeyRef, t.dayOfOperation)
+			.on(t.runId)
 			.where(sql`${t.delayMin} >= 7.5`),
 		// idx_journey_stops_ref_day_name and idx_journey_stops_origin_rt —
 		// covering indexes with INCLUDE payloads — are created by
 		// drizzle/20260813190000_line_stops_covering and
-		// drizzle/20260813200000_entity_day_origin_rt.
+		// drizzle/20260813200000_entity_day_origin_rt, and re-created on
+		// run_id by drizzle/20260820120000_journey_stops_run_id.
 		// They are not declared here because this drizzle version's index
 		// builder has no .include(), and declaring them without the payload
 		// would make every later `generate` plan to drop and recreate them.

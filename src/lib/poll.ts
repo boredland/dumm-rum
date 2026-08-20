@@ -52,20 +52,11 @@ async function markRunDone(
 
 /** The stops a run visits, read before a tombstone deletes them so the
  * rollup for those stop-days can be recomputed afterwards. */
-async function stopIdsOfRun(
-	db: Db,
-	journeyRef: string,
-	dayOfOperation: string,
-): Promise<string[]> {
+async function stopIdsOfRun(db: Db, runId: number): Promise<string[]> {
 	const rows = await db
 		.selectDistinct({ stopId: journeyStops.stopId })
 		.from(journeyStops)
-		.where(
-			and(
-				eq(journeyStops.journeyRef, journeyRef),
-				eq(journeyStops.dayOfOperation, dayOfOperation),
-			),
-		);
+		.where(eq(journeyStops.runId, runId));
 	return rows.map((r) => r.stopId);
 }
 
@@ -84,17 +75,10 @@ async function tombstoneLongDistanceRun(
 	dayOfOperation: string,
 	category: string | null,
 ): Promise<void> {
-	const affected = await stopIdsOfRun(db, journeyRef, dayOfOperation);
-	await db
-		.delete(journeyStops)
-		.where(
-			and(
-				eq(journeyStops.journeyRef, journeyRef),
-				eq(journeyStops.dayOfOperation, dayOfOperation),
-			),
-		);
-	await refreshStopDayStats(db, affected, dayOfOperation);
-	await db
+	// The tombstone UPDATE hands back the run_id the stop visits hang off, so
+	// this costs no extra round-trip. A run discovery never inserted has
+	// nothing to delete either, hence the early return.
+	const [run] = await db
 		.update(journeyRuns)
 		.set({ category, pollState: "done" })
 		.where(
@@ -102,7 +86,13 @@ async function tombstoneLongDistanceRun(
 				eq(journeyRuns.journeyRef, journeyRef),
 				eq(journeyRuns.dayOfOperation, dayOfOperation),
 			),
-		);
+		)
+		.returning({ runId: journeyRuns.runId });
+	if (!run) return;
+
+	const affected = await stopIdsOfRun(db, run.runId);
+	await db.delete(journeyStops).where(eq(journeyStops.runId, run.runId));
+	await refreshStopDayStats(db, affected, dayOfOperation);
 }
 
 /** Marks a run the poller must ignore and the site must not show.
@@ -124,17 +114,7 @@ async function tombstoneExcludedRun(
 	journeyRef: string,
 	dayOfOperation: string,
 ): Promise<void> {
-	const affected = await stopIdsOfRun(db, journeyRef, dayOfOperation);
-	await db
-		.delete(journeyStops)
-		.where(
-			and(
-				eq(journeyStops.journeyRef, journeyRef),
-				eq(journeyStops.dayOfOperation, dayOfOperation),
-			),
-		);
-	await refreshStopDayStats(db, affected, dayOfOperation);
-	await db
+	const [run] = await db
 		.update(journeyRuns)
 		.set({ pollState: EXCLUDED_POLL_STATE })
 		.where(
@@ -142,7 +122,13 @@ async function tombstoneExcludedRun(
 				eq(journeyRuns.journeyRef, journeyRef),
 				eq(journeyRuns.dayOfOperation, dayOfOperation),
 			),
-		);
+		)
+		.returning({ runId: journeyRuns.runId });
+	if (!run) return;
+
+	const affected = await stopIdsOfRun(db, run.runId);
+	await db.delete(journeyStops).where(eq(journeyStops.runId, run.runId));
+	await refreshStopDayStats(db, affected, dayOfOperation);
 }
 
 interface BatchStats {
@@ -287,14 +273,19 @@ export async function processPollBatch(
 				continue;
 			}
 
-			await upsertJourneyRunFromMgate(
+			// The run upsert yields the surrogate the stop rows need. It
+			// returns null only when the detail payload is too incomplete to
+			// store a run at all, in which case there is nothing to hang stops
+			// off either.
+			const runId = await upsertJourneyRunFromMgate(
 				db,
 				journeyRef,
 				dayOfOperation,
 				mgDetail,
 				now,
 			);
-			await upsertMgateStops(db, journeyRef, dayOfOperation, mgStops);
+			if (runId === null) continue;
+			await upsertMgateStops(db, runId, dayOfOperation, mgStops);
 			await refreshStopDayStats(
 				db,
 				mgStops.map((st) => st.extId),
@@ -413,21 +404,21 @@ async function upsertJourneyRunFromMgate(
 	dayOfOperation: string,
 	mg: MgateJourneyDetail,
 	snapshotAt: string,
-): Promise<void> {
+): Promise<number | null> {
 	const stops = mg.stops;
-	if (stops.length < 2) return;
+	if (stops.length < 2) return null;
 
 	const origin = stops[0];
 	const dest = stops[stops.length - 1];
-	if (!origin.depTime || !dest.arrTime) return;
+	if (!origin.depTime || !dest.arrTime) return null;
 
 	const line = mg.product?.line ?? mg.product?.name;
-	if (!line) return;
+	if (!line) return null;
 
 	const hasRtData =
 		mg.lastPos != null || stops.some((s) => s.rtDepTime || s.rtArrTime);
 
-	await db
+	const [run] = await db
 		.insert(journeyRuns)
 		.values({
 			journeyRef: ref,
@@ -467,7 +458,11 @@ async function upsertJourneyRunFromMgate(
 					THEN ${EXCLUDED_POLL_STATE} ELSE 'polling' END`,
 				snapshotAt: excluded(journeyRuns.snapshotAt),
 			},
-		});
+		})
+		.returning({ runId: journeyRuns.runId });
+	// DO UPDATE always returns the row, so this is null only if the insert
+	// matched nothing at all.
+	return run?.runId ?? null;
 }
 
 /** One-off backfill for stops discovered before the poller started
@@ -597,8 +592,7 @@ async function refreshStopDayStats(
 				STRING_AGG(DISTINCT ${lineSlugSql}, ',') AS lines
 			FROM ${journeyStops}
 			JOIN ${journeyRuns}
-				ON ${journeyRuns.journeyRef} = ${journeyStops.journeyRef}
-				AND ${journeyRuns.dayOfOperation} = ${journeyStops.dayOfOperation}
+				ON ${journeyRuns.runId} = ${journeyStops.runId}
 			WHERE ${journeyStops.stopId} IN ${ids}
 				AND ${journeyStops.dayOfOperation} = ${dayOfOperation}
 				AND ${journeyRuns.categoryNorm} <> 'Fernverkehr'
@@ -633,14 +627,14 @@ async function refreshStopDayStats(
 
 async function upsertMgateStops(
 	db: Db,
-	journeyRef: string,
+	runId: number,
 	dayOfOperation: string,
 	stops: MgateJourneyDetail["stops"],
 ): Promise<void> {
 	if (stops.length === 0) return;
 
 	const values = stops.map((s) => ({
-		journeyRef,
+		runId,
 		dayOfOperation,
 		routeIdx: s.routeIdx,
 		stopId: s.extId,
@@ -656,11 +650,7 @@ async function upsertMgateStops(
 		.insert(journeyStops)
 		.values(values)
 		.onConflictDoUpdate({
-			target: [
-				journeyStops.journeyRef,
-				journeyStops.dayOfOperation,
-				journeyStops.routeIdx,
-			],
+			target: [journeyStops.runId, journeyStops.routeIdx],
 			set: {
 				rtDepTime: sql`COALESCE(${excluded(journeyStops.rtDepTime)}, ${journeyStops.rtDepTime})`,
 				rtArrTime: sql`COALESCE(${excluded(journeyStops.rtArrTime)}, ${journeyStops.rtArrTime})`,

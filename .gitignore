@@ -12,3 +12,6 @@ dist/
 # in the repo anyway.
 apks/
 src/routeTree.gen.ts
+
+# Local helper for running SQL against production over ssh.
+.dev/
