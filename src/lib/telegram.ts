@@ -280,9 +280,7 @@ export async function handleTelegramWebhook(
 				}>(sql`
 				SELECT DISTINCT ON (js.stop_id) js.stop_id, js.stop_name
 				FROM journey_stops js
-				JOIN journey_runs jr
-					ON jr.journey_ref = js.journey_ref
-					AND jr.day_of_operation = js.day_of_operation
+				JOIN journey_runs jr ON jr.run_id = js.run_id
 				WHERE js.day_of_operation >= ${sinceDays(30)}
 					AND LOWER(js.stop_name) LIKE ${`%${stopFilter.toLowerCase()}%`}
 					AND jr.category_norm <> 'Fernverkehr'
@@ -584,29 +582,30 @@ export async function notifyJourneyIssues(
 ): Promise<void> {
 	if (!token) return;
 
-	const [run, stops] = await Promise.all([
-		db
-			.select({ category: normalizedCategorySql.as("category") })
-			.from(journeyRuns)
-			.where(
-				and(
-					eq(journeyRuns.journeyRef, journeyRef),
-					eq(journeyRuns.dayOfOperation, dayOfOperation),
-				),
-			)
-			.limit(1),
-		db
-			.select()
-			.from(journeyStops)
-			.where(
-				and(
-					eq(journeyStops.journeyRef, journeyRef),
-					eq(journeyStops.dayOfOperation, dayOfOperation),
-				),
+	// Sequential, where this used to be one Promise.all: the stop visits are
+	// addressed by run_id now, so the run has to be read first. One extra
+	// round-trip on a path that already awaits a Telegram POST per alert.
+	const [run] = await db
+		.select({
+			runId: journeyRuns.runId,
+			category: normalizedCategorySql.as("category"),
+		})
+		.from(journeyRuns)
+		.where(
+			and(
+				eq(journeyRuns.journeyRef, journeyRef),
+				eq(journeyRuns.dayOfOperation, dayOfOperation),
 			),
-	]);
+		)
+		.limit(1);
+	if (!run) return;
 
-	const category = run[0]?.category ?? "Bus";
+	const stops = await db
+		.select()
+		.from(journeyStops)
+		.where(eq(journeyStops.runId, run.runId));
+
+	const category = run.category ?? "Bus";
 	// Long-distance traffic is ingested but never displayed, so it must not
 	// generate alerts either — see COLLECTED_TRAFFIC in queries.ts.
 	if (category === "Fernverkehr") return;

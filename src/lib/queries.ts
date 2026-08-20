@@ -86,24 +86,21 @@ function delayedByRunSq(until?: string, bounded = false) {
 			)
 		: gte(journeyStops.delayMin, DELAY_THRESHOLD_MIN);
 	return db
-		.selectDistinct({
-			journeyRef: journeyStops.journeyRef,
-			dayOfOperation: journeyStops.dayOfOperation,
-		})
+		.selectDistinct({ runId: journeyStops.runId })
 		.from(journeyStops)
 		.where(where)
 		.as("dbr");
 }
 
+/** One column, not two: run_id is unique on journey_runs, so it identifies
+ * the run on its own. The pair this replaced had to carry day_of_operation
+ * because journey_ref was only unique per day. */
 function delayedJoinCondition(dbr: ReturnType<typeof delayedByRunSq>) {
-	return and(
-		eq(dbr.journeyRef, journeyRuns.journeyRef),
-		eq(dbr.dayOfOperation, journeyRuns.dayOfOperation),
-	);
+	return eq(dbr.runId, journeyRuns.runId);
 }
 
 function runDelayedSql(dbr: ReturnType<typeof delayedByRunSq>) {
-	return sql<number>`SUM(CASE WHEN NOT ${journeyRuns.cancelled} AND ${dbr.journeyRef} IS NOT NULL THEN 1 ELSE 0 END)`;
+	return sql<number>`SUM(CASE WHEN NOT ${journeyRuns.cancelled} AND ${dbr.runId} IS NOT NULL THEN 1 ELSE 0 END)`;
 }
 
 /** Same "was this run delayed" signal as the joinable subquery, correlated
@@ -120,8 +117,7 @@ function runDelayedSql(dbr: ReturnType<typeof delayedByRunSq>) {
  * window, so one pass beats a probe per run. */
 const runDelayedCorrelatedSql = sql<number>`SUM(CASE WHEN NOT ${journeyRuns.cancelled} AND EXISTS (
 	SELECT 1 FROM ${journeyStops}
-	WHERE ${journeyStops.journeyRef} = "journey_runs"."journey_ref"
-		AND ${journeyStops.dayOfOperation} = "journey_runs"."day_of_operation"
+	WHERE ${journeyStops.runId} = "journey_runs"."run_id"
 		AND ${journeyStops.delayMin} >= ${DELAY_THRESHOLD_MIN}
 ) THEN 1 ELSE 0 END)`;
 
@@ -512,8 +508,7 @@ export async function getLineDayJourneys(
 			time: journeyRuns.originDepTime,
 			rtTime: sql<string | null>`(
 				SELECT js.rt_dep_time FROM journey_stops js
-				WHERE js.journey_ref = "journey_runs"."journey_ref"
-				AND js.day_of_operation = "journey_runs"."day_of_operation"
+				WHERE js.run_id = "journey_runs"."run_id"
 				AND js.route_idx = 0
 			)`.as("rt_time"),
 			direction: journeyRuns.destName,
@@ -625,8 +620,7 @@ export async function getOperatorDayJourneys(
 			time: journeyRuns.originDepTime,
 			rtTime: sql<string | null>`(
 				SELECT js.rt_dep_time FROM journey_stops js
-				WHERE js.journey_ref = "journey_runs"."journey_ref"
-				AND js.day_of_operation = "journey_runs"."day_of_operation"
+				WHERE js.run_id = "journey_runs"."run_id"
 				AND js.route_idx = 0
 			)`.as("rt_time"),
 			line: journeyRuns.line,
@@ -768,9 +762,12 @@ export async function getStopStats(stopIds: string[]): Promise<StopStats> {
 }
 
 export interface StopDayDeparture {
-	/** Identity of the stop visit: the journey_stops primary key minus the
-	 * day, which every row in one response already shares. Lets the UI key
-	 * rows on real data instead of the array index. */
+	/** Identity of the stop visit, as (run, route_idx). Lets the UI key rows
+	 * on real data instead of the array index.
+	 *
+	 * Read from journey_runs now that journey_stops holds run_id rather than
+	 * the ref itself. The value is unchanged, so links and React keys built
+	 * on it behave exactly as before. */
 	journeyRef: string;
 	routeIdx: number;
 	date: string;
@@ -789,7 +786,7 @@ export async function getStopDayDepartures(
 	if (stopIds.length === 0) return [];
 	const rows = await db
 		.select({
-			journeyRef: journeyStops.journeyRef,
+			journeyRef: journeyRuns.journeyRef,
 			routeIdx: journeyStops.routeIdx,
 			date: journeyStops.dayOfOperation,
 			time: sql<string>`COALESCE(${journeyStops.depTime}, ${journeyStops.arrTime})`.as(
@@ -806,13 +803,7 @@ export async function getStopDayDepartures(
 			ghost: sql<number>`${ghostCaseSql}`.as("ghost"),
 		})
 		.from(journeyStops)
-		.innerJoin(
-			journeyRuns,
-			and(
-				eq(journeyRuns.journeyRef, journeyStops.journeyRef),
-				eq(journeyRuns.dayOfOperation, journeyStops.dayOfOperation),
-			),
-		)
+		.innerJoin(journeyRuns, eq(journeyRuns.runId, journeyStops.runId))
 		.where(
 			and(
 				inArray(journeyStops.stopId, stopIds),
@@ -960,13 +951,7 @@ export async function getStopsForLine(slug: string): Promise<string[]> {
 			name: journeyStops.stopName,
 		})
 		.from(journeyStops)
-		.innerJoin(
-			journeyRuns,
-			and(
-				eq(journeyRuns.journeyRef, journeyStops.journeyRef),
-				eq(journeyRuns.dayOfOperation, journeyStops.dayOfOperation),
-			),
-		)
+		.innerJoin(journeyRuns, eq(journeyRuns.runId, journeyStops.runId))
 		.where(and(where, gte(journeyStops.dayOfOperation, sinceDays(30))))
 		.orderBy(journeyStops.stopName);
 	return rows.map((r) => r.name).filter(Boolean);
