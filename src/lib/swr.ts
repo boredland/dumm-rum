@@ -3,6 +3,8 @@
  * journey_stops) should never be served synchronously — cold callers
  * wait once, everyone else rides the memo. */
 
+import { evictOverCap } from "./lru.ts";
+
 interface Entry<T> {
 	value: T;
 	/** Return without refresh up to this timestamp. */
@@ -13,13 +15,6 @@ interface Entry<T> {
 	stale: number;
 }
 
-/** Most keys held per memo before the least-recently-used ones are
- * dropped. Keys come from route params (stop slug, line, operator, date),
- * so the space is unbounded and reachable by anyone typing URLs — without
- * a cap the map only ever grows. Well above the ~1300 stops or ~90 lines a
- * real working set touches, so eviction stays off the normal path. */
-const MAX_ENTRIES = 4096;
-
 /** Returns a keyed SWR memo. Pass a fetcher that computes the value for
  * a given string key; callers pass the same key to hit the cache. */
 export function makeSwr<T>(
@@ -28,21 +23,6 @@ export function makeSwr<T>(
 ) {
 	const memo = new Map<string, Entry<T>>();
 	const inflight = new Map<string, Promise<T>>();
-
-	/** Drops the least recently refreshed entries once the map is over cap.
-	 *
-	 * Purely capacity-based. It used to sweep everything past `stale` first,
-	 * on the grounds that `get` would not return those anyway — but `get`
-	 * now does return them while a refresh runs, so dropping them would
-	 * reintroduce the blocking rebuild this cache exists to avoid. */
-	function evict(): void {
-		// Map iterates in insertion order and refresh re-inserts, so the
-		// front of the map is the least recently refreshed.
-		for (const k of memo.keys()) {
-			if (memo.size <= MAX_ENTRIES) break;
-			memo.delete(k);
-		}
-	}
 
 	function refresh(key: string): Promise<T> {
 		const existing = inflight.get(key);
@@ -59,7 +39,7 @@ export function makeSwr<T>(
 					stale: now + opts.staleMs,
 				});
 				inflight.delete(key);
-				if (memo.size > MAX_ENTRIES) evict();
+				evictOverCap(memo);
 				return value;
 			})
 			.catch((e) => {
