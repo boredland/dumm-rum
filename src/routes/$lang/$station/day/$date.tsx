@@ -82,13 +82,18 @@ const loadDay = createServerFn({ method: "GET" })
 		return { slug, date };
 	})
 	.handler(async ({ data: { slug, date } }): Promise<DayData> => {
-		const isToday = date === todayBerlin();
-		setResponseHeader(
-			"Cache-Control",
-			isToday
-				? "public, max-age=30, s-maxage=60, stale-while-revalidate=900"
-				: "public, max-age=3600, s-maxage=86400, stale-while-revalidate=86400, immutable",
-		);
+		// Today is never cached — it changes with every ingest pass, and a
+		// stale-while-revalidate copy would keep serving the old departures
+		// to the reader whose request triggered the refresh. Past days are
+		// settled and cache hard.
+		if (date === todayBerlin()) {
+			setResponseHeader("Cache-Control", "no-store");
+		} else {
+			setResponseHeader(
+				"Cache-Control",
+				"public, max-age=3600, s-maxage=86400, stale-while-revalidate=86400, immutable",
+			);
+		}
 		const cached = await stationDaySwr.get(`${slug}|${date}`);
 		if (!cached) throw new Error("not found");
 		return cached;

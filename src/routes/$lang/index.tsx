@@ -58,22 +58,24 @@ const getHomeSummaries = createServerFn({ method: "GET" })
 		return { days: "all" };
 	})
 	.handler(async ({ data }): Promise<HomePayload> => {
-		// For non-"today" queries, use yesterday as the "until" date for cacheability
+		// Every window except "today" is pinned to yesterday, so its answer
+		// cannot change until the date rolls over and it caches hard.
 		const until =
 			data.days !== "today" ? (data.until ?? yesterdayBerlin()) : undefined;
 
-		// For "today", use default cache (changes at midnight)
-		// For date-based queries, extend cache duration since the result won't change
 		if (data.days !== "today") {
 			setResponseHeader(
 				"Cache-Control",
 				"public, max-age=3600, s-maxage=86400, stale-while-revalidate=604800",
 			);
 		} else {
-			setResponseHeader(
-				"Cache-Control",
-				"public, max-age=30, s-maxage=60, stale-while-revalidate=600",
-			);
+			// "today" is never cached. It changes with every ingest pass, and a
+			// cached copy is worse than a slow one here: stale-while-revalidate
+			// hands the stale body to the reader who triggered the refresh, so
+			// the page kept showing an empty or hours-old today until someone
+			// hard-reloaded. The origin answers this from the homeSwr memo in
+			// ~0.2 s, which is the cost this trades for.
+			setResponseHeader("Cache-Control", "no-store");
 		}
 
 		return loadHomeSummaries(data.days, until);
